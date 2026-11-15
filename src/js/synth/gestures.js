@@ -15,30 +15,74 @@
 //     { press(cid, control, event) -> knob, drag(knob, event), wheel(event),
 //       choiceKey(event, host) -> handled, aria(el, value, param, text), refused(el, cid),
 //       cc(cc, value, faceOf, played) -> { cid, value, text } | null }   a controller's knob
-//       (V506, midi-cc.js): its own undo burst; it closes a wheel burst first
+//       (V506, midi-cc.js computes it): the wheel's and the controller's edits share one undo
+//       burst, which press, wheel, choiceKey and flush close, and whose timer ends only the
+//       gesture it began (handle().gestureId; C3-548-1)
 
 import { ariaAttrs, WHEEL_LINE_PX, WHEEL_NOTCH_PX, wheelValue } from '../ui/synth/knob.js';
 import { dragAnchor, dragAt, GESTURE_IDLE_MS, reanchorDrag } from '../ui/synth/feel.js';
 import { stepOption } from './view/knob.js';
-import { midiCc } from './midi-cc.js';
+import { ccEdit } from './midi-cc.js';
 
 const CHOICE_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End']);
 const ARIA = ['aria-valuemin', 'aria-valuemax', 'aria-valuenow', 'aria-valuetext'];
 
 export function createGestures({ controlOf, valueOf, setControl, handle, say, label }) {
+  // The one open burst, a wheel's or a controller's (C3-548-1): { cid, rest, timer, id }, id the
+  // history's number of the gesture it began (handle().gestureId), so it ends only that gesture.
   let burst = null;
-  let own = false; // the wheel's own setControl: not a gesture that flushes it
+  let own = false; // the burst's own setControl: not a gesture that flushes it
 
-  /** Close an open wheel burst now (21's R3): history nests gestures and commits the outermost,
-   *  so any other edit made while a burst waits would fold into it, and its timer firing
-   *  mid-drag would commit the drag early. */
+  /** Whether burst b's gesture is still the open one: an undo closes every gesture. */
+  const live = (b) => {
+    const h = handle();
+    return typeof h.gestureId !== 'function' || h.gestureId() === b.id;
+  };
+
+  /** End burst b's gesture, if it is still the open one: a gesture begun after an undo closed
+   *  b's (a drag) is not b's to end (C3-548-1). */
+  function close(b) {
+    clearTimeout(b.timer);
+    if (live(b)) handle().endGesture();
+  }
+
+  /** Close the open burst now (21's R3): history nests gestures and commits the outermost, so
+   *  any other edit made while a burst waits would fold into it, and its timer firing mid-drag
+   *  would commit the drag early. */
   function flush() {
     if (own || !burst) return;
-    clearTimeout(burst.timer);
+    const b = burst;
     burst = null;
-    handle().endGesture();
+    close(b);
   }
-  const wheelSet = (cid, v) => { own = true; try { setControl(cid, v); } finally { own = false; } };
+
+  /** The burst of control `cid` (`text` its undo label): the open one, or a new one. */
+  function open(cid, text) {
+    // A burst whose gesture an undo closed is gone: the run goes on in a new one (C3-548-4).
+    if (burst && !live(burst)) {
+      clearTimeout(burst.timer);
+      burst = null;
+    }
+    if (!burst || burst.cid !== cid) {
+      flush();
+      const h = handle();
+      h.beginGesture(text);
+      burst = { cid, rest: 0, timer: 0, id: typeof h.gestureId === 'function' ? h.gestureId()
+        : null };
+    }
+    const mine = burst;
+    clearTimeout(mine.timer);
+    mine.timer = setTimeout(() => {
+      if (burst !== mine) return;
+      burst = null;
+      close(mine);
+    }, GESTURE_IDLE_MS);
+    return mine;
+  }
+  const wheelSet = (cid, v) => {
+    own = true;
+    try { return setControl(cid, v); } finally { own = false; }
+  };
 
   function press(cid, x, e) {
     flush(); // before the drag's own gesture begins, so the burst ends at its own level
@@ -68,25 +112,19 @@ export function createGestures({ controlOf, valueOf, setControl, handle, say, la
     // A pinch (Ctrl or Cmd) and a horizontal swipe stay the page's (21's R8).
     if (e.ctrlKey || e.metaKey || Math.abs(e.deltaX || 0) > Math.abs(e.deltaY || 0)) return;
     e.preventDefault();
-    if (!burst || burst.cid !== cid) {
-      if (burst) { clearTimeout(burst.timer); handle().endGesture(); }
-      burst = { cid, rest: 0, timer: 0 };
-      handle().beginGesture(label(x));
-    }
-    clearTimeout(burst.timer);
-    burst.timer = setTimeout(() => { burst = null; handle().endGesture(); }, GESTURE_IDLE_MS);
+    const b = open(cid, label(x));
     if (k) {
       const r = wheelValue(valueOf(x), e.deltaY, x.c.param, { fine: e.shiftKey,
-        deltaMode: e.deltaMode, rest: burst.rest });
-      burst.rest = r.rest;
+        deltaMode: e.deltaMode, rest: b.rest });
+      b.rest = r.rest;
       if (r.value !== valueOf(x)) wheelSet(cid, r.value);
       return;
     }
-    burst.rest += e.deltaY * (e.deltaMode === 1 ? WHEEL_LINE_PX
+    b.rest += e.deltaY * (e.deltaMode === 1 ? WHEEL_LINE_PX
       : e.deltaMode === 2 ? WHEEL_NOTCH_PX : 1);
-    while (Math.abs(burst.rest) >= WHEEL_NOTCH_PX) {
-      const dir = burst.rest > 0 ? 1 : -1;
-      burst.rest -= dir * WHEEL_NOTCH_PX;
+    while (Math.abs(b.rest) >= WHEEL_NOTCH_PX) {
+      const dir = b.rest > 0 ? 1 : -1;
+      b.rest -= dir * WHEEL_NOTCH_PX;
       wheelSet(cid, stepOption(x.c.param, valueOf(x), -dir));
     }
   }
@@ -98,6 +136,7 @@ export function createGestures({ controlOf, valueOf, setControl, handle, say, la
     if (!x) return false;
     e.preventDefault();
     if (offGroup(o)) return refused(o, o.dataset.option); // its reason, no move (21's T2)
+    flush(); // an open burst ends before the key's own edit (C3-548-1)
     const opts = x.c.param.options;
     // A toggle and a slide draw option 0 at the bottom and their radios run top to bottom
     // (view/face.js), so the keys move as drawn (review of W1c, finding 1): ArrowUp +1,
@@ -136,10 +175,13 @@ export function createGestures({ controlOf, valueOf, setControl, handle, say, la
     return true;
   }
 
-  /** A controller's CC (V506): the open wheel burst ends first, then midi-cc.js's own. */
+  /** A controller's CC (V506): midi-cc.js computes the edit; it runs in the one burst. */
   function cc(n, value, faceOf, played) {
-    flush();
-    return midiCc(n, value, { faceOf, played, controlOf, setControl, handle });
+    const e = ccEdit(n, value, { faceOf, played, controlOf });
+    if (!e) return null;
+    open(e.cid, e.label);
+    const r = wheelSet(e.cid, e.value);
+    return r && r.ok !== false ? { cid: e.cid, value: e.value, text: e.text } : null;
   }
 
   return { press, drag, wheel, choiceKey, aria, refused, flush, cc };
