@@ -302,3 +302,31 @@ test('K247: the claim of the note arming the instrument yields only the engine v
   ui.midiAllOff(); // outside an arming note: every note off, as before
   assert.equal(ui.kbdHeld, '');
 });
+
+test('K247: keysInstrument plays the document, else the panel it may take, else nothing; the '
+  + 'Studio itself inserts nothing', async () => {
+  const { createWorkspaceKeys, holdsPanel } = await import(
+    '../../../src/js/ui/studio/workspace/keys.js');
+  const panelNode = { id: 'k', type: 'keys', metadata: { panel: { module: 'keys' } } };
+  let model = { graph: { nodes: [panelNode], edges: [] }, metadata: {} };
+  const ctx = { handle: { getModel: () => model } };
+  const { part } = createWorkspaceKeys(ctx);
+  const synth = { name: 'synth' };
+  const doc = { name: 'doc' };
+  const cmp = { workspace: 'measure', studioSink: () => null, synthSink: () => synth,
+    keysInstrument: part.keysInstrument };
+  assert.equal(holdsPanel(model), true);
+  assert.equal(cmp.keysInstrument(), synth, 'the document holds the panel: it plays');
+  cmp.studioSink = () => doc;
+  assert.equal(cmp.keysInstrument(), doc, 'a note target of the document plays first');
+  cmp.studioSink = () => null;
+  // The demo song: the user's own chain feeds Master Output, so the panel would cut it.
+  const { templateModel } = await import('../../../src/js/studio/templates/index.js');
+  model = templateModel('demo-song');
+  assert.equal(holdsPanel(model), false);
+  assert.equal(cmp.keysInstrument(), null, 'never rewired from a key: the engine voice plays');
+  model = { graph: { nodes: [], edges: [] }, metadata: {} }; // nothing to cut: it may insert
+  assert.equal(cmp.keysInstrument(), synth);
+  cmp.workspace = 'studio';
+  assert.equal(cmp.keysInstrument(), null, 'in the Studio a key inserts nothing (M086)');
+});

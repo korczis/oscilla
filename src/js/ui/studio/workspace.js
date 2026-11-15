@@ -38,7 +38,7 @@ import { NO_TRACE, createTrace } from '../../core/trace.js';
 import {
   REFERENCE_TEMPLATE_ID, listTemplates, templateModel,
 } from '../../studio/templates/index.js';
-import { createSynthUi, insertDecision } from '../../synth/ui.js';
+import { createSynthUi } from '../../synth/ui.js';
 import { createDirtyTracker, hashMigrationText } from '../../studio/library.js';
 import { openModal, closeModal } from '../dialogs.js';
 import { createGraphEditor } from './graph-editor.js';
@@ -59,6 +59,7 @@ import { createWorkspaceFiles } from './workspace/files.js';
 import { createWorkspaceGraph } from './workspace/graph.js';
 import { createWorkspaceTimeline } from './workspace/timeline.js';
 import { createWorkspaceVoice } from './workspace/voice.js';
+import { createWorkspaceKeys } from './workspace/keys.js';
 import {
   FULLSCREEN_UNSUPPORTED, createWorkspaceNavigation, fullscreenElementOf, fullscreenSupport,
 } from './workspace/navigation.js';
@@ -80,7 +81,7 @@ import { OWNER } from '../output-owner.js';
 /** The parts of the workspace (./workspace/*.js), in the order their functions join `ops`. */
 const PARTS = [createWorkspaceDocument, createWorkspaceRuntime, createWorkspaceMeasurement,
   createWorkspaceFiles, createWorkspaceGraph, createWorkspaceTimeline, createWorkspaceNavigation,
-  createWorkspaceVoice];
+  createWorkspaceVoice, createWorkspaceKeys];
 
 /**
  * A stable handle over the current store (§9): the same object for every projection, the
@@ -590,23 +591,6 @@ export function createStudioUi(svc = {}) {
     studioTraceText() {
       const t = ctx.trace.stats();
       return `${t.size}/${t.cap} steps · ${t.ops} operations · ${t.dropped} dropped`;
-    },
-
-    /**
-     * The one instrument the keys play outside the Synth (K247; midi/routes.js): the Studio
-     * document's note target, else the Synth panel when the document holds it or may take it by
-     * itself (synth/insert.js insertDecision: it cuts nothing of the user's), else null, and the
-     * keys play the engine's own voice: a document of the user's that plays no notes is never
-     * rewired from a key. In the Studio itself, where the document is in sight, a key inserts
-     * nothing (M086): only its note target plays.
-     */
-    keysInstrument() {
-      const doc = this.studioSink();
-      if (doc || this.workspace === 'studio') return doc;
-      const m = ctx.handle.getModel();
-      const has = m.graph.nodes.some((n) => n.metadata && n.metadata.panel
-        && n.metadata.panel.module === 'keys');
-      return has || insertDecision(m).auto ? this.synthSink() : null;
     },
 
     /** Test seam (window.OSCILLA.studio): the live objects, never copies. */
