@@ -4,10 +4,11 @@
 // its own. A workspace switch changes only the route; octave, velocity and lights stay.
 //
 //   plays     the component method that gives the workspace's note sink. Every workspace plays
-//             the one instrument (K247, the owner's order of 2026-11-15): the Studio document's
-//             note target (studioSink), the Synth panel in the Synth; where that method gives no
-//             sink, midi/ui.js falls back to the Synth panel (synthSink), which lives in the same
-//             Studio document, and never to a voice of its own
+//             the one instrument (K247, the owner's order of 2026-11-15): keysInstrument (the
+//             Studio part) gives the document's note target, else the Synth panel in the same
+//             document where it is there or may be inserted by itself; the Synth plays its panel
+//             (synthSink). Only a document of the user's that plays no notes and that the panel
+//             may not rewire by itself leaves the keys to the engine's own voice
 //   folded    the dock starts folded to its handle (the keys still armed and playing): a page
 //             that is not an instrument keeps its content; the user unfolds it
 //   armed     whether the computer keyboard is armed when the workspace first opens: armed
@@ -54,12 +55,12 @@ export const STUDIO_EDITOR_MIN_PX = 360;
 export const SYNTH_CONTENT_MIN_PX = 60 + 3 * 44;
 
 /** Every workspace that is not listed: the one instrument, armed, the dock folded (K247). */
-export const DEFAULT_ROUTE = Object.freeze({ plays: 'studioSink', armed: true, leave: 'leave',
+export const DEFAULT_ROUTE = Object.freeze({ plays: 'keysInstrument', armed: true, leave: 'leave',
   editors: null, yieldsTo: null, folded: true });
 
 export const KEY_ROUTES = Object.freeze({
   // The Playground keeps the keys under its panels (not docked): they play the one instrument.
-  playground: Object.freeze({ plays: 'studioSink', armed: true, leave: 'leave', editors: null,
+  playground: Object.freeze({ plays: 'keysInstrument', armed: true, leave: 'leave', editors: null,
     yieldsTo: null }),
   synth: Object.freeze({ plays: 'synthSink', armed: true, leave: null, editors: null,
     yieldsTo: 'xy-pad',
@@ -71,7 +72,7 @@ export const KEY_ROUTES = Object.freeze({
     keepsRoom: Object.freeze({ toolbar: '[data-osc="page.header"]',
       editorMin: SYNTH_CONTENT_MIN_PX, stackedBelow: 0,
       keptBy: '[data-osc="synth.panel"][data-keeps-dock]' }) }),
-  studio: Object.freeze({ plays: 'studioSink', armed: true, leave: 'leave',
+  studio: Object.freeze({ plays: 'keysInstrument', armed: true, leave: 'leave',
     editors: '[data-osc="studio.graph.viewport"], [data-osc="studio.timeline"]',
     yieldsTo: null,
     // The Studio's toolbar and its editor: the graph's header and two rows of node cards over

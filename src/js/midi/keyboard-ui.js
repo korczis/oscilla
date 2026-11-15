@@ -290,6 +290,11 @@ export function createKeyboardUi({ win = window, bus = null } = {}) {
       };
     },
 
+    /** The keyboard's notes on the engine's own voices off, its keys kept (K247). */
+    kbdEngineOff() {
+      return notes ? notes.silenceEngine() : 0;
+    },
+
     /** Arm or disarm the computer keyboard in the view in sight. */
     kbdToggle() {
       const v = this.kbdView;

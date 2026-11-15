@@ -30,12 +30,14 @@ export const MIDI_REFUSED = notesRefusedSentences('midi');
 /** The least time between two status lines of the same CC control (V506). */
 export const CC_STATUS_MS = 400;
 
-/** The one instrument the keys play now (K247): the workspace's sink, else the Synth panel. */
+/**
+ * The one instrument the keys play now (K247): the sink the workspace's row names (the Studio
+ * part's keysInstrument, or the Synth panel in the Synth), or null where the page has none and
+ * the engine's own voice plays (midi/notes.js).
+ */
 export function centralSink(cmp) {
   const own = routeOf(cmp.workspace).plays;
-  const sink = own && typeof cmp[own] === 'function' ? cmp[own]() : null;
-  if (sink) return sink;
-  return own !== 'synthSink' && typeof cmp.synthSink === 'function' ? cmp.synthSink() : null;
+  return own && typeof cmp[own] === 'function' ? cmp[own]() || null : null;
 }
 
 /** What a port is for, as the MIDI section says it (V507). */
@@ -62,6 +64,7 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
   let support = null;
   let notes = null;
   let monitor = null;
+  let arming = 0; // > 0 while a note of the keys or MIDI is being taken by the instrument (K247)
   const part = {
     midiState: null,
     midiText: '',
@@ -91,10 +94,9 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
         noted: bus ? (on, note, source) => bus.note(on, { note, input: String(source) })
           : () => {},
         refused,
-        // What the keys play: the one instrument (K247). The workspace's row of the one table
-        // names its sink (midi/routes.js, K178): the Studio document's note target, or the Synth
-        // panel in the Synth; where it gives none, the Synth panel, which lives in the same
-        // document. Only a page without the Synth (a unit rig) falls to the engine's voice.
+        starting: (on) => { arming += on ? 1 : -1; },
+        // What the keys play: the one instrument (K247), named by the workspace's row of the one
+        // table (midi/routes.js, K178).
         route: () => centralSink(cmp),
       });
       notes = notesFor((by) => {
@@ -196,6 +198,12 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
      */
     midiAllOff() {
       if (!notes) return 0;
+      // A note arming the instrument made its claim yield the notes (K247): only the engine's
+      // voices give way; the keys and MIDI notes the instrument plays are its own.
+      if (arming > 0) {
+        return notes.silenceEngine()
+          + (typeof this.kbdEngineOff === 'function' ? this.kbdEngineOff() : 0);
+      }
       const n = notes.silence();
       if (typeof this.kbdUnlightMidi === 'function') this.kbdUnlightMidi();
       if (typeof this.kbdReleaseAll === 'function') this.kbdReleaseAll();

@@ -2,8 +2,8 @@
 //
 // Since K247 (ADR 0058, its K247 note) every note of the keys and of MIDI goes to the one
 // instrument that route() gives (midi/ui.js centralSink: the Studio document's note target, else
-// the Synth panel); the engine voices below play a note only on a page without that instrument
-// (a unit rig). The owner table still refuses a note while a measurement, a level reference
+// the Synth panel); the engine voices below play a note only where the page has no instrument
+// (a document of the user's that plays no notes and that the panel may not rewire, a unit rig). The owner table still refuses a note while a measurement, a level reference
 // capture or the sequencer owns the output; the Studio row does not, the Studio being the
 // instrument.
 //
@@ -85,11 +85,13 @@ export function parseMidiMessage(data) {
  * 'reference', 'studio', 'sequencer') or returns null, as before the bus. `refused(by)`
  * is told once per run of refused notes (the caller says so to the user).
  * The MIDI inputs and the on-screen and computer keyboard (K026, src/js/midi/keyboard.js) play
- * through the same layer, each with its own `source` in the note key.
+ * through the same layer, each with its own `source` in the note key. `starting(on)` is told
+ * around each note the instrument takes (K247): the note that arms it makes the playback bus
+ * yield the notes, and the caller then lets only the engine's voices yield (midi/ui.js).
  */
 export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () => null,
   refused = () => {}, route = () => null, claim = null, release = () => {},
-  noted = () => {} } = {}) {
+  noted = () => {}, starting = () => {} } = {}) {
   let refusing = null;
   const keyOf = (source, channel, note) => `${source}:${channel}:${note}`;
   // Where each held key sounds, fixed at its note-on (src/js/midi/held-notes.js, K178): the
@@ -151,7 +153,9 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
         held.releaseKey(key, 're-press');
         before.noteOff(note, { key, reason: 're-press' });
       }
-      const r = sink.noteOn(note, velocity);
+      let r;
+      starting(true);
+      try { r = sink.noteOn(note, velocity); } finally { starting(false); }
       if (r && r.ok !== false) held.hold(key, { sink, note, velocity, input: inputOf(source) });
       return played(r, note, source);
     }
@@ -279,6 +283,14 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
     },
 
     /** Every note off within ESCAPE_RELEASE_S; returns how many were sounding. */
+    /** Only the engine's own voices off (K247: what the instrument's claim yields). */
+    silenceEngine() {
+      const n = engine ? engine.notesOff(true) : 0;
+      held.releaseAll('silence', { sink: ENGINE });
+      releaseIfIdle();
+      return n;
+    },
+
     silence() {
       sustained.clear();
       const sink = route();

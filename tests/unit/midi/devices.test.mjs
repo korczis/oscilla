@@ -29,7 +29,7 @@ import { recognise, recogniserOf, controlOf, controlLabel, DEVICES }
   from '../../../src/js/midi/devices.js';
 import { decodeMidi, describeMidi, createMidiMonitor, MONITOR_ROWS, MONITOR_FLUSH_MS }
   from '../../../src/js/midi/monitor.js';
-import { createMidiUi, inputRow } from '../../../src/js/midi/ui.js';
+import { createMidiUi, inputRow, centralSink } from '../../../src/js/midi/ui.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const read = (rel) => readFileSync(path.join(ROOT, rel), 'utf8');
@@ -259,4 +259,46 @@ test('midi/ui.js: the Synth\'s CC status line names the physical control', () =>
   ui.synthCc = () => ({ cid: 'lpf.frequency', text: 'CC 74 → LPF Cutoff: 1.2 kHz' });
   ui.midiControl({ controller: 74, value: 64 }, { label: 'Enkodér 1' });
   assert.equal(ui.synth.status, 'Enkodér 1 · CC 74 → LPF Cutoff: 1.2 kHz');
+});
+
+test('K247: centralSink gives the sink the workspace row names, or null for the engine voice', () => {
+  const doc = { noteOn() {}, noteOff() {} };
+  const synth = { noteOn() {}, noteOff() {} };
+  const cmp = { workspace: 'measure', keysInstrument: () => doc, synthSink: () => synth };
+  assert.equal(centralSink(cmp), doc, 'every unlisted workspace: the Studio part\'s instrument');
+  cmp.workspace = 'playground';
+  assert.equal(centralSink(cmp), doc);
+  cmp.workspace = 'synth';
+  assert.equal(centralSink(cmp), synth, 'the Synth plays its panel');
+  cmp.workspace = 'studio';
+  cmp.keysInstrument = () => null; // a document of the user's that plays no notes
+  assert.equal(centralSink(cmp), null, 'then the engine\'s own voice plays (notes.js)');
+  assert.equal(centralSink({ workspace: 'about' }), null, 'a page without the Studio part');
+});
+
+test('K247: the claim of the note arming the instrument yields only the engine voices, never '
+  + 'the keys and MIDI notes the instrument plays', async () => {
+  const { ui, ports } = rig();
+  const played = [];
+  let armed = false;
+  const instrument = {
+    noteOn: (n) => {
+      if (!armed) { armed = true; ui.midiAllOff(); } // the bus's yield, inside the arming note
+      played.push(`on ${n}`);
+      return { ok: true };
+    },
+    noteOff: (n) => { played.push(`off ${n}`); return true; },
+    allOff: () => 0,
+  };
+  ui.keysInstrument = () => instrument;
+  await ui.midiInit();
+  ui.midiConnect();
+  await new Promise((r) => setImmediate(r));
+  ports.get('KeyLab mkII 61 MIDI').send([0x90, 60, 100]);
+  assert.deepEqual(played, ['on 60'], 'the arming note is not released by its own claim');
+  assert.equal(ui.kbdHeld, 'C4 (MIDI)', 'and stays lit');
+  ports.get('KeyLab mkII 61 MIDI').send([0x80, 60, 0]);
+  assert.deepEqual(played, ['on 60', 'off 60']);
+  ui.midiAllOff(); // outside an arming note: every note off, as before
+  assert.equal(ui.kbdHeld, '');
 });

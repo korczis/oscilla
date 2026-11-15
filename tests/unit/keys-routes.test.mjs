@@ -37,7 +37,7 @@ test('one table: each workspace names its sink, its first arm state and its leav
   assert.equal(mod.ROOM_EVENT, 'osc:room');
   // The Studio's graph and timeline keep their letter shortcuts while they have the focus.
   assert.deepEqual(JSON.parse(JSON.stringify(mod.KEY_ROUTES.studio)),
-    { plays: 'studioSink', armed: true, leave: 'leave',
+    { plays: 'keysInstrument', armed: true, leave: 'leave',
       editors: '[data-osc="studio.graph.viewport"], [data-osc="studio.timeline"]',
       yieldsTo: null,
       keepsRoom: { toolbar: '[data-osc="studio.bar"]', editorMin: mod.STUDIO_EDITOR_MIN_PX,
@@ -46,9 +46,9 @@ test('one table: each workspace names its sink, its first arm state and its leav
   // unlisted workspace play the Studio document's note target (midi/ui.js centralSink falls back
   // to the Synth panel), never a voice of their own; an unlisted page starts with the dock folded.
   assert.deepEqual(JSON.parse(JSON.stringify(mod.KEY_ROUTES.playground)),
-    { plays: 'studioSink', armed: true, leave: 'leave', editors: null, yieldsTo: null });
+    { plays: 'keysInstrument', armed: true, leave: 'leave', editors: null, yieldsTo: null });
   assert.deepEqual(JSON.parse(JSON.stringify(mod.DEFAULT_ROUTE)),
-    { plays: 'studioSink', armed: true, leave: 'leave', editors: null, yieldsTo: null,
+    { plays: 'keysInstrument', armed: true, leave: 'leave', editors: null, yieldsTo: null,
       folded: true });
   assert.equal(mod.routeOf('measure'), mod.DEFAULT_ROUTE, 'an unlisted workspace');
   assert.equal(mod.dockState({ route: mod.DEFAULT_ROUTE }), 'collapsed');
@@ -72,7 +72,8 @@ test('no other module keeps its own workspace -> sink or arm map', () => {
   const own = path.join(ROOT, 'src/js/midi/routes.js');
   const bad = files.filter((f) => f !== own).filter((f) => {
     const s = readFileSync(f, 'utf8');
-    return /synth:\s*'synthSink'|studio:\s*'studioSink'|kbdArmed:\s*\{/.test(s);
+    return /synth:\s*'synthSink'|studio:\s*'(studioSink|keysInstrument)'|kbdArmed:\s*\{/
+      .test(s);
   }).map((f) => path.relative(ROOT, f));
   assert.deepEqual(bad, [], 'a second owner of the routes');
   const ui = readFileSync(path.join(ROOT, 'src/js/midi/ui.js'), 'utf8');

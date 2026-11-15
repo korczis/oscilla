@@ -92,8 +92,9 @@ K247 note): in every workspace the Studio document's note target (its routed nod
 node that plays notes), and where it has none the Synth panel, which lives in the same document.
 The computer keys and the on-screen keys play the same instrument. There is no second
 synthesizer and no voice of a page's own: the Studio transport is a graph of the one audio
-engine. The Playground's engine voice still plays its own Play and Hold, and plays notes only on
-a page without the Synth (a unit test rig); its laws, as V502 set them, are below for that case.
+engine. The one exception is a Studio document of the user's that plays no notes and whose
+Master Output the Synth panel would have to take: a key never rewires it, so there the keys play
+the engine's own voice (its laws, as V502 set them, are below) until **Vložit** puts the panel in.
 
 - **The instrument's voices.** The Keys node of the Synth panel is monophonic (the last key
   wins); an engine routed as the note target plays its own polyphony. Velocity reaches the node

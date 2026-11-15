@@ -38,7 +38,7 @@ import { NO_TRACE, createTrace } from '../../core/trace.js';
 import {
   REFERENCE_TEMPLATE_ID, listTemplates, templateModel,
 } from '../../studio/templates/index.js';
-import { createSynthUi } from '../../synth/ui.js';
+import { createSynthUi, insertDecision } from '../../synth/ui.js';
 import { createDirtyTracker, hashMigrationText } from '../../studio/library.js';
 import { openModal, closeModal } from '../dialogs.js';
 import { createGraphEditor } from './graph-editor.js';
@@ -590,6 +590,22 @@ export function createStudioUi(svc = {}) {
     studioTraceText() {
       const t = ctx.trace.stats();
       return `${t.size}/${t.cap} steps · ${t.ops} operations · ${t.dropped} dropped`;
+    },
+
+    /**
+     * The one instrument the keys play outside the Synth (K247; midi/routes.js): the Studio
+     * document's note target, else the Synth panel when the document holds it or may take it by
+     * itself (synth/insert.js insertDecision: it cuts nothing of the user's), else null, and the
+     * keys play the engine's own voice: a document of the user's that plays no notes is never
+     * rewired from a key.
+     */
+    keysInstrument() {
+      const doc = this.studioSink();
+      if (doc) return doc;
+      const m = ctx.handle.getModel();
+      const has = m.graph.nodes.some((n) => n.metadata && n.metadata.panel
+        && n.metadata.panel.module === 'keys');
+      return has || insertDecision(m).auto ? this.synthSink() : null;
     },
 
     /** Test seam (window.OSCILLA.studio): the live objects, never copies. */

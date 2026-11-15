@@ -90,7 +90,7 @@ satisfaction:
     evidence: "command"
     ref: "node --test tests/unit/chart-light-references.test.mjs && node scripts/visual-charts.mjs && node scripts/visual-charts.mjs --check-accepted"
   - id: "one-keyboard-everywhere"
-    criterion: "In every workspace the computer keys, the on-screen keys and MIDI play the one instrument, the Studio document's note target and else the Synth panel in the same document, never a voice of the page's own; the keys are armed at once in every workspace with one Arm switch per page, the same docked keyboard is in every workspace (folded to its handle on a page that is not an instrument, unfolded by the user), the readout names no page, and leaving any workspace ends the keys' armed-only run"
+    criterion: "In every workspace the computer keys, the on-screen keys and MIDI play the one instrument, the Studio document's note target and else the Synth panel in the same document, never a voice of the page's own (only a document of the user's that plays no notes and that the panel may not rewire by itself leaves them to the engine's voice); the keys are armed at once in every workspace with one Arm switch per page, the same docked keyboard is in every workspace (folded to its handle on a page that is not an instrument, unfolded by the user), the readout names no page, and leaving any workspace ends the keys' armed-only run"
     evidence: claim
     ref: "one-keyboard-everywhere"
 governance:

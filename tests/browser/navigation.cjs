@@ -84,7 +84,8 @@
 //                     `#m=playground&kbd=1` arms the Playground (Arm keys pressed, the keys
 //                     shown) and the key leaves the address with the first workspace change;
 //                     `#m=studio&kbd=1` arms the Studio, and a link set in the page arms the
-//                     Playground beside it; `#m=measure&kbd=1` arms nothing and shows no keys;
+//                     Playground beside it; `#m=measure&kbd=1` arms Measure, whose keyboard is
+//                     shown (K247: the one keyboard in every workspace);
 //                     every other workspace keeps the state it opens with (read from a plain
 //                     page: armed everywhere since Q105), so a link changes only its own
 //   no-console-errors
@@ -307,6 +308,7 @@ function defineChecks() {
       const a = O.app;
       return { ws: a.workspace, playing: !!a.playing, seq: !!O.labs.sequencer.editor.playing,
         armed: !!(a.synth && a.synth.armed), notes: O.engine.noteCount,
+        studioHeld: O.studio && O.studio.transport ? O.studio.transport.heldNotes().length : 0,
         said: (window.__said || []).join(' | '), nodes: O.engine.activeNodeCount,
         kbd: !!a.notesSounding, status: a.status };
     });
@@ -357,10 +359,12 @@ function defineChecks() {
     await quiet('the sequence');
     await page.locator('[data-osc="keyboard.readout"]').click(); // a gesture, on no control
     await page.keyboard.down('KeyA');
-    res.keyHeld = await settle((s) => s.notes > 0 && s.kbd, 'a held key sounds and is lit');
+    // K247: the key plays the one instrument (the Studio transport), lit on the keys; the
+    // engine's own note count stays 0.
+    res.keyHeld = await settle((s) => s.kbd && s.studioHeld > 0, 'a held key sounds and is lit');
     await forget();
     await go('studio'); // the keys' dock folds there too: the bus's leave reads them first
-    res.keysReleased = await settle((s) => s.notes === 0 && s.said.includes(sentence('notes')),
+    res.keysReleased = await settle((s) => s.studioHeld === 0 && s.said.includes(sentence('notes')),
       'leaving with a key held releases it and the status bar says so');
     await page.keyboard.up('KeyA');
     await quiet('the keys');
@@ -1547,12 +1551,13 @@ function defineChecks() {
     return { ...H.verdict({
       playgroundArmed: p1.workspace === 'playground' && p1.here && p1.shown
         && p1.pressed === 'true' && same(p1.armed, 'studio'),
-      leavesTheAddress: away.workspace === 'measure' && !/kbd=/.test(away.hash) && !away.shown,
+      // K247: Measure has the same keyboard (docked, folded to its handle), armed by default.
+      leavesTheAddress: away.workspace === 'measure' && !/kbd=/.test(away.hash) && away.shown,
       studioArmed: s1.workspace === 'studio' && s1.here && s1.armed.studio
         && same(s1.armed, 'playground') && s1.shown,
       linkInPage: s2.workspace === 'playground' && s2.armed.playground && s2.armed.studio,
-      measureNone: m1.workspace === 'measure' && !m1.here && same(m1.armed, 'playground')
-        && same(m1.armed, 'studio') && !m1.shown,
+      measureArmed: m1.workspace === 'measure' && m1.here && m1.armed.measure
+        && same(m1.armed, 'playground') && same(m1.armed, 'studio') && m1.shown,
     }), def, p1, away, s1, s2, m1 };
   });
 

@@ -557,10 +557,13 @@ status stays `proposed`.**
 
 1. **One instrument.** The computer keys, the on-screen keys and MIDI play, in every workspace,
    the Studio document's note target (its routed node, else its first node that plays notes),
-   and where it has none the Synth panel, which lives in the same document (`midi/ui.js`
-   `centralSink`). No workspace has a voice of its own for the keys any more: the Playground's
-   engine voice still plays its own Play and Hold, and plays keys only on a page without the
-   Synth (a unit rig). The engine stays the one audio owner: the Studio transport is its graph.
+   and where it has none the Synth panel, which lives in the same document, when the document
+   holds it or may take it by itself (it cuts nothing of the user's: `synth/insert.js`
+   `insertDecision`). No workspace has a voice of its own for the keys any more. The one
+   exception: a document of the user's that plays no notes and whose Master Output the panel
+   would have to take is never rewired from a key; there the keys play the engine's own voice,
+   as before K247, and the Insert button puts the panel in. The engine stays the one audio
+   owner: the Studio transport is its graph.
 2. **Armed everywhere.** Every workspace is a keyboard view, armed when it first opens, with
    one Arm switch per page (Q105's answer, which the route table had applied to three pages).
 3. **One dock.** The same keyboard docks over the bottom edge of every workspace but the
