@@ -253,6 +253,10 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
     /** Every note off within ESCAPE_RELEASE_S; returns how many were sounding. */
     silence() {
       sustained.clear();
+      // Every pedal is forgotten too (C3-548-3): silence follows a lost input, a withdrawn
+      // access, a blur and Escape, and a pedal held across any of them would hold every later
+      // Note Off of its input until it was pressed again. Its next press sends CC 64 anew.
+      pedals.clear();
       const sink = route();
       const n = sink ? sink.allOff() : 0;
       const sounding = engine ? engine.notesOff(true) : 0;

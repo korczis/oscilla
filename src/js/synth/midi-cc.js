@@ -3,8 +3,9 @@
 // A controller's knob or fader edits the panel exactly as the mouse does: the slot's control is
 // found on the panel's face, the 0-127 value is a position along that control (ui/synth/knob.js
 // fromNorm, so a log cutoff sweeps in equal ratios), and the edit is one NODE_PARAM_SET (or one
-// amount BATCH) through the panel's own setControl. A run of messages on one control is one undo
-// entry, closed GESTURE_IDLE_MS after its last message, as a wheel burst is.
+// amount BATCH) through the panel's own setControl, applied by synth/gestures.js: a run of
+// messages on one control is one undo entry in the burst the wheel uses too, closed
+// GESTURE_IDLE_MS after its last message or by any other edit (C3-548-1).
 //
 // The slots follow the factory layout that controllers of the KeyLab mkII family send and that
 // the classic-synth plug-ins of the same maker read (derived 2026-11-14 from the installed
@@ -20,10 +21,9 @@
 //   ENGINE_ENV                   { cc: key } re-aimed at the played engine's own envelope
 //   ccTarget(cc, played, faceOf) -> 'module.key' | null
 //   ccValue(value, param)        -> the control's value at position value / 127
-//   midiCc(cc, value, deps)      -> { cid, value, text } | null    (applies it)
+//   ccEdit(cc, value, deps)      -> { cid, value, label, text } | null   (computes it)
 
 import { fromNorm, formatValue } from '../ui/synth/knob.js';
-import { GESTURE_IDLE_MS } from '../ui/synth/feel.js';
 
 export const CC_SLOTS = Object.freeze({
   1: 'vco1.vco-mg', 7: 'out.level',
@@ -51,30 +51,18 @@ export function ccValue(value, param) {
   return fromNorm(Math.min(127, Math.max(0, Number(value) || 0)) / 127, param);
 }
 
-// One open undo burst per store (a page has one).
-const bursts = new WeakMap();
-
 /**
- * Apply CC `cc` = `value` (0-127). deps: { faceOf, played, controlOf, setControl, handle }.
- * A control that is missing from the document, a switch or a cable is left alone (null).
+ * What CC `cc` = `value` (0-127) does, computed and applied by nobody here: { cid, value, label,
+ * text } for the panel control of its slot, or null where that control is missing from the
+ * document, a switch or a cable. deps: { faceOf, played, controlOf }. synth/gestures.js applies
+ * it inside the one undo burst it keeps for the wheel and the controller alike (C3-548-1).
  */
-export function midiCc(cc, value, { faceOf, played, controlOf, setControl, handle }) {
+export function ccEdit(cc, value, { faceOf, played, controlOf }) {
   const cid = ccTarget(cc, played(), faceOf);
   const x = cid && controlOf(cid);
   if (!x || !x.node || (x.c.kind !== 'knob' && x.c.kind !== 'amount')) return null;
-  const store = handle();
-  let b = bursts.get(store);
-  if (!b || b.cid !== cid) {
-    if (b) { clearTimeout(b.timer); store.endGesture(); }
-    b = { cid, timer: 0 };
-    bursts.set(store, b);
-    store.beginGesture(`Změnit ${x.mid.toUpperCase()} ${x.c.label} (MIDI CC ${cc})`);
-  }
-  clearTimeout(b.timer);
-  b.timer = setTimeout(() => { bursts.delete(store); store.endGesture(); }, GESTURE_IDLE_MS);
   const v = ccValue(value, x.c.param);
-  const r = setControl(cid, v);
-  if (!r || r.ok === false) return null;
   const name = `${x.mid.toUpperCase()} ${x.c.label}`;
-  return { cid, value: v, text: `CC ${cc} → ${name}: ${formatValue(v, x.c.param)}` };
+  return { cid, value: v, label: `Změnit ${name} (MIDI CC ${cc})`,
+    text: `CC ${cc} → ${name}: ${formatValue(v, x.c.param)}` };
 }
