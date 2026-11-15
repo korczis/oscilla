@@ -520,8 +520,11 @@ async function measured(browser, b, origin, url, site) {
           check(leg, id, `${build}: Connect MIDI is still ${pendingAt(ms)} (recorded off darwin), `
             + 'with the ADR\'s copy', m.text === midiText('pending', { site }), m.text);
         } else {
+          // the failed copy names the browser's error: the ADR's text with any word for {error}
+          const failedCopy = new RegExp(`^${midiText('failed', { site, error: '\u0000' })
+            .replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace('\u0000', '\\w+')}$`);
           const copyOk = m.state === 'failed'
-            ? /^MIDI could not start on this computer \(the browser reported \w+\)\.$/.test(m.text)
+            ? failedCopy.test(m.text)
             : m.text === midiText(m.state, { site });
           check(leg, id, `${build}: Connect MIDI ends ${m.state}, with the ADR's copy`,
             g.ok && copyOk, `${m.text} (${Date.now() - t0} ms)`);
