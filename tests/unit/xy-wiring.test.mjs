@@ -215,7 +215,7 @@ test('the Y target and the presets: the XY tab\'s BATCH, one undo entry each', (
   sel.fire('change');
   assert.equal(r.st.debugInfo().undoDepth, depth + 1);
   assert.equal(xyTarget(r.st.getModel(), PANEL), 'hpf.frequency');
-  assert.equal(r.said.at(-1), 'Y drives HPF Cutoff.');
+  assert.equal(r.said.at(-1), 'Y ovládá HPF Cutoff.');
   assert.equal(want.type, 'BATCH');
   const st = panelStore();
   for (const recipe of XY_RECIPES) {
@@ -826,7 +826,7 @@ test('Y reads what its target plays: the compiler\'s own sizing at the context\'
         const notes = [past, held ? 'drženo' : ''].filter(Boolean).join(', ');
         assert.equal(opts.readout.y(y), `${name} ${k.text(want)}${notes ? ` (${notes})` : ''}`,
           `${recipe.id}: the ring's value`);
-        assert.ok(opts.text.y(y).includes(`% to ${name}: ${k.text(want)}`),
+        assert.ok(opts.text.y(y).includes(`% pro ${name}: ${k.text(want)}`),
           `${recipe.id}: Y's aria-valuetext ${opts.text.y(y)}`);
       }
       assert.deepEqual(opts.readout.yEnds(), [k.text(rd.at(0)), k.text(rd.at(1))], 'the Y ends');

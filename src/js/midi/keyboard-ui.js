@@ -123,7 +123,7 @@ export function createKeyboardUi({ win = window, bus = null } = {}) {
     kbdSounding: false,
     kbdRange: '',
     // V635: on a phone the Synth's dock shows its keys and the Octave buttons; the instrument
-    // row, Arm and Velocity unfold from its More button, so the dock never buries the panel.
+    // row, Arm and Velocity unfold from its Vše toggle, so the dock never buries the panel.
     kbdMore: false,
     kbdBtn: KBD_BTN,
     // The note owner and the user's expansion as the dock last applied them (midi/dock-yield.js
@@ -185,7 +185,7 @@ export function createKeyboardUi({ win = window, bus = null } = {}) {
     kbdInit({ notesFor }) {
       const cmp = this;
       notes = notesFor((by) => {
-        if (typeof cmp.notify === 'function') cmp.notify('info', 'Keyboard', KEYBOARD_REFUSED[by]);
+        if (typeof cmp.notify === 'function') cmp.notify('info', 'Klávesy', KEYBOARD_REFUSED[by]);
       });
       kb = createKeyboard({
         play: (note, velocity, source) => {
@@ -248,10 +248,10 @@ export function createKeyboardUi({ win = window, bus = null } = {}) {
           cmp.kbdArmed[v] = armed;
           // The domain answers, as every link does (surface-census routes).
           if (typeof cmp.notify === 'function') {
-            const where = v === 'studio' ? 'Studio' : 'Playground';
-            cmp.notify('info', `Keyboard ${armed ? 'armed' : 'disarmed'} from the link`, armed
-              ? `The computer keys play the ${where}. Nothing plays until you press a key.`
-              : `The computer keys no longer play the ${where}.`);
+            const where = { studio: 've Studiu', synth: 'v Synthu' }[v] || 'v Playgroundu';
+            cmp.notify('info', `Klávesy ${armed ? 'připravené' : 'odpojené'} z odkazu`, armed
+              ? `Klávesnice počítače hraje ${where}. Nic nezazní, dokud nestisknete klávesu.`
+              : `Klávesnice počítače už ${where} nehraje.`);
           }
           return true;
         });

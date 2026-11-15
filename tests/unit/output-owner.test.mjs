@@ -219,8 +219,8 @@ test('C024: the description and the status bar name the notes while only notes s
   const name = OUTPUT_OWNER_NAMES.notes;
   assert.strictEqual(held.outputOwner, 'notes');
   assert.ok(held.analysisCanvasLabel.includes(`(${name})`), held.analysisCanvasLabel);
-  assert.doesNotMatch(held.analysisCanvasLabel, /not playing/);
-  assert.match(held.analysisCanvasLabel, /relative to full scale/);
+  assert.doesNotMatch(held.analysisCanvasLabel, /nehraje/);
+  assert.match(held.analysisCanvasLabel, /vůči plné škále/);
   assert.strictEqual(held.statusLabel, 'HRAJE');
   assert.strictEqual(held.anySounding, true, 'the status dot shows the notes sounding');
   assert.strictEqual(held.statusPatternText.toLowerCase(), name.toLowerCase(),
@@ -231,7 +231,7 @@ test('C024: the description and the status bar name the notes while only notes s
 
   const released = notesCmp({ kbdSounding: false, source: 'sweep', sweep: { curve: 'log' } });
   assert.strictEqual(released.outputOwner, null);
-  assert.match(released.analysisCanvasLabel, /not playing/);
+  assert.match(released.analysisCanvasLabel, /nehraje/);
   assert.strictEqual(released.statusLabel, 'PŘIPRAVENO');
   assert.notStrictEqual(released.statusPatternText.toLowerCase(), name.toLowerCase());
 
@@ -273,10 +273,10 @@ test('C024: the bridge takes the notes owner and the scope draws and names it', 
   createScopeView({ getWindowMs: () => 5 }).draw({ p, W: 600, H: 200, pal: { gridSoft: 'g',
     muted: 'm', accent: 'a', dim: 'd', accentFaint: 'f', accentSoft: 's' },
   bandMin: new Float32Array(600), bandMax: new Float32Array(600) }, st);
-  const label = drawn.find((t) => t.startsWith('output analyser'));
+  const label = drawn.find((t) => t.startsWith('analyzátor výstupu'));
   assert.ok(label, JSON.stringify(drawn));
   assert.ok(label.includes(`· ${OUTPUT_OWNER_NAMES.notes}`), label);
-  assert.match(label, /relative to full scale/);
+  assert.match(label, /vůči plné škále/);
 });
 
 /** Every .js file under src/js. */

@@ -17,7 +17,9 @@ export const STEPS_CHOICE = 'steps';
 export function createDock(ctx) {
   const { panel, registry } = ctx;
   const state = () => ({ open: false, choices: [], target: '', osc: 'vco1', wave: '',
-    oscs: ['vco1', 'vco2'].map((id) => ({ id, label: panel.module(id).label })), waves: WAVES });
+    // every item of the dock's radio template has a name, its accessible name and title (U109)
+    oscs: ['vco1', 'vco2'].map((id) => ({ id, label: panel.module(id).label,
+      name: panel.module(id).label })), waves: WAVES });
 
   function sync() {
     const cmp = ctx.cmp();
@@ -30,7 +32,7 @@ export function createDock(ctx) {
     d.choices = [...instrumentChoices(m, panel, { registry, current: on && on.id }),
       { id: STEPS_CHOICE, name: STRIP_TEXT.title, kind: strip ? 'nad panelem' : 'přidat',
         selected: false, disabled: false, reason: '' }];
-    d.target = on ? on.metadata.name : 'nothing';
+    d.target = on ? on.metadata.name : 'nic';
     d.wave = waveOf(m, panel, d.osc);
   }
 
@@ -49,7 +51,8 @@ export function createDock(ctx) {
       const on = done.ok ? ctx.played() : null;
       // K246: a New Synth voice is an insert: its sentence is the insert alert's.
       if (done.ok && id === NEW_VOICE && r.text && ctx.inserted) ctx.inserted(r);
-      else if (done.ok) ctx.say(r.text || `The keys play ${on ? on.metadata.name : 'nothing'}.`);
+      else if (done.ok) ctx.say(r.text || (on ? `Klávesy hrají ${on.metadata.name}.`
+        : 'Klávesy nehrají nic.'));
       return done.ok;
     },
 
