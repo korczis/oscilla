@@ -208,6 +208,7 @@ const LIMIT_MARGIN_S = 2;    // a note at the safety limit is freed within its r
 let NOTE_POLYPHONY;
 let MAX_OUTPUT_GAIN; // the safety chain's ceiling (core/constants.js), loaded in main()
 let MIDI_REFUSED;
+let WORKSPACE_IDS; // src/js/ui/shell.js, the registry (K247)
 let OUTPUT_OWNER_NAMES; // src/js/visualization/output-owner.js (C024)
 
 // ------------------------------------------------------------------------- pure judgements
@@ -1643,6 +1644,64 @@ async function keysInsertNotice(browser, b, origin, url) {
   }
 }
 
+// keys-everywhere-central (K247 criterion 3, the owner's order of 2026-11-15): on one fresh page,
+// every workspace of the registry (WORKSPACE_IDS, the Synth and the Studio too) in its order: the
+// keys are armed on entry, the same A sounds through the one instrument (the Studio transport
+// armed and holding C4) with no voice of the page's own, the keys are shown or folded to their
+// handle, which unfolds the same keys, and its release leaves the instrument holding nothing.
+async function keysEverywhereCentral(browser, b, origin, url) {
+  const leg = `${b}/${origin}`;
+  const id = 'keys-everywhere-central';
+  const { context, page, errors } = await openPage(browser, `${url}#m=playground`,
+    { also: { fn: audioProbe, arg: {} } });
+  const keys = () => page.evaluate(() => {
+    const visible = (el) => {
+      if (!el) return false;
+      const r = el.getBoundingClientRect();
+      const st = getComputedStyle(el);
+      return r.width > 0 && r.height > 0 && st.visibility !== 'hidden' && st.display !== 'none';
+    };
+    return { keys: visible(document.querySelector('[data-osc="keyboard.keys"]')),
+      handle: visible(document.querySelector('[data-osc="keyboard.handle"]')) };
+  });
+  try {
+    for (const ws of WORKSPACE_IDS) {
+      await page.evaluate((w) => window.OSCILLA.app.setWorkspace(w), ws);
+      await until(() => page.evaluate((w) => window.OSCILLA.app.workspace === w
+        && window.OSCILLA.app.kbdView === w, ws), { ms: STEP_MS, what: `${leg}: ${ws} opens` });
+      const armed = await page.evaluate(() => window.OSCILLA.app.kbdArmedHere);
+      await page.locator('#osc-main').click({ position: { x: 4, y: 4 } }); // a gesture
+      await focusOffEditors(page);
+      await page.keyboard.down('KeyA');
+      const m = await heard(page, (x) => x.peak > 0.005, `${leg}: A sounds in ${ws}`);
+      const inst = await instrument(page);
+      const shown = await keys();
+      await page.keyboard.up('KeyA');
+      const off = await until(async () => {
+        const i = await instrument(page);
+        return i.held.length === 0 ? i : null;
+      }, { ms: STEP_MS, what: `${leg}: A released in ${ws}` }).catch(() => instrument(page));
+      let unfolded = shown.keys;
+      if (!shown.keys && shown.handle) {
+        await page.locator('[data-osc="keyboard.handle"]').click();
+        unfolded = await until(async () => ((await keys()).keys ? true : null),
+          { ms: STEP_MS, what: `${leg}: the handle unfolds the keys in ${ws}` }).catch(() => false);
+        await page.locator('[data-osc="keyboard.handle"]').click(); // folded again
+      }
+      check(leg, id, `${ws}: the keys are armed on entry, A sounds through the one instrument `
+        + '(the Studio transport armed, holding C4, no voice of the page), the keys are shown or '
+        + 'folded to their handle, which unfolds them, and the release leaves nothing held',
+      armed && !m.timedOut && m.notes === 0 && inst.armed && inst.held.includes(60)
+        && (shown.keys || shown.handle) && unfolded && off.held.length === 0,
+      JSON.stringify({ armed, peak: m.peak, notes: m.notes, timedOut: m.timedOut, inst, shown,
+        unfolded, off }));
+    }
+    check(leg, id, 'no console or page error', errors.length === 0, errors.join(' | '));
+  } finally {
+    await context.close();
+  }
+}
+
 async function keyboardChecks(browser, b, origin, url) {
   const leg = `${b}/${origin}`;
   const id = 'keyboard-qwerty';
@@ -1883,6 +1942,8 @@ async function main() {
     'ui.js')).href));
   ({ OUTPUT_OWNER_NAMES } = await import(pathToFileURL(path.join(ROOT, 'src', 'js',
     'visualization', 'output-owner.js')).href));
+  ({ WORKSPACE_IDS } = await import(pathToFileURL(path.join(ROOT, 'src', 'js', 'ui',
+    'shell.js')).href));
   await RUN.ready();
   const server = RUN.origins.includes('http') ? await serveDist(DIST, { prefix: 'oscilla-midi-' })
     : null;
@@ -1906,6 +1967,7 @@ async function main() {
             await keyboardChecks(browser, b, origin, url);
             await keysInsertNotice(browser, b, origin, url);
             await keyboardEverywhere(browser, b, origin, url);
+            await keysEverywhereCentral(browser, b, origin, url);
             await keysOneKeyboard(browser, b, origin, url);
             await keyboardStudioHeld(browser, b, origin, url);
             await seamReroute(browser, b, origin, url);
