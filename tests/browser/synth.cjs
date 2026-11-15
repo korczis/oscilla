@@ -1526,7 +1526,7 @@ function defineChecks() {
     // Nine notes nodes (pad L too since K220, the same xy-pad kind as pad R), New Synth voice
     // and, since K221, Krokový sekvencer.
     return { ok: out.items === 11 && out.expanded === 'true' && out.routeEntries === 1
-      && /^Play .* from the keys$/.test(out.label) && out.sameRevision
+      && /^Hrát .* z kláves$/.test(out.label) && out.sameRevision
       && out.waveName.count === 1 && out.waveName.text === 'Obd'
       && out.waveName.title === 'Obdélník', ...out };
   });
