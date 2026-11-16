@@ -40,4 +40,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-15
-updated_at: 2026-11-15
+updated_at: 2026-11-16T19:45:48Z
+started_at: 2026-11-16T19:42:50Z
+started_event: sha256:a53045fbc3f020fb2a19c2b180365b28862cf2ce428b33efc5304396c9fe82a4
+verified_at: 2026-11-16T19:43:19Z
+verified_event: sha256:929123619ebea2b72661597af9061a26231941bb62c1d30c76a22e5fd453947c
+completed_at: 2026-11-16T19:45:48Z
+completed_event: sha256:665777c61cb41b3d3854b2a55cc1c2bdc696b4434df39f1c48ecf7c8ea7279ef
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "node --test tests/unit/midi/device-map.test.mjs tests/unit/ui-catalog.test.mjs; node tests/browser/midi.cjs"
+    result: "built by oscilla-ff (session cae276ab) on feat/v509-midi-device-map (PR 570), landed in train T25, PR 574 (main merge commit db8fef0372d4dc8efb693c3f9171f5385499ff0a), released as v3.40.0. Criteria re-checked on db8fef03 by oscilla-ff: the 4 criteria hold. The view is derived from each profile's own groups, and device-map.test.mjs finds every profile control exactly once. What a control moves is read from ccControl, the decoder and the notes, so a renamed CC 74 control renames the map. A control lights from the monitor's decoded message within MONITOR_FLUSH_MS (the ui.js lit test, and midi.cjs midi-seam-device-map with a stub KeyLab mkII CC 74 lighting Encoder 1 as LPF Cutoff). The markup is Flowbite Pro with Czech copy, the controls are catalogued (midi.map, midi.map-bank) and the ratchets are green in T25's unit job. Units at db8fef03: 157/157. midi.cjs: green in every leg of T25's run 43864218899 on 5db8fbec."
+    artifact: ".ai/repo/reviews/574.yaml"
+    commit: db8fef0372d4dc8efb693c3f9171f5385499ff0a
+    recorded_at: 2026-11-16T19:44:43Z
