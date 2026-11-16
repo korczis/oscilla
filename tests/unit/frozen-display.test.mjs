@@ -54,5 +54,7 @@ test('the page reads notices, plan warnings and pattern field labels through sho
   assert.match(html, /x-text="shownText\(a\.message\)"/);
   assert.match(html, /planWarnings\.map\(shownText\)/);
   const wb = readFileSync(`${ROOT}src/js/ui/workbench.js`, 'utf8');
-  assert.match(wb, /ppLabel\(d\) \{ return this\.ppSweep \? this\.sweepLabel\(d\) : shownText\(d\.label\); \}/);
+  assert.match(wb, /ppLabel\(d\) \{ return this\.ppSweep \? this\.sweepLabel\(d\) : shownText\(d\.label\); \}/);  // WCAG 2.5.3 label in name (C3, T25): the input's aria-label overrides its <label for>, so
+  // it names the same Czech text the label shows, never the frozen English field label.
+  assert.match(wb, /ppAriaLabel\(d\) \{ return this\.ppSweep \? null : shownText\(d\.label\) \+ this\.paramUnit\(d\); \}/);
 });
