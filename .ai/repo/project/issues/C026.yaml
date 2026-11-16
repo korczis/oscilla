@@ -25,4 +25,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-01
-updated_at: 2026-11-01
+updated_at: 2026-11-15T17:11:21Z
+started_at: 2026-11-15T17:09:59Z
+started_event: sha256:c6cd2345d3dbc4cf6041a7d7da2fea797b00d70225f2db0fe094d81251dc9681
+verified_at: 2026-11-15T17:10:30Z
+verified_event: sha256:a8e33c84c3939abfc38db28ccaf70e78231e1d15e98dedca0177688048cede05
+completed_at: 2026-11-15T17:11:21Z
+completed_event: sha256:44e7b5662061998d14f16dada63d568dc2f5173e251e3794cf206b6bae4e91e2
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "node --test tests/unit/c011-safety-limits.test.mjs"
+    result: "On main 474ce9c3, tests/unit/c011-safety-limits.test.mjs case 20 (release 0.8 s under a limit lowered to 0.5 s; literal times) passes 20/20, and both tightenLimit mutants (rel = v.release; Math.max(0.005, lim)) fail it 19/1, as #429's body shows; landed test-only via #429 in #437 (v3.23.0), no verdict needed (unguarded). Audit of 2026-11-15 by oscilla-ff (session cae276ab-2d90-45d2-babb-a1f8023668d2) on the owner's order to finish unfinished work, criterion by criterion."
+    artifact: "tests/unit/c011-safety-limits.test.mjs"
+    commit: 474ce9c351e979bac15bcfd77f9a8c6ca638f16b
+    recorded_at: 2026-11-15T17:11:03Z

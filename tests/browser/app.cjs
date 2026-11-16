@@ -1345,7 +1345,7 @@ function defineChecks() {
     const midiConnected = await page.evaluate(() => !!(window.OSCILLA.app
       && window.OSCILLA.app.midiState === 'connected'));
     const notOffered = [...(midiOffered ? [] : ['midi.connect']),
-      ...(midiConnected ? [] : ['midi.monitor-clear'])];
+      ...(midiConnected ? [] : ['midi.monitor-clear', 'midi.response'])];
     const neverVisible = list.filter((c) => !c.visible && !notOffered.includes(c.osc))
       .map((c) => c.osc);
     // Controls the audit must have met (they exist only in a state the audit sets up).
@@ -5194,14 +5194,14 @@ function defineChecks() {
       && /noopener/.test(l.rel) && /noreferrer/.test(l.rel);
     const ok = res.nav.last === 'nav.about'
       && (res.tabbedTo === 'nav.about' || browserName === 'webkit')
-      && v.shown && v.current === 'nav.about' && v.title === 'OSCILLA · About' && v.h2 === 1
-      && v.heading === 'About OSCILLA' && !v.anchors.length && v.traceHidden && v.othersHidden
+      && v.shown && v.current === 'nav.about' && v.title === 'OSCILLA · O aplikaci' && v.h2 === 1
+      && v.heading === 'O aplikaci OSCILLA' && !v.anchors.length && v.traceHidden && v.othersHidden
       && external(v.source, 'https://github.com/korczis/oscilla')
       && external(v.majordomus, 'https://majordomus.dev/')
       && v.email && v.email.href === 'mailto:korczis@gmail.com'
       && res.reducedMotionS < 0.01
       && Object.values(res.widths).every((b) => !b.length)
-      && res.menuMode === 'about' && !/About/.test(res.baseTitle)
+      && res.menuMode === 'about' && !/O aplikaci/.test(res.baseTitle)
       && res.roadmapOk && res.workspacesOk && res.headlineOk;
     return { ok, ...res };
   });

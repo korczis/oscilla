@@ -308,5 +308,5 @@ test('the Filter Lab labels the rate it models, and Learn says which display ass
   const { LEARN_TOPICS } = await import('../../src/js/data/learn.js');
   const body = LEARN_TOPICS.find((t) => t.id === 'samplerate').body;
   assert.match(body, /until then the display assumes 44\.1 kHz provisionally and marks it as such/);
-  assert.match(body, /the Filter Lab models its response at 48 kHz and labels it/);
+  assert.match(body, /the Filtry page models its response at 48 kHz and labels it/);
 });

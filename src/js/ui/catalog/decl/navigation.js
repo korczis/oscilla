@@ -13,7 +13,7 @@ export default [
     pattern: { template: 'nav-group.{key}', keys: Object.keys(GROUP_REGISTRY),
       sites: ['src/index.html', 'src/js/ui/app.js', 'src/js/ui/shell.js'] },
     kind: 'open',
-    label: 'Analyze, Synthesis',
+    label: 'Analýza, Syntéza',
     docs: 'Opens the menu of workspaces grouped under one navigation entry.',
     state: 'ui.navExpanded',
     in: 'sidebar',

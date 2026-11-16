@@ -16,10 +16,11 @@
 //               specifiers, untracked files under node_modules) are clause (c)'s.
 //     surfaces  the UI surfaces of src/index.html (HTML comments removed):
 //                 navbar   the element with role="banner"
-//                 sidebar  the element with aria-label="Sidebar" (the legacy tab bar's
-//                          "Workspace" too)
+//                 sidebar  the element with aria-label="Postranní panel" (U106; "Sidebar"
+//                          before it, the legacy tab bar's "Workspace" too)
 //                 main     the <main> element
-//                 footer   the element with aria-label="Status and actions"
+//                 footer   the element with aria-label="Stavový řádek" (U106; "Status and
+//                          actions" before it)
 //                 page     every element whose id starts with "osc-view-" (a workspace)
 //                 card     every other <section> element with an id
 //                 modal    every <dialog> element with an id

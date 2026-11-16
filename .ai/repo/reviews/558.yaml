@@ -1,0 +1,153 @@
+# Review verdict for pull request #558 (train/t23): train T23 and release v3.38.1 (a patch:
+# release:analyze derives patch from U106's fix(ui)).
+# Member: oscilla-0b's U106 (#556: 81350f63, the page is lang="cs", the shell's remaining English
+# carries lang="en", the workspaces have Czech names with Studio, Synth and Playground kept as
+# names; bde33eb1, its size raise entry), merged into the train in 59a8dc35 on main 474ce9c3
+# (T22, v3.38.0) with one rebuild; oscilla-0b's linux-x64 re-accept 8cd09f5a; oscilla-43's
+# chore(release): record v3.38.0 c4a41d76 and chore(release): v3.38.1 84460015. bde33eb1 and
+# 474ce9c3 are ancestors of 84460015 (checked by the reviewer). Guarded in 2 paths, both string
+# literals that quote a renamed label: src/js/experiments/connections.js ("loaded in Měření")
+# and src/js/studio/sequence-import.js ("holds no Sekvencer sequence"). Unguarded and read as
+# members: src/js/ui/shell.js (the registry's Czech labels and lang: 'en' on the kept names),
+# src/index.html (lang="cs", the bound :lang of the nav, page header and Related links),
+# src/js/ui/app.js, cross-links.js, counterparts.js, shortcuts.js, workbench.js,
+# ui/studio/workspace/files.js and navigation.js, core/preset-notice.js, main.js, the catalogue
+# declarations, scripts/landing/copy.mjs, scripts/ui-flowbite-pro-measure.mjs, README.md,
+# docs/v31/user-guide.md, the new tests/unit/shell-lang.test.mjs and the readers that moved.
+# Judged at 84460015 on base origin/main 474ce9c3, 2026-11-15, in the reviewer's own detached
+# worktree ~/dev/oscilla-wt/review-526; superseded at 85412d57 (oscilla-43's
+# test(studio) fix for C3-558-1, below), and again at 85662bf6 (oscilla-0b's census driver
+# change for E075, below), the same digest.
+#
+# Reviewer: rev-seat-2 (session oscilla-c3, claude-code c0f0687c), a separate top-level session
+# acting as rev-seat for every train (Q108 A). It built none of this: oscilla-0b built U106 and
+# re-accepted the references, oscilla-43 integrated and stamped. Disclosure: U106's naming and
+# scope are this reviewer's own Q090 decision (2026-11-15, recorded verbatim in U106.yaml); the
+# builder implemented it and this verdict judges the implementation against it.
+#
+# The digest: origin/main's (474ce9c3) scripts/review-verdict.mjs --content --list at 84460015:
+# cec49b6a2297c9f3... over 2 guarded paths (equal to the integrator's).
+#
+# How it was judged, condition by condition (Q090 on U106):
+# - (1) Labels: Měření, Experimenty, Analyzátor, Filtry, Porovnání, Syntéza, Sekvencer,
+#   Předvolby, Výuka, O aplikaci; groups Analýza and Syntéza. Hashes, routes, data-osc hooks and
+#   catalogue ids unchanged. The English left in src/, scripts/ and tests/browser that still
+#   reads Measure, Compare, Presets or Learn is not a workspace label (core/constants.js
+#   APP_MODES is read only for its ids; the Experiments panel "Compare", measure-flow's step, the
+#   Studio inspector's "Presets" menu, scripts/facts.mjs's directory map), so it stays under the
+#   czech-prose ratchet. English sentences quoting a renamed workspace now name it as shown
+#   ("loaded in Měření", "Sekvencer is not available here"), which condition (1) asks; they are
+#   still English, and later Czech passes translate them.
+# - (2) Playground, Studio and Synth carry lang="en" only where they stand alone (the nav item,
+#   the page header, the Related links), bound from the registry's lang; declined Czech sentences
+#   carry none; shell-lang.test.mjs states the rule in its header. The reviewer's probe
+#   k558-shell.cjs (chromium, keyboard Tab at 1536 px): Playground{en}, Studio{en}, Synth{en},
+#   every other nav stop Czech, and the brand link {en} (Q002).
+# - (3) Syntéza group and item stay parallel. The aria snapshot at 1536 px (chromium and webkit)
+#   reads button "Syntéza" [expanded], list "Syntéza", link "Syntéza": the follow-up is #556's
+#   body and U113 (plan PR #559), which must tell all three apart.
+# - (4) shell-lang.test.mjs derives its regions from the shell's catalogue declaration
+#   (decl/shell.js) and the contentinfo landmark, no hand count; fail-first run by the reviewer:
+#   OSC_SHELL_LANG_ROOT over origin/main 474ce9c3's src/ fails 4 of 6 (the page is not cs,
+#   unmarked English, the labels, the unbound lang); at 84460015 6 of 6 pass.
+# - (5) Size: #556's raise entry (cap 306000, 304601 -> 305066 B, +465) is that step's history
+#   on its old base; raises are added, never edited, so it stays behind #555's. The cap in force
+#   is 310000 (caps), src/index.html 309121 -> 309586 B (+465), under it.
+# - The page title follows the workspace's Czech label ("OSCILLA · O aplikaci") while the static
+#   <title>, og/twitter and the brand's aria-label stay English (Q002): accepted.
+# - The visual re-accept 8cd09f5a states its reasons per gate (header chrome 16.39 vs 16.24 % from
+#   "Exportovat" and the Czech search placeholder; MEASURE 0.553 %; all 16 SYN views; STUDIO
+#   unchanged); the SYN noise re-measured over 10 runs, the tool's minimum (NOISE_RUNS) and the
+#   count every view used until today.
+# - Phone and keyboard (probe k558-shell.cjs, 320x568, 375x667 and 1536x1024, chromium and
+#   webkit): no shell text clipped by the longer labels (the hits are screen-reader-only spans);
+#   the page summary's ellipsis at 1536 px is main's too (title fallback).
+#
+# Seen while judging, not this train's:
+# - cross-links learn-demo-back (chromium, keyboard) failed 2 of 2 origins in the suite run.
+#   Alternated with --only, 15 rounds each: head 2, main 474ce9c3 1, same signature (focus on
+#   source.hold, not #osc-main > h1); CI chromium passed it 16 of 16 in the 8 runs before. The
+#   unchanged suite instrumented with a focusin hook caught it on run 16 of 52: runLearnDemo's
+#   $nextTick focus to #osc-hold-play (src/js/ui/workbench.js) fired 52 ms after the demo, after
+#   the notice had been followed and Back pressed, and took focus from the Playground heading.
+#   Filed by oscilla-43 as E074 (plan PR #559).
+# - ui-flowbite-pro shell-a11y failed once in chromium/file (390 dark: ArrowDown had not yet
+#   moved focus from nav.playground when read); 10 of 10 on head and 10 of 10 on main alternated
+#   at load 25-37; undetermined. U106's shell.js diff touches no key or focus handling.
+#
+# THE CONDITION of this verdict (as for the trains since #509): it binds once the reviewer has
+# read the six "Browser leg N (browser)" logs of this pull request's run and found each leg's
+# suite list equal to shards.cjs --plan at this head, "run-suites: all K suites passed" and no
+# FAIL line, AND has run the release CI receipt check against this run with the base ci.yml
+# (474ce9c3's). Auto-merge is armed only after the reviewer reports "legs OK"; otherwise a
+# superseding verdict.
+#
+# Measured by the reviewer (Node 22.20.0, OSC_LOAD_MAX=80): at 84460015 GITHUB_BASE_REF=main npm
+# test exit 0 (5835 tests, 5834 pass, 0 fail), build:check 0, release:analyze 0 (patch:
+# v3.38.1), src/index.html 309586 B (cap 310000); in chromium, firefox and webkit: navigation 0
+# (25/25 x 6), link-integrity 0 (126 checks), ui-current 0 (407/407 x 3), app 0 (66/66 x 6),
+# first-screen 0 (645 checks), journeys 0 (38 x 3), iphone 0 (61/61, 61/61, 122/122),
+# surface-census 0 (9/9 x 6), layout 0 (107/107 x 3), qa-regressions 0 (19/19 x 3), synth 0,
+# v31-studio-workflows 0, v31-studio-links 0 (8/8 x 6), control-census 0 (340 pass, 1 expected failure, 0 fail per engine); cross-links exit 1 (106 passed,
+# learn-demo-back as above, main's) and ui-flowbite-pro exit 1 (11/12 once, 12/12 x 5, as
+# above, undetermined).
+#
+# Superseding (2026-11-15): the pull request's run 43716604765 on 4c40b17b (this file's first
+# version) was red. Each leg's suite list equals shards.cjs --plan (control-census split 1/2 and
+# 2/2 per engine); legs 2 chromium, 1 webkit and 2 firefox failed tests/browser/
+# v31-studio-transport.cjs: status-bar-studio (2 checks) and reset-over-studio read
+# "Zesílení -30.5 dB" / "Zesílení -21.9 dB" where the suite still built `Gain ${dbText(...)}`.
+# U106 renamed the status bar's gain label (src/index.html, app.js statusGainText and its unit
+# tests) and left this browser reader: C3-558-1, P1, gate red. The reviewer had not run
+# v31-studio-transport locally (its own miss: the suite reads the renamed text). Reproduced:
+# chromium at 84460015 exit 1 (3 failures, 41 passed), at main 474ce9c3 exit 0 (44 passed).
+# Closed by 85412d57 (oscilla-43; the two readers and the header comment, the only file); at
+# 85412d57 v31-studio-transport in chromium, firefox and webkit exit 0 (131 checks), and no other
+# `Gain ${` or "Gain -" reader in tests/browser or tests/unit. Digest at 85412d57 unchanged
+# (cec49b6a, the same 2 guarded paths).
+# The run's firefox reds are not this train's: leg 1 journeys journey-3-views:instrument and
+# leg 2 control-census envelope.sustainSlider.pointer, both an envelope control not switching
+# within 10 s. The same shape failed firefox on 87826c4d attempt 1 (journey-5-persist:url,
+# "#osc-env-enable switched on"), on 7145ecde (envelope.attackSlider.pointer) and on #560's first
+# attempt; U106 changes no envelope or input code (its src diff there is two title strings).
+# Main's since T22, undetermined in cause; the flake ledger row names it.
+#
+# Superseding again (2026-11-15): run 43725597787 on ad446314 (the version above) was red in
+# Browser leg 2 (firefox) only, control-census --part 2/2, attempt 1 envelope.sustainSlider.pointer
+# and attempt 2 (rerun agreed with oscilla-43, ledger row E075) envelope.attackSlider.pointer,
+# "not reached within 10000 ms"; the other five legs equal shards.cjs --plan, "all K suites
+# passed", no FAIL; v31-studio-transport passed in every engine. Firefox leg 2 on T23 was red
+# 3 of 3 against 1 of 6 on the other K247/T22 descendants (job logs read by the reviewer), so
+# it was judged as a suspect, not rerun again. Probed: the reviewer's and oscilla-0b's linux
+# firefox and chromium probes (mcr playwright 1.63 image) found every envelope slider hit at
+# the census click point on a fresh page, nothing fixed over it, scrollY 0, and every click
+# moved the value, on main's and T23's dist alike; with lang="cs" Firefox reflows (release
+# slider y 715 -> 720, attack 584 -> 583), Chromium identical. oscilla-0b's three slider rows
+# --only passed 12 of 12 in the container on both dists. The reviewer's hooked full part 2/2 in
+# the container was inconclusive (amd64 emulation: page.goto timed out at row 18). Classified by
+# oscilla-43's alternated Mac A/B of the full part in firefox: main's tree (474ce9c3) round 1
+# red on envelope.attackSlider.pointer, T23 round 1 green; so it is E075 (plan PR #559), main's,
+# not U106's. The rate difference stays a note: lang="cs" moves Firefox's layout and can raise a
+# settle race's odds; it is not shown to cause it.
+# 85662bf6 (oscilla-0b, tests/browser/control-census.cjs only): D.slide, the two hold rows and
+# the minimap row click through the locator (position, timeout ROW_MS), which re-reads the box
+# at the click, waits for stability and refuses a covered point with Playwright's own message;
+# no catch; no census row keeps a box-then-page.mouse drive (reviewer's grep). The commit
+# message states the evidence as above and keeps E075 open for journeys' #osc-env-enable. The
+# D.slide comment states the race as the cause, which is not pinned: C3-558-2, P3, open, to be
+# corrected under E075. At 85662bf6 (reviewer, Node 22.20.0, OSC_LOAD_MAX=80, load 46):
+# GITHUB_BASE_REF=main npm test exit 0 (5835 tests, 5834 pass, 0 fail); control-census in
+# firefox and chromium exit 0 (340 pass, 1 expected failure, 0 fail each). Not run by the
+# reviewer: control-census in webkit (the CI webkit legs run it). Digest at 85662bf6 unchanged
+# (cec49b6a, the same 2 guarded paths).
+#
+# Verdict: merge, under the condition above, at 85662bf6. Two findings: C3-558-1 closed,
+# C3-558-2 (P3) open.
+schema: review-verdict/v1
+pr: 558
+verdict: merge
+reviewer: oscilla-c3 rev-seat-2 (claude-code c0f0687c, a separate top-level session; built none of 85662bf6)
+content: cec49b6a2297c9f39430da834dd6b9360c48f3c5d99a0e91e3abc8d706a85b3a
+findings:
+  - { id: C3-558-1, severity: P1, status: closed, title: "v31-studio-transport still read the status bar's gain as \"Gain <dB>\" after U106 renamed it Zesílení (gate red in all three engines); closed by 85412d57" }
+  - { id: C3-558-2, severity: P3, status: open, title: "control-census D.slide's comment states the box-then-click race as E075's cause, which is not pinned; correct it under E075" }

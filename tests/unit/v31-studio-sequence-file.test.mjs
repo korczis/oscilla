@@ -189,7 +189,7 @@ test('a malformed or oversized file is refused with a readable reason and no mod
     durationMs: 100, beats: null, params: {} }));
   const huge = fileText({ ...ref, note: 'x'.repeat(STUDIO_IMPORT_LIMITS.maxBytes) });
   const cases = [
-    ['config without a sequence', configText(null), /holds no Sequencer sequence/,
+    ['config without a sequence', configText(null), /holds no Sekvencer sequence/,
       'sequencer'],
     ['blocks not a list', fileText({ ...ref, blocks: { b1: ref.blocks[0] } }),
       /blocks are not a list/, 'blocks'],

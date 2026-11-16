@@ -23,10 +23,26 @@ import { decodeMidi } from './message.js';
 import { createMidiMonitor, describeMidi } from './monitor.js';
 import { createClockMeter, transportAction, transportTarget, CLOCK_GAP_MS } from './transport.js';
 import { createKeyboardUi } from './keyboard-ui.js';
+import { createResponseMode } from './response-mode.js';
+import { ANSWER_SOURCE } from './response.js';
+import { clockOffsetS, transportClockOf } from '../audio/clock.js';
+import { NOTE_POLYPHONY } from '../audio/audio-engine.js';
 import { OWNER, notesRefusalOf, notesRefusedSentences } from '../core/output-bus.js';
 
 /** What a refused MIDI note says, per owner: the one output-owner table's (C036). */
 export const MIDI_REFUSED = notesRefusedSentences('midi');
+
+/**
+ * Why an answer of call and response does not sound (V503), said once per phrase in the MIDI
+ * section: an owner of the output (the one table's sentence for MIDI), or no instrument to plan
+ * it on (the keys play the page's own voice, which starts now or never).
+ */
+export const RESPONSE_TEXT = Object.freeze({
+  title: 'Otázka a odpověď',
+  refused: (why) => `Odpověď nezazní: ${why}`,
+  noInstrument: 'klávesy teď hrají jen vlastní hlas stránky, který odpověď naplánovat neumí. '
+    + 'Otevřete Synth, nebo přidejte do Studia uzel Keys.',
+});
 
 /** The least time between two status lines of the same CC control (V506). */
 export const CC_STATUS_MS = 400;
@@ -36,7 +52,11 @@ export const CC_STATUS_MS = 400;
  * part's keysInstrument, or the Synth panel in the Synth), or null where the page has none and
  * the engine's own voice plays (midi/notes.js).
  */
-export function centralSink(cmp) {
+export function centralSink(cmp, source) {
+  // An answer of call and response never brings the Synth panel in (oscilla-c3 on V503, item
+  // 8 (i)): a Zpět in the phrase's gap is the user removing it, and the answer may not undo that.
+  if (source === ANSWER_SOURCE && typeof cmp.keysPanelMissing === 'function'
+    && cmp.keysPanelMissing()) return null;
   const own = routeOf(cmp.workspace).plays;
   return own && typeof cmp[own] === 'function' ? cmp[own]() || null : null;
 }
@@ -76,6 +96,7 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
   let notes = null;
   let monitor = null;
   let arming = 0; // > 0 while a note of the keys or MIDI is being taken by the instrument (K247)
+  let response = null; // call and response (V503), on the one instrument
   const part = {
     midiState: null,
     midiText: '',
@@ -83,6 +104,7 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
     midiInputs: [],   // inputRow per connected input (V507)
     midiLog: [],      // the monitor's rows, newest first (V507)
     midiClockBpm: null, // the tempo of an incoming MIDI clock, or null (V508)
+    midiResponse: false, // call and response is on (V503); off on every load, never stored
 
     /** Called once by the component's init: the load-time read, never a request. */
     midiInit() {
@@ -103,19 +125,39 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
         // claims the output as the notes, and the last released note gives it back.
         claim: bus ? (reason) => bus.claim(OWNER.notes, reason) : null,
         release: bus ? () => bus.release(OWNER.notes) : () => {},
-        noted: bus ? (on, note, source) => bus.note(on, { note, input: String(source) })
-          : () => {},
+        noted: (on, note, source) => {
+          // Any other player's note cuts an answer, the computer and on-screen keys and the pad
+          // too (oscilla-c3 on V503, item 8 (iii)): they share the one instrument.
+          if (on && response && source !== ANSWER_SOURCE) response.interrupt();
+          if (bus) bus.note(on, { note, input: String(source) });
+        },
         refused,
         starting: (on) => { arming += on ? 1 : -1; },
         // What the keys play: the one instrument (K247), named by the workspace's row of the one
         // table (midi/routes.js, K178).
-        route: () => centralSink(cmp),
+        route: (source) => centralSink(cmp, source),
       });
-      notes = notesFor((by) => {
+      notes = notesFor((by, source) => {
+        if (source === ANSWER_SOURCE) return; // the answer says its own refusal (V503)
         if (typeof cmp.notify === 'function') cmp.notify('info', 'MIDI', MIDI_REFUSED[by]);
       });
+      // Call and response (V503): it hears the play port's notes, wakes on the engine's one
+      // transport clock and plays its answer through the same note layer (A2, A5).
+      if (engine) {
+        response = createResponseMode({ notes, clock: transportClockOf(engine),
+          offsetS: () => (engine.ctx ? clockOffsetS(engine.ctx, now()) : null),
+          ctxNow: () => (engine.ctx ? engine.ctx.currentTime : 0), perfNow: now,
+          safeMax: () => engine.safeMaximum, a4: () => (cmp.a4 > 0 ? cmp.a4 : 440),
+          polyphony: NOTE_POLYPHONY,
+          say: (reason) => {
+            if (typeof cmp.notify !== 'function') return;
+            cmp.notify('info', RESPONSE_TEXT.title, RESPONSE_TEXT.refused(reason === 'no-instrument'
+              ? RESPONSE_TEXT.noInstrument : MIDI_REFUSED[reason] || reason));
+          } });
+      }
       // Every note off, and nothing lit: the forced stops of ADR 0062 and V502.
       const silence = () => {
+        if (response) response.cut();
         const n = notes.silence();
         if (typeof cmp.kbdUnlightMidi === 'function') cmp.kbdUnlightMidi();
         if (typeof cmp.kbdReleaseAll === 'function') cmp.kbdReleaseAll();
@@ -169,6 +211,10 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
           if (w.role !== 'play') return;
           const e = notes.handle(data, ids.get(port));
           if (e.kind === 'control-change') { cmp.midiControl(e, control); return; }
+          if (response && (e.kind === 'note-on' || e.kind === 'note-off')) {
+            const at = Number.isFinite(stamp) && stamp > 0 ? stamp : now();
+            response.player(e.kind === 'note-on' ? 'on' : 'off', e.note, e.velocity, at);
+          }
           // The on-screen keys light the note while it sounds (K026).
           if (typeof cmp.kbdLight !== 'function') return;
           if (e.kind === 'note-on' && e.result && e.result.ok) cmp.kbdLight(e.note, true);
@@ -275,6 +321,17 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
      * Every MIDI note off: Measure or Studio PLAY takes the output (main.js stopPlayback), or
      * the sequencer starts (main.js, around the editor's play).
      */
+    /** True while an answer of call and response plays or is planned (V503). */
+    midiAnswering() {
+      return !!(response && response.answering());
+    },
+
+    /** Call and response on or off (V503): the MIDI section's switch; off on every load. */
+    midiResponseToggle(on = !this.midiResponse) {
+      this.midiResponse = response ? response.setOn(on) : false;
+      return this.midiResponse;
+    },
+
     midiAllOff() {
       if (!notes) return 0;
       // A note arming the instrument made its claim yield the notes (K247): only the engine's
@@ -283,6 +340,7 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
         return notes.silenceEngine()
           + (typeof this.kbdEngineOff === 'function' ? this.kbdEngineOff() : 0);
       }
+      if (response) response.cut(); // an answer's own first note arming it is not cut
       const n = notes.silence();
       if (typeof this.kbdUnlightMidi === 'function') this.kbdUnlightMidi();
       if (typeof this.kbdReleaseAll === 'function') this.kbdReleaseAll();

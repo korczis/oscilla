@@ -45,8 +45,9 @@
 //   status-bar-studio  the Subtractive Synth looping at Master 0.05: the visible status bar says PLAYING
 //        with the playing dot, "Master -26.0 dB" (the level in effect) and pattern "Studio"; the
 //        status Play button stays the instrument's (aria-pressed false, ADR 0050); a Playground
-//        gain set while the Studio plays is shown as "Gain <dB>" and is the engine's level; after
-//        STOP the state is not PLAYING and the readout is the Playground gain (dup-stale-4);
+//        gain set while the Studio plays is shown as "Zesílení <dB>" (U106) and is the engine's
+//        level; after STOP the state is not PLAYING and the readout is the Playground gain
+//        (dup-stale-4);
 //   app: no console error or page error.
 // --app-only (diagnostic) runs only the dist checks.
 // Runs in `npm run test:studio` (release-gate and the CI studio job).
@@ -398,7 +399,7 @@ async function statusBarStudio(key, page) {
   // The Playground gain set while the Studio plays is the newer level: shown as such.
   const PLAYGROUND = 0.03;
   await page.evaluate((g) => { window.OSCILLA.app.gainLevel = g; }, PLAYGROUND);
-  const wantGain = `Gain ${dbText(PLAYGROUND)}`;
+  const wantGain = `Zesílení ${dbText(PLAYGROUND)}`;
   const set = await until(() => statusBar(page).then((v) => (v.gain === wantGain ? v : null)),
     { ms: 5000, what: 'status-bar-studio: a Playground gain while playing' }).catch(() => null);
   const sb = set || await statusBar(page);
@@ -469,7 +470,7 @@ async function resetOverStudio(key, page) {
   await until(() => statusBar(page).then((v) => v.gain === master),
     { ms: 5000, what: 'reset-over-studio: the status bar shows the Studio Master' });
   await page.evaluate(() => document.querySelector('[data-osc="settings.reset"]').click());
-  const want = `Gain ${dbText(playground)}`;
+  const want = `Zesílení ${dbText(playground)}`;
   const bar = await until(() => statusBar(page).then((v) => (v.gain === want ? v : null)),
     { ms: 5000, what: 'reset-over-studio: the readout after Reset instrument' })
     .catch(() => null);

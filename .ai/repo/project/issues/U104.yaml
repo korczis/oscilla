@@ -25,4 +25,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-10'
-updated_at: '2026-11-10'
+updated_at: 2026-11-15T17:45:22Z
+started_at: 2026-11-15T17:43:51Z
+started_event: sha256:201fb91b663c738ef8c3067e5e74c12122517e114f458fae24ac7e38b26fd443
+verified_at: 2026-11-15T17:44:34Z
+verified_event: sha256:c72e31f53e768be9f910146ceb257973e3a142390b30b8d7681018ca31f5de34
+completed_at: 2026-11-15T17:45:22Z
+completed_event: sha256:d5415aedf9615015fc6af42c7eaa4e4638dcf171cfbb852f3de638c6f043877b
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "node --test tests/unit/first-screen-layout.test.mjs"
+    result: "On main 474ce9c3 the phone measurement row keeps exactly one step visible (the current one, else the blocked one, else the last) through the data-shown attribute rather than a class, as current_state explains (a class would have raised the Flowbite debt) (tests/unit/first-screen-layout.test.mjs 9/9, the U104 case fails on a7102358; build:check up to date), landed in T7a (#525) and judged merge in 525.yaml. Audit of 2026-11-15 by oscilla-ff (session cae276ab-2d90-45d2-babb-a1f8023668d2) on the owner's order to finish unfinished work, criterion by criterion."
+    artifact: ".ai/repo/reviews/525.yaml"
+    commit: 474ce9c351e979bac15bcfd77f9a8c6ca638f16b
+    recorded_at: 2026-11-15T17:45:06Z
