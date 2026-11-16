@@ -1,0 +1,103 @@
+# Review verdict for pull request #581 (train/t26): train T26 and release v3.41.0 (a minor:
+# release:analyze derives minor from V510's feat(midi) 69a4fd2).
+# Members (each head verified an ancestor of 3e43ec84 by the reviewer): #573 Rychlost a7c7f2dc,
+# #579 shell-a11y theme icon wait 254dc3b4, #575 V503/V509 HTML comments dropped 11608da6, #572 V510
+# MIDI clock out 5865f05f (its review fixes 70c75a56 and 527dc6fa, the T25 merge d36f2b5a, the
+# seam-surface pin 5865f05f); every member built by oscilla-ff. Composed by oscilla-0b in the
+# integrator's place (oscilla-43 silent for 8 h; told, a stop honoured at any point) on main
+# 37ce5fc2: b234e91c merges #573, 45267e81 #579, 2b776142 #575, c11c80b9 #572, d23cfbc4 the one
+# rebuild, ce307a35 ff's linux-x64 SYN bay re-accept, 3b618bef the 3.41 About station,
+# chore(release): v3.41.0 3e43ec84. 45267e81, 2b776142 and c11c80b9 equal git's automatic merge
+# outside dist/ (git merge-tree). b234e91c's conflicts were resolved on main's side
+# (tests/unit/visual-synth.test.mjs, tests/visual/synth/references.json, the four linux-x64 bay
+# PNGs, re-derived by ce307a35) and tests/unit/czech-prose-short-baseline.json is main's with
+# modulation.js 24 -> 23 and total 1690 (#573's own -1); outside these and dist/ it equals the
+# automatic merge. Judged at 3e43ec84 on base origin/main 37ce5fc2, 2026-11-16, in the reviewer's own
+# detached worktree ~/dev/oscilla-wt/review-526.
+#
+# Reviewer: rev-seat-2 (session oscilla-c3, claude-code c0f0687c), a separate top-level session
+# acting as rev-seat for every train (Q108 A). It built none of this: oscilla-ff built the four
+# members and the re-accept, oscilla-0b composed the train and the station.
+#
+# The digest: origin/main's (37ce5fc2) scripts/review-verdict.mjs --content --list at 3e43ec84:
+# 6a399b6dd745... over 3 guarded paths (src/js/studio/nodes/modulation.js,
+# src/js/studio/transport.js, src/js/synth/normals.js). #575 and #579 alone have the empty digest.
+#
+# How it was judged:
+# - V510 (#572), pre-reviewed at 8ce9bdbb, re-checked at 70c75a56 and 527dc6fa with the reviewer's
+#   own receiver probes (each message's timestamp in wire order): the clock-out model
+#   (midi/clock-out-mode.js) keeps an anchor grid {run, origin, tempo, tick0, fromStart}; a run
+#   already playing when an output is chosen is joined by Song Position Pointer then Continue, with
+#   a bounded catch-up (CATCHUP_S 0.25 s); Stop is stamped after the last queued clock; a tempo
+#   change and a locate re-plan from the new grid; a dead port sends once and says it once; the
+#   loop wakes every 100 ms idle, 25 ms while a run is sent. transport.js gains clockAnchor (read
+#   only); the output is "Žádný" on every load and never stored. Findings C3-572-1 to C3-572-5 below,
+#   all closed by ff before the train.
+#   Seam pin: app.cjs seam-surface-pinned failed on #572's CI chromium leg 1 for the new clockAnchor
+#   key; closed by 5865f05f (the key listed). #572's last own CI run 43898571661 also had
+#   journeys firefox journey-3-views:instrument ("#osc-env-enable switched on: not reached within
+#   10000 ms"): a scan of the firefox legs of the last 40 CI runs finds it only there (the scan finds
+#   that run); 6 rounds alternating main 37ce5fc2 and 5865f05f (journeys --dist, firefox, load up to
+#   22.6) all exit 0; #572 does not touch the envelope. Classified nondeterministic. Its webkit leg 2
+#   red (ui-flowbite-pro shell-a11y read the light theme with the old icon) is #579's subject.
+# - #573: the shared rate() label is Rychlost (modulation.js; the step-voltage sequencer's help
+#   "Bez taktu krokuje svou Rychlostí"); normals.js's sample-and-hold refusal derives the label
+#   from the port (fallback the port key) and three units derive it; no browser suite reads the
+#   'Rate' text (synth.cjs comments and the port key 'rate' only). The phone bay at LABEL_MAX 8
+#   "Rychlost": s-mobile overlaps 0 and small 0 in three engines (reviewed at a7c7f2dc).
+# - #579: the theme poll waits for theme, stored value and visible icon together and reports its
+#   last reading on a miss; the old wait ended on the attribute alone.
+# - #575: two HTML comments removed from src/index.html (they restated device-map.js, response.js,
+#   ADR 0058); src/index.html is 314544 B at the head, under its cap 316000.
+# - ce307a35: the four linux-x64 SYN bay references and references.json re-derived for Rychlost
+#   (oscilla-ff, SYN 16/16 in the container); STABILITY linux-x64 19 / 434 (10 runs), the maximum
+#   over the 16 views (desktop-bay-light), replacing T25's 25 / 441 of the same view.
+# - The 3.41 station is Czech and names what the train ships (the MIDI output following the
+#   transport in view, "Žádný" on every load, Rychlost); about-stations.mjs --check-station exit 0.
+#
+# Measured by the reviewer (Node 22.20.0):
+# - At 3e43ec84: build:check 0; GITHUB_BASE_REF=main npm test exit 0 (5902 tests, 5901 pass,
+#   0 fail, 1 skipped); about-stations.mjs --check-station 0; ui-flowbite-pro 0 (12/12 x 6,
+#   shell-a11y among them in chromium, firefox and webkit, file and http).
+# - At d23cfbc4 (the members and the rebuild, before the re-accept, the station and the stamp;
+#   src/js identical to 3e43ec84): build:check 0; npm test 0 (5901/0); app 0 (66/66 x 6); synth 0
+#   (49/49 + 16/16 x 3); journeys 0 (38/38 x 3); cross-links 0 (108); v31-studio-graph 0 (41/41 +
+#   6/6 x 3); npm run test:studio 0 (v31-studio-graph, -timeline, -audio 81, -transport 131,
+#   -offline 198, -workflows, -links, -runtime, instrument-dsp, studio-keys, step-grid,
+#   studio-trigger-gates; every leg PASS).
+#   midi exit 1, classified: only midi-measured-grant (chromium file and http) and
+#   midi-measured-connect (firefox http), which measure this Mac's own Web MIDI (a KeyLab mkII 61
+#   and a BeatStep Pro attached): environmental, as on T25 and earlier trains; 913 checks pass,
+#   midi-seam-clock-out (Start, clock 20.833 ms apart at 120 BPM / 24 PPQ, Stop; "Žádný" sends
+#   nothing; the Sequencer's own tempo) in every engine and context among them.
+# Not run by the reviewer: navigation, link-integrity, ui-current, surface-census, layout,
+# integration-map, iphone, first-screen and the visual gates (oscilla-0b: gate, MEASURE and STUDIO
+# PASS in the container at d23cfbc4); the CI legs run every one.
+#
+# P3 notes, open, none blocks: English sentences around the Czech label remain ("Rychlost control
+# input" from describePort, validate.js's lowercased "rychlost", the Inspector's "keeps this
+# rychlost"), Q104's per-file transition; the Song Position Pointer clamps at 16383 sixteenths
+# (about 34 min at 120 BPM), documented by ff.
+#
+# THE CONDITION of this verdict (as for the trains since #509): it binds once the reviewer has read
+# the six "Browser leg N (browser)" logs of this pull request's run at this verdict's commit and
+# found each leg's suite list equal to shards.cjs --plan at this head, "run-suites: all K suites
+# passed" and no FAIL line (app's seam-surface-pinned and ui-flowbite-pro's shell-a11y must pass in
+# all three engines; journeys' journey-3-views, an integration-map webkit/file keyboard edge at
+# ~10 s (E076) or a v3-ui definitions timeout (E077) is judged against main before any rerun), the
+# linux visual job passes with the re-derived bay references, AND has run the release CI receipt
+# check against this run with the base ci.yml (37ce5fc2's). Auto-merge is armed only after the
+# reviewer reports "legs OK"; otherwise a superseding verdict.
+#
+# Verdict: merge, under the condition above. Findings: C3-572-1 to C3-572-5 closed.
+schema: review-verdict/v1
+pr: 581
+verdict: merge
+reviewer: oscilla-c3 rev-seat-2 (claude-code c0f0687c, a separate top-level session; built none of 3e43ec84)
+content: 6a399b6dd74522fe909b4f43470ed468678c424afdd30b1d277353578c7c427f
+findings:
+  - { id: C3-572-1, severity: P1, status: closed, title: "choosing an output during a long run sent every missed clock at once (600 s in: 28805 clocks in one call); closed by 70c75a56 (Song Position Pointer, bounded catch-up)" }
+  - { id: C3-572-2, severity: P2, status: closed, title: "a tempo change or locate kept the old tick phase, and on the wire the old grid's queued clocks arrived after the new run's Continue; closed by 70c75a56 and 527dc6fa (Stop stamped after the last queued clock)" }
+  - { id: C3-572-3, severity: P3, status: closed, title: "no Stop before a run that replaced the current one; closed by 70c75a56" }
+  - { id: C3-572-4, severity: P3, status: closed, title: "a dead port was told 25 times and kept receiving sends in one pass, and the loop woke at 40 Hz while stopped; closed by 70c75a56 (one send, one message, 100 ms idle wake)" }
+  - { id: C3-572-5, severity: P3, status: closed, title: "Song Position Pointer clamps at 16383 sixteenths without saying so; documented by 527dc6fa" }

@@ -111,7 +111,10 @@ test('K239: a cable the receiver\'s patch refuses is named when the link applies
       cables: [['mg.control', 'sh.rate'], ['mg.control', 'lpf.frequency']] };
     const plan = linkPlan(st.getModel(), PANEL, link);
     assert.deepEqual(plan.skipped.map((x) => [x.from, x.to]), [['mg.control', 'sh.rate']]);
-    assert.match(plan.skipped[0].reason, /^S&H Rate nemá účinek, dokud je zapojený Clock/);
+    // The S&H's rate is named by its own label (the Synth face shows the same one).
+    const rate = PANEL.faceOf('sh').find((c) => c.key === 'rate').label;
+    assert.ok(plan.skipped[0].reason.startsWith(`S&H ${rate} nemá účinek, dokud je zapojený Clock`),
+      plan.skipped[0].reason);
     assert.equal(skippedText(plan.skipped), 'Odkaz nezapojil 1 kabel: mg.control → sh.rate '
       + `(${plan.skipped[0].reason.replace(/\.$/, '')}).`);
     // the rest of the link applies, and linkAction is the same BATCH

@@ -35,7 +35,7 @@ const controlOut = definePort({ id: 'control', direction: 'out', type: 'CONTROL'
  */
 const triggerOut = () => definePort({ id: 'trigger', direction: 'out', type: 'TRIGGER',
   label: 'Trigger', channels: 1, rate: 'event', monitor: false, compact: false, version: 1 });
-const rate = (def, modDepth, opts = {}) => numberParam('rate', 'Rate', {
+const rate = (def, modDepth, opts = {}) => numberParam('rate', 'Rychlost', {
   min: 0.01, max: 100, unit: 'Hz', scale: 'log', default: def, automatable: true,
   modulatable: true, modDepth, ...opts,
 });
@@ -360,7 +360,7 @@ export const stepVoltageSequencer = defineNode({
     what: 'Tři řady krokových hodnot (A, B, C) se společnou pozicí: každá řada má svůj výstup '
       + 'CV, Hradlo spouští každý krok a Krok N jen krok N.',
     inputs: 'Takt posune o krok (první takt hraje krok 1); Na začátek vrátí na krok 1 na příští '
-      + 'hranici kroku, nebo na takt ve stejném okamžiku. Bez taktu krokuje rychlostí Rate a '
+      + 'hranici kroku, nebo na takt ve stejném okamžiku. Bez taktu krokuje svou Rychlostí a '
       + 'výstupy TRIGGER mlčí.',
     // The counts are the node's own (R050): SVS_MAX_STEPS and SVS_LENGTHS, never retyped.
     outputs: `CV A, B, C: řízení −1 až 1. Hradlo a Krok 1 až ${SVS_MAX_STEPS}: TRIGGER.`,

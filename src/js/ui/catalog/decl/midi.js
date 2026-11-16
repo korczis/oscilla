@@ -60,6 +60,15 @@ export default [
     state: 'ui.midiResponse',
   }),
   defineComponent({
+    id: 'midi.clock-out',
+    kind: 'choice',
+    label: 'Hodiny a transport na výstup',
+    docs: 'Zvolí výstup MIDI, který dostává Start, Pokračovat, Stop a hodiny MIDI (24 na dobu) '
+      + 'podle transportu, který je vidět: v Sekvenceru jeho, jinde Studia. Žádný nic neposílá; '
+      + 'při každém načtení žádný.',
+    state: 'ui.midiClockOut',
+  }),
+  defineComponent({
     id: 'midi.map',
     kind: 'readout',
     label: 'Mapa ovladačů',

@@ -37,6 +37,10 @@
 //   transport.live(keysId, { kind, note, velocity, at }) -> result, emitted as 'live' (K223)
 //   transport.step(id, at) -> result   K226: a manual step of a step-voltage sequencer (stopped:
 //                                       arms first, as a key strike does)
+//   transport.clockAnchor() -> { origin, tempo, fromStart } | null   V510: while the timeline
+//                                       plays (not an armed run of the keys alone), the context
+//                                       time of position 0, the document's tempo and whether
+//                                       the run began at position 0, for MIDI clock out
 //   transport.debugInfo(), transport.on(fn) -> off ('state' | 'ended' | 'warning': a
 //                                                Diagnostic), transport.dispose(), .playing
 //   transport.debugRefuseNextPlay() -> boolean  INJECT hook (ADR 0052; K169, tests/browser/
@@ -1812,6 +1816,16 @@ export function createStudioTransport({
     });
   }
 
+  /** V510: where the playing timeline's position 0 falls on the audio clock, and its tempo. */
+  function clockAnchor() {
+    if (!playing || armedOnly || !scheduler) return null;
+    const { anchor } = scheduler.getState();
+    const tempo = model && model.transport ? Number(model.transport.tempo) : NaN;
+    if (!anchor || !Number.isFinite(anchor.baseTime) || !(tempo > 0)) return null;
+    const from = anchor.startPosition || 0;
+    return { origin: anchor.baseTime - from, tempo, fromStart: from === 0 };
+  }
+
   function debugInfo() {
     const st = scheduler ? scheduler.getState() : null;
     return {
@@ -1905,6 +1919,7 @@ export function createStudioTransport({
     admit,
     escape,
     playhead,
+    clockAnchor,
     debugInfo,
     debugRefuseNextPlay() {
       if (!inTest()) return false;

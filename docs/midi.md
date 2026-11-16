@@ -298,5 +298,36 @@ Continue the Studio refuses (a measurement owns the output: the playhead stays w
 the monitor row says only what each message did (`… → Studio: přehrát od začátku`). Record, Fast forward and the other
 DAW buttons act on nothing. The clock's tempo is read over the last whole beat on the messages'
 own timestamps and clears half a second after the clock stops; the transport never follows it by
-itself (ADR 0058, its V508 note). OSCILLA sends no MIDI.
+itself (ADR 0058, its V508 note). OSCILLA sends MIDI only on an output you choose (below).
+
+## Clock and transport out (V510)
+
+In the MIDI section, **Hodiny a transport na výstup** picks one connected output; **Žádný** is
+chosen on every load, and with it nothing is sent. The chosen output follows the transport in view
+(the Sequencer's own in the Sequencer, the Studio's everywhere else), whatever starts or stops it:
+
+| The transport | The output receives |
+|---|---|
+| starts from position 0 (seen within 0.25 s) | Start (`FA`) at its first beat, then Timing Clock (`F8`, 24 per quarter note) at its tempo |
+| plays already (the output chosen later, the view back on it) or starts elsewhere | Song Position Pointer (`F2`) for the next sixteenth, Continue (`FB`) there, then the clock |
+| starts again or jumps while sent | Stop (`FC`) first, then as above |
+| changes tempo while playing | Stop, Song Position Pointer and Continue on the new beat grid |
+| stops | Stop (`FC`) |
+
+These messages need no SysEx and come under the same `{ sysex: false }` permission as the
+input; MMC is SysEx (V511). A tempo change moves the device to the new grid rather than bending
+its count, so its beats stay on OSCILLA's. Every message is stamped, and what is stamped earlier
+reaches the device first: Stop comes after the last tick already sent ahead, and the new run no
+earlier than it. Song Position Pointer counts at most 16383 sixteenths (about 34 minutes at
+120 BPM); a device joining a run later than that is told the last position it can express, so its
+bar count is wrong (its beats stay on the grid). Each tick is computed on the audio clock and sent ahead with its own
+timestamp (`src/js/midi/clock-out.js`, `clock-out-mode.js`), so a busy page moves no tick; the
+mapping from the audio clock to the page's clock is slewed by at most 0.02 ms per reading, since
+the readings scatter (by several milliseconds in Firefox). An output that leaves, or stops taking
+messages, is no longer followed, and the MIDI section says so once. ADR 0058, its V510 note.
+
+**Measured.** In the browser gate, on the test stub's output: Start, then clock one tick of the
+tempo apart within 0.05 ms, then Stop, in the Studio and the Sequencer, in Chromium, Firefox and
+WebKit (`tests/browser/midi.cjs` `midi-seam-clock-out`). On hardware, the clock's jitter at the
+owner's BeatStep Pro following it (`scripts/midi/listen.swift`) is **not measured yet**.
 
