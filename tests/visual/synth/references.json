@@ -480,26 +480,6 @@
           "runs": 10,
           "px": 3,
           "faint": 7
-        },
-        "desktop-bay-dark": {
-          "runs": 10,
-          "px": 0,
-          "faint": 0
-        },
-        "desktop-bay-light": {
-          "runs": 10,
-          "px": 19,
-          "faint": 489
-        },
-        "phone-bay-dark": {
-          "runs": 10,
-          "px": 0,
-          "faint": 5
-        },
-        "phone-bay-light": {
-          "runs": 10,
-          "px": 1,
-          "faint": 17
         }
       },
       "seeds": {
@@ -553,22 +533,6 @@
             "phone-xy-light": {
               "px": 3,
               "faint": 7
-            },
-            "desktop-bay-dark": {
-              "px": 2031,
-              "faint": 2237
-            },
-            "desktop-bay-light": {
-              "px": 2075,
-              "faint": 2372
-            },
-            "phone-bay-dark": {
-              "px": 0,
-              "faint": 0
-            },
-            "phone-bay-light": {
-              "px": 0,
-              "faint": 16
             }
           }
         },
@@ -622,22 +586,6 @@
             "phone-xy-light": {
               "px": 2,
               "faint": 6
-            },
-            "desktop-bay-dark": {
-              "px": 1132,
-              "faint": 1862
-            },
-            "desktop-bay-light": {
-              "px": 1454,
-              "faint": 2359
-            },
-            "phone-bay-dark": {
-              "px": 0,
-              "faint": 0
-            },
-            "phone-bay-light": {
-              "px": 1,
-              "faint": 1
             }
           }
         },
@@ -691,22 +639,6 @@
             "phone-xy-light": {
               "px": 3,
               "faint": 7
-            },
-            "desktop-bay-dark": {
-              "px": 0,
-              "faint": 175051
-            },
-            "desktop-bay-light": {
-              "px": 3,
-              "faint": 7957
-            },
-            "phone-bay-dark": {
-              "px": 0,
-              "faint": 0
-            },
-            "phone-bay-light": {
-              "px": 0,
-              "faint": 16
             }
           }
         },
@@ -760,22 +692,6 @@
             "phone-xy-light": {
               "px": 3,
               "faint": 7
-            },
-            "desktop-bay-dark": {
-              "px": 672,
-              "faint": 1248
-            },
-            "desktop-bay-light": {
-              "px": 1059,
-              "faint": 1323
-            },
-            "phone-bay-dark": {
-              "px": 0,
-              "faint": 0
-            },
-            "phone-bay-light": {
-              "px": 0,
-              "faint": 17
             }
           }
         }
