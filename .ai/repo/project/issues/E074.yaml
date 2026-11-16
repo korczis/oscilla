@@ -8,7 +8,7 @@ priority: p3
 profile: implementation
 objective: "runLearnDemo focuses Hold to Play in this.$nextTick(() => focusSafely(document.getElementById('osc-hold-play'))) (src/js/ui/workbench.js:776). A keyboard user who follows the demo's notice to Learn and presses Back within that tick gets the Playground heading focused by the router, then loses it to Hold to Play when the deferred focus fires. The deferred focus should apply only while nothing has moved: capture the demo's workspace and the active element when runLearnDemo runs, and in the tick focus Hold to Play only while this.workspace is still that workspace and document.activeElement is still the demo button, <body>, or inside the now-hidden Learn view."
 why: "oscilla-c3 pinned it on #558 (T23, 2026-11-15) with the unmodified tests/browser/cross-links.cjs at 84460015 and a --require hook that logs every focusin with its JS stack. It failed on run 16 of 52, chromium/file, keyboard pass. The order: +510 BUTTON[learn.demo] (Enter), +535 A[alert.action], +539 popstate #m=learn, +542 H2#osc-learn-title, +548 popstate #m=playground, +552 H1 (the router's heading focus, correct), +562 BUTTON#osc-hold-play by focusSafely from runLearnDemo's $nextTick. In every passing run the deferred focus fires before the notice is followed (about 20-50 ms after the demo). It is on main too (alternated --only learn-demo-back, 15 rounds: head 2 failures, main 474ce9c3 1; CI chromium 16 of 16 in 8 runs), so it is a product race, not U106's."
-current_state: "Filed 2026-11-15 by oscilla-43 from oscilla-c3's pinned cause on #558. Built 2026-11-16 by oscilla-0b in fix/e074-learn-demo-focus (8162676d, ui/learn-focus.js deferDemoFocus, tests/unit/learn-demo-focus.test.mjs); oscilla-c3 asked for it after train T25 as its own PR, not a T25 condition (its bisect under --dist showed no member signal). Mutation evidence: the guard removed, the race and the workspace-changed tests fail (4 pass, 2 fail)."
+current_state: "Filed 2026-11-15 by oscilla-43 from oscilla-c3's pinned cause on #558. Built 2026-11-16 by oscilla-0b in fix/e074-learn-demo-focus (8162676d, ui/learn-focus.js deferDemoFocus, tests/unit/learn-demo-focus.test.mjs); oscilla-c3 asked for it after train T25 as its own PR, not a T25 condition (its bisect under --dist showed no member signal). Mutation evidence: the guard removed, the race and the workspace-changed tests fail (4 pass, 2 fail). Done 2026-11-16: landed by PR 577 at main d9e1fa9a, reviewed by oscilla-c3, released in v3.40.1."
 scope:
   - "src/js/ui/workbench.js"
   - "tests/unit/learn-demo-focus.test.mjs"
@@ -23,4 +23,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-15'
-updated_at: '2026-11-15'
+updated_at: 2026-11-16T16:22:01Z
+started_at: 2026-11-16T16:21:26Z
+started_event: sha256:3fa1bdfcb43b1d496c509b4a240fe257149718ae99e2209d6f34f07a11ebd3b2
+verified_at: 2026-11-16T16:21:40Z
+verified_event: sha256:e18b69f8fca3c11c1b4f118506f9ad64b880c1454166a46f0d54e5f0f78242ea
+completed_at: 2026-11-16T16:22:01Z
+completed_event: sha256:fc4a56439901149d6df18b05be1def1617620e1efff4a28762cdf18a1080db64
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "npm test; node tests/browser/cross-links.cjs"
+    result: "built by oscilla-0b (fix/e074-learn-demo-focus, 8162676d), landed by PR 577 (main merge commit d9e1fa9a). Criterion 1: tests/unit/learn-demo-focus.test.mjs changes the workspace and moves the focus before the tick; on main the module is absent (fails), and with the guard removed from deferDemoFocus 2 of 6 fail (the race and the workspace-changed case), 6/0 with it. Criterion 2: PR 577's CI run 43893915819 at 90794790 passed cross-links (learn-demo-back) in chromium, firefox and webkit, file and http. oscilla-c3's Mac chromium A/B of cross-links: PR 577 6/6 rounds all pass, main 51c975c8 red in 4/6 and in 3/3 more, each on 'a Learn demo leads back to its lesson'. Criterion 3: reviewed by oscilla-c3 (review OK at 90794790, 2026-11-16); no verdict file: the base program finds no guarded path in PR 577 (node scripts/review-verdict.mjs --content --head d9e1fa9a^2 --base d9e1fa9a^1 prints the empty digest e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855)."
+    artifact: "https://github.com/korczis/oscilla/pull/577"
+    commit: d9e1fa9a35cdc05ea3a8b3f5296ad13905fccf3f
+    recorded_at: 2026-11-16T16:21:54Z
