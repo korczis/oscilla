@@ -94,6 +94,11 @@ export {
 } from './inspector-runtime.js';
 import { sliderFill } from '../app.js';
 import { opSummary, traceCount } from './trace-summary.js';
+import { clipsText, graphCountsText, lanesText } from './counts-text.js';
+
+/** The Studio header's line: nodes, connections, clips and automation lanes, in Czech. */
+const studioCountsLine = (c) => `${graphCountsText(c.nodes, c.edges)} · ${clipsText(c.clips)} · `
+  + lanesText(c.lanes);
 // The pure helpers of the fields live in inspector-fields.js; re-exported, so callers keep their
 // import from this module.
 export {
@@ -1153,8 +1158,7 @@ export function mountInspector(host, svc) {
     const length = h('span', { class: 'osc-num', 'data-osc': 'studio.inspector.length',
       text: st.lengthText });
     refs.set('studio.inspector.lengthText', { readout: length });
-    return [header('Studio', `${view.counts.nodes} nodes · ${view.counts.edges} connections · `
-      + `${view.counts.clips} clips · ${view.counts.lanes} automation lanes`),
+    return [header('Studio', studioCountsLine(view.counts)),
     buildRuntime(view.runtime),
     buildTrace(view.trace, 'What each recent operation did, newest first.'),
     textInput('osc-si-studio-title', 'Title', view.title,
@@ -1424,8 +1428,7 @@ export function mountInspector(host, svc) {
       if (t) t.field.input = view.title;
       if (t && t.input !== document.activeElement) t.input.value = view.title;
       const sub = host.querySelector('.osc-si-sub');
-      if (sub) setText(sub, `${view.counts.nodes} nodes · ${view.counts.edges} connections · `
-        + `${view.counts.clips} clips · ${view.counts.lanes} automation lanes`);
+      if (sub) setText(sub, studioCountsLine(view.counts));
       return;
     }
     if (press.holds()) return;

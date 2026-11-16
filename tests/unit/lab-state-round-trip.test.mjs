@@ -192,7 +192,8 @@ test('a v1 record without labs loads as on the merge base: no labs key, labs unt
   const app = instrumentWithLabs(labs, stores);
   app.applyPreset({ ...rec, cfg: rec.cfg });
   assert.deepEqual(labView(labs), SAVED, 'a record without labs leaves the labs as they are');
-  assert.equal(app.alerts.at(-1).message, 'Press and hold HOLD TO PLAY.', 'V1 message');
+  // the Loaded notice names the control by its Czech label (U114)
+  assert.equal(app.alerts.at(-1).message, 'Stiskněte a držte Podržet a hrát.', 'the notice');
   // And the V1 instrument alone (no labs layer) stores no labs.
   const plain = createInstrument({ engine: null, localStore: memoryStore(),
     sessionStore: memoryStore(), timers: { setTimeout: () => 0, clearTimeout() {} } });

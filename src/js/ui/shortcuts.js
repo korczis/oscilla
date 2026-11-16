@@ -92,11 +92,12 @@ export const GLOBAL_SHORTCUTS = Object.freeze([
   row('tab', 'Tab', 'Move focus (never taken by a shortcut)'),
 ]);
 
-// Hold, Trigger and the frequency slider are laid out by width and are not on screen in every
-// instrument workspace: the rows say so instead of implying the control is there.
+// Podržet a hrát, Spustit and the frequency slider are laid out by width and are not on screen
+// in every instrument workspace: the rows say so instead of implying the control is there. The
+// controls by their Czech labels (U114, c3 under Q090).
 const INSTRUMENT_ROWS = Object.freeze([
-  row('trigger', 'Enter', 'Trigger once', 'on Hold or Trigger, where shown'),
-  row('octave', 'PgUp / PgDn', 'One octave up / down', 'on the frequency slider, where shown'),
+  row('trigger', 'Enter', 'Spustit jednou', 'na Podržet a hrát nebo Spustit, kde jsou'),
+  row('octave', 'PgUp / PgDn', 'O oktávu výš / níž', 'na posuvníku frekvence, kde je'),
 ]);
 // The Sequencer's timeline rows are Czech (U106, Q104) and name it as the navigation does.
 const SEQUENCER_WHERE = 'na časové ose Sekvenceru';

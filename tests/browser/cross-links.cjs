@@ -839,7 +839,7 @@ async function runLeg(name, origin) {
         const words = said && (said.coarse ? /^Otevřete Playground a zahrajte ho tlačítkem /
           : /^(Stiskněte|Podržte) mezerník a zazní tady/);
         if (!said || said.workspace !== 'presets' || !words.test(said.message)
-          || /^Press TRIGGER/.test(said.message) || said.action !== 'Otevřít Playground') {
+          || /^(Press TRIGGER|Stiskněte Spustit \(nebo)/.test(said.message) || said.action !== 'Otevřít Playground') {
           wrong.push(`${input}: ${JSON.stringify(said)}`);
           await page.close();
           continue;
