@@ -308,6 +308,10 @@
       "summary": "Režim volání a odpovědi: frázi zahranou na ovladači MIDI nástroj zopakuje jednou deterministickou odpovědí, kterou přeruší každá jiná hraná nota, a odpověď nikdy nevloží panel Synthu; sekce MIDI v Nastavení ukazuje mapu každého známého ovladače a rozsvítí ovládací prvek, který právě posílá; tlačítka Podržet a hrát, Spustit a volba Povolit nepřetržité přehrávání jsou česky i v upozorněních, Studio počítá uzly, spojení a klipy česky a stavový řádek nikdy neusekne slovo",
       "commit": "37c5001",
       "datetime": "2026-11-16T10:54:17+01:00"
+    },
+    {
+      "title": "Výstup MIDI sleduje transport a rychlost modulace česky",
+      "summary": "V Nastavení, v sekci MIDI, se dá zvolit výstup „Hodiny a transport na výstup“: zvolený výstup MIDI dostává Start, Pokračovat, Stop a hodiny MIDI podle transportu, který právě vidíte (v Sekvenceru jeho vlastní, jinde Studia), při každém načtení je zvolené „Žádný“ a bez volby se nic neposílá; ovladač rychlosti u LFO, Náhody, Krokového modulátoru a sekvenceru napětí se jmenuje Rychlost"
     }
   ]
 }
