@@ -23,4 +23,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-07
-updated_at: 2026-11-07
+updated_at: 2026-11-15T17:29:31Z
+started_at: 2026-11-15T17:27:57Z
+started_event: sha256:c397cd5a2ffce091091488f57bd336b8246e81d360c91a3a8a49493bc0eb56ce
+verified_at: 2026-11-15T17:28:41Z
+verified_event: sha256:ffb6b724310a1e58af107bd6cd034a99860c7e7c5ddd849c2d3521476e09ba9e
+completed_at: 2026-11-15T17:29:31Z
+completed_event: sha256:6cda4d699adaa08a39a7425d540b8cde6ec0268763da1a59e5f1932fc8cb1dbb
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "node --test tests/unit/synth-panel-normals.test.mjs"
+    result: "On main 474ce9c3, tests/unit/synth-panel-normals.test.mjs passes 10/10, including the six K212 cases on the inserted panel; it landed test-only with \"fail-first: n/a\" in #503 via train T2 (#507, verdict .ai/repo/reviews/507.yaml, merge), and tests/README.md has its row. Audit of 2026-11-15 by oscilla-ff (session cae276ab-2d90-45d2-babb-a1f8023668d2) on the owner's order to finish unfinished work, criterion by criterion."
+    artifact: ".ai/repo/reviews/507.yaml"
+    commit: 474ce9c351e979bac15bcfd77f9a8c6ca638f16b
+    recorded_at: 2026-11-15T17:29:15Z

@@ -1,0 +1,88 @@
+# Review verdict for pull request #567 (train/t24): train T24 and release v3.39.0 (a minor:
+# release:analyze derives minor from K226's feat(studio) 9049505d).
+# Members (each head verified an ancestor of aa17cb93 by the integrator; the reviewer read each
+# member's own CI before the train): #560 K247 87826c4d (run 43709307893, attempt 2 green; attempt
+# 1's only red E075), #561 E073 851a5ebe (run 43733268206: firefox leg 1 E075 journeys env-enable;
+# webkit leg 1 synth s-pads@webkit/file, the audio wall-time shape seen at T15, undetermined;
+# #561's own diff over #560 is tests/browser/midi.cjs and E073.yaml only), #565 K226 5a30f8e9
+# containing #563 R050 f83c2716 (563.yaml, the member record), #564 K150 1c71e28f (run
+# 43750207733: only the v3.38.0 release-flow record, main's then, cleared by T23), Czech pass 5
+# 8b91dd57 (oscilla-0b; no CI run of its own, this train's run is its first), and the plan PRs
+# #557 5d35b70f, #562 e264897e, #559 f4512f53, #493 e588634a. Integration by oscilla-43: the merges
+# 92eef1dd 7de5ef66 cb8e3b93 1b55f282 89f67c95 2cf0887c ccb4d7b9 47b31a95 1128e859 (git show --cc
+# shows no hunk differing from both parents: no hand resolution), one rebuild 84bf42e9, the
+# v3.38.1 record 4262ea1d, E075's current state 86c271b3, the 3.39 About station e68d582c and
+# chore(release): v3.39.0 aa17cb93. Judged at aa17cb93 on base origin/main 7447efa0, 2026-11-16,
+# in the reviewer's own detached worktree ~/dev/oscilla-wt/review-526.
+#
+# Reviewer: rev-seat-2 (session oscilla-c3, claude-code c0f0687c), a separate top-level session
+# acting as rev-seat for every train (Q108 A). It built none of this: oscilla-ff built K226 and
+# R050, oscilla-0b pass 5, the others their members, oscilla-43 integrated and stamped.
+#
+# The digest: origin/main's (7447efa0) scripts/review-verdict.mjs --content --list at aa17cb93:
+# 3e686bd63b553b1a... over 3 guarded paths (src/js/studio/nodes/modulation.js,
+# src/js/studio/step-voltage.js, src/js/synth/step-strip.js), equal to the integrator's.
+#
+# How it was judged:
+# - R050 (#563): 563.yaml's judgement stands for step-strip.js and modulation.js's help (text
+#   byte-identical to main's, the scan fails on the base); its open P3 C3-563-1 (a derived count
+#   before a fixed "kroků" is wrong Czech for 2-4) is carried and tracked in R050's current_state
+#   (#562 e264897e).
+# - K226 (#565): an all-skipped step-voltage sequencer's card says "všechny kroky přeskočené, nic
+#   nehraje". C3-565-1 (P3): the card first restated the skip rule with another length fallback,
+#   so card and sound diverged on a length outside SVS_LENGTHS; closed by 27a3e483 (svsLength and
+#   svsPlayable have one home in nodes/modulation.js, step-voltage.js imports them, no cycle; a
+#   1024-case test holds card and svsStep together). The card's count printed the stored length;
+#   closed by 5a30f8e9 (svsLength, with an assertion that '12' reads "8 kroků"). The reviewer ran
+#   studio-step-voltage-sequencer and counts-from-source at 27a3e483: 19/19.
+# - Pass 5: the Settings dialog, the MIDI section and its status texts, the dialogs' Close in
+#   Czech; RANGE_NAMES gives the range options their Czech names while RANGE_MODES stays the V1
+#   data the freeze golden pins. Condition (2) of the train: the reviewer grepped word-sized
+#   fragments of its 22 removed English strings over tests/browser, tests/unit, tests/visual and
+#   scripts: no test selects by that text (no getByRole/Label/Text or text= hit); the MIDI readers
+#   compare midiText and the state (midi.cjs) or data-midi-state (demo-song, iphone); no status-bar
+#   or phone-bar string changes (the readout clip found live on v3.38.1, status.gain "Zesí" at
+#   1536, is main's since U106 and is pass 6's, ruled under Q090 by this reviewer).
+# - The station is Czech and names what the train ships; the v3.38.1 record matches the published
+#   Release (commit 7447efa0); E075's current state says the cause is not pinned.
+#
+# Measured by the reviewer at aa17cb93 (Node 22.20.0, OSC_LOAD_MAX=80, load 35-87 during the run):
+# GITHUB_BASE_REF=main npm test exit 0 (5838 tests, 5837 pass, 0 fail); build:check 0;
+# release:analyze 0 (minor, v3.39.0); demo-song 0 (54 checks), iphone 0 (61/61, 61/61, 122/122),
+# journeys 0 (38 x 3), studio-trigger-gates 0 (5/5 x 3; tg-connect, red once in #565's run on
+# webkit, passed here in 3 engines).
+# Exit 1, classified:
+# - midi: only midi-measured-grant (chromium file and http) and midi-measured-connect (firefox
+#   http), which measure the host's own Web MIDI: this Mac has a KeyLab mkII 61 and a BeatStep Pro
+#   attached, so a grant connects real ports; environmental, as on earlier trains; 733 checks pass.
+# - v31-studio-transport: 4 firefox audio-timing failures (Tone clip onset 0.17 s late, cutoff
+#   automation readings null) at load ~65. Alternated main 7447efa0 / head, firefox, 2 rounds at
+#   load 16-31: 0 failures on both trees, so they were the host's load.
+# - app: firefox/file release-edit-while-held. Alternated with --dist (the same app.cjs, which T24
+#   does not change): head 66/66; main's dist 64/66 (boot-no-console-errors, about-page); not this
+#   train's.
+# - control-census: chromium and webkit 340 pass, 1 expected failure, 0 fail; firefox 2 rows
+#   timed out at 10 s (family:links.workspace page.goto, seq.add.sweep.pointer locator.click) at
+#   load ~35; T24 changes nothing those rows drive; the CI legs judge them.
+# Not run by the reviewer: the other gate suites (navigation, link-integrity, cross-links,
+# ui-current, first-screen, ui-flowbite-pro, surface-census, layout, qa-regressions, synth,
+# v31-studio-workflows, v31-studio-links); the CI legs run every one of them.
+#
+# THE CONDITION of this verdict (as for the trains since #509): it binds once the reviewer has
+# read the six "Browser leg N (browser)" logs of this pull request's run and found each leg's
+# suite list equal to shards.cjs --plan at this head, "run-suites: all K suites passed" and no
+# FAIL line (a red matching E075's Firefox envelope signature is classified under E075; a red of
+# tg-connect@webkit or s-pads@webkit is judged against main before any rerun), AND has run the
+# release CI receipt check against this run with the base ci.yml (7447efa0's). Auto-merge is armed
+# only after the reviewer reports "legs OK"; otherwise a superseding verdict.
+#
+# Verdict: merge, under the condition above. Findings: C3-565-1 closed; C3-563-1 (P3) open,
+# carried from 563.yaml.
+schema: review-verdict/v1
+pr: 567
+verdict: merge
+reviewer: oscilla-c3 rev-seat-2 (claude-code c0f0687c, a separate top-level session; built none of aa17cb93)
+content: 3e686bd63b553b1a69b02c2d9938d8596136837fcae9857b904dc84b84a76a51
+findings:
+  - { id: C3-565-1, severity: P3, status: closed, title: "the all-skipped card restated the skip rule with another length fallback (card and sound diverged on a length outside SVS_LENGTHS); closed by 27a3e483, the card's count by 5a30f8e9" }
+  - { id: C3-563-1, severity: P3, status: open, title: "a derived step count before a fixed \"kroků\" reads wrong Czech for 2-4; a shared cs plural helper (Intl.PluralRules('cs')), tracked in R050" }

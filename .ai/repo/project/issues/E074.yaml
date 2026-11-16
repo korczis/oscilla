@@ -1,0 +1,26 @@
+id: E074
+milestone: M046
+serves:
+  - "engineering-integrity#browser-suites-harnessed"
+title: "A Learn demo's deferred focus to Hold to Play applies only while nothing has moved, so a fast Back keeps the heading focus"
+slug: learn-demo-deferred-focus-guard
+priority: p3
+profile: implementation
+objective: "runLearnDemo focuses Hold to Play in this.$nextTick(() => focusSafely(document.getElementById('osc-hold-play'))) (src/js/ui/workbench.js:776). A keyboard user who follows the demo's notice to Learn and presses Back within that tick gets the Playground heading focused by the router, then loses it to Hold to Play when the deferred focus fires. The deferred focus should apply only while nothing has moved: capture the demo's workspace and the active element when runLearnDemo runs, and in the tick focus Hold to Play only while this.workspace is still that workspace and document.activeElement is still the demo button, <body>, or inside the now-hidden Learn view."
+why: "oscilla-c3 pinned it on #558 (T23, 2026-11-15) with the unmodified tests/browser/cross-links.cjs at 84460015 and a --require hook that logs every focusin with its JS stack. It failed on run 16 of 52, chromium/file, keyboard pass. The order: +510 BUTTON[learn.demo] (Enter), +535 A[alert.action], +539 popstate #m=learn, +542 H2#osc-learn-title, +548 popstate #m=playground, +552 H1 (the router's heading focus, correct), +562 BUTTON#osc-hold-play by focusSafely from runLearnDemo's $nextTick. In every passing run the deferred focus fires before the notice is followed (about 20-50 ms after the demo). It is on main too (alternated --only learn-demo-back, 15 rounds: head 2 failures, main 474ce9c3 1; CI chromium 16 of 16 in 8 runs), so it is a product race, not U106's."
+current_state: "Open. Filed 2026-11-15 by oscilla-43 from oscilla-c3's pinned cause on #558; whoever owns workbench.js's Learn demos builds it."
+scope:
+  - "src/js/ui/workbench.js"
+  - "tests/unit/learn-demo-focus.test.mjs"
+depends_on: []
+acceptance_criteria:
+  - "The deferred focus to Hold to Play does nothing once the workspace has changed or the focus has moved outside the demo button, <body> and the hidden Learn view; a unit test that changes the workspace before the tick fails on main and passes with the change."
+  - "cross-links.cjs's learn-demo-back passes in chromium, firefox and webkit, file and http."
+  - "A reviewer's verdict."
+validation:
+  - "npm test"
+  - "node tests/browser/cross-links.cjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-15'
+updated_at: '2026-11-15'

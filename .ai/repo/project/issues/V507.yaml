@@ -44,4 +44,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-15
-updated_at: 2026-11-15
+updated_at: 2026-11-15T11:00:41Z
+started_at: 2026-11-15T11:00:04Z
+started_event: sha256:7a24b1371f5553165c2627a29a3804921d07512115dc2a0c62641352ea2adc64
+verified_at: 2026-11-15T11:00:19Z
+verified_event: sha256:ce8bf64879011eb596eaed36328c07dd9bc8bc055e53c160aa1ca5683b421e6d
+completed_at: 2026-11-15T11:00:41Z
+completed_event: sha256:acb6e4fd5ac4a2a27ef318ddd8e89859a6611880aa33b316b1073036e588b002
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "node scripts/midi/derive-devices.mjs --check; node --test tests/unit/midi/devices.test.mjs; node tests/browser/midi.cjs"
+    result: "landed in train T22, PR 555 (main merge commit 474ce9c351e979bac15bcfd77f9a8c6ca638f16b, member PR 549), released as v3.38.0 (Pages serves it, verify-deploy green). Criteria re-checked on main: derive-devices --check exits 0 on the owner's Mac (the committed profile and docs region equal a fresh derivation), and its unit test derives the synthetic fixture; recognise() and controlOf() name the owner's ports and controls (devices.test); a DAW or editor port sounds no note and a play port does (midi-seam-monitor); the Settings dialog lists each input with device and role, and the monitor shows messages newest first and Vymazat empties it (midi-seam-monitor); rule project.midi-profiles-derived enforced by devices.test, procedure .ai/repo/workflows/midi-device-import.md. Live on 2026-11-15 the device list showed the KeyLab mkII 61 and BeatStep Pro ports with their roles. npm test 5827/0 at 474ce9c3; the deciding CI run 43694410257 green on the train head 9a175f9d (unit and the browser gate in three engines). Review verdict .ai/repo/reviews/555.yaml (merge)"
+    artifact: ".ai/repo/reviews/555.yaml"
+    commit: 474ce9c351e979bac15bcfd77f9a8c6ca638f16b
+    recorded_at: 2026-11-15T11:00:34Z
