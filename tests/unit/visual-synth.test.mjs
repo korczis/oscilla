@@ -11,7 +11,7 @@
 // --measure-noise), above a floor. The record at this acceptance (the W1b chain: the adoption
 // with the synth-theme core's S9/S10 and the knob's W1c, chromium 153.0.8010.12), the largest
 // count over every view, at threshold 0.05 / 0:
-//   STABILITY darwin-arm64 2 / 75 (10 runs), linux-x64 19 / 489 (10 runs)
+//   STABILITY darwin-arm64 2 / 75 (10 runs), linux-x64 6 / 39 (10 runs)
 // (K247 re-accepted the six desktop panel, engines and bay views on linux-x64, where the keys
 // readout no longer names a page; 20 noise runs each, desktop-bay-light's 21 / 400 the largest)
 // (train T5 re-accepted the eight XY and bay views over K220, K229 and K232 together: pad R's
