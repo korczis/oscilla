@@ -105,6 +105,39 @@ export function glideStart(ctx) {
   return ctx.currentTime > 0 ? ctx.currentTime : RENDER_QUANTUM / ctx.sampleRate;
 }
 
+// ---------------------------------------------------------- performance time <-> context time
+
+/**
+ * The offset between the audio clock and the performance timeline, in seconds: context time
+ * minus performance time, from one getOutputTimestamp() reading (V503, A4; V510). An event of
+ * the performance timeline (a MIDIMessageEvent's timeStamp) is at context time perf / 1000 +
+ * offset, and a context time is sent to Web MIDI's send(data, timestamp) as (ctx - offset) *
+ * 1000. The reading's contextTime and performanceTime are of the same output instant, so no
+ * latency is added again (Firefox reports both trailing by outputLatency; see
+ * renderedTimeAtLeast). Without a usable reading the offset is ctx.currentTime against `now`;
+ * null when neither exists.
+ */
+export function clockOffsetS(ctx, now = perfNow()) {
+  if (ctx && typeof ctx.getOutputTimestamp === 'function') {
+    try {
+      const ts = ctx.getOutputTimestamp();
+      if (ts && ts.contextTime > 0 && ts.performanceTime > 0) {
+        return ts.contextTime - ts.performanceTime / 1000;
+      }
+    } catch (e) {
+      /* no timestamp: the currentTime offset stands */
+    }
+  }
+  if (!ctx || !isNum(ctx.currentTime) || now === null || !isNum(now)) return null;
+  return ctx.currentTime - now / 1000;
+}
+
+/** The context time (s) of performance time `perfMs` under `offsetS` (clockOffsetS). */
+export const perfToContextS = (perfMs, offsetS) => perfMs / 1000 + offsetS;
+
+/** The performance time (ms) of context time `ctxS` under `offsetS` (clockOffsetS). */
+export const contextToPerfMs = (ctxS, offsetS) => (ctxS - offsetS) * 1000;
+
 // ------------------------------------------------------------------ the one transport clock
 
 /**

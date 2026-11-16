@@ -42,3 +42,15 @@ satisfaction:
     criterion: "A controller's transport plays the workspace in view: MIDI Start, Continue and Stop from any input and a DAW-control port's Play, Stop, Rewind and Cycle buttons act on the Sequencer's own transport in the Sequencer and on the Studio's elsewhere, the monitor saying what each did; an incoming MIDI clock's tempo is measured over the last whole beat and shown, and cleared when the clock stops, without the transport following it by itself"
     evidence: claim
     ref: "midi-transport-clock"
+  - id: midi-device-map
+    criterion: "Each connected controller of a known family is shown in the MIDI section laid out from its derived profile, every control lighting as it sends and naming the OSCILLA control it moves, read from the one source that moves it"
+    evidence: command
+    ref: "node tests/browser/midi.cjs"
+  - id: midi-output-transport
+    criterion: "OSCILLA drives a chosen MIDI output's transport: realtime Start, Continue and Stop and MIDI clock from the audio clock at the workspace's tempo, under the plain MIDI permission, with nothing sent until an output is chosen"
+    evidence: command
+    ref: "node tests/browser/midi.cjs"
+  - id: midi-output-sysex
+    criterion: "OSCILLA writes to a controller's display and lights only after a recorded decision to ask for the SysEx permission, on its own explicit action, with messages measured on the device and never copied from the maker's files"
+    evidence: command
+    ref: "node tests/browser/midi.cjs"
