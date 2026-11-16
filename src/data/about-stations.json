@@ -310,8 +310,11 @@
       "datetime": "2026-11-16T10:54:17+01:00"
     },
     {
+      "release": "3.41",
       "title": "Výstup MIDI sleduje transport a rychlost modulace česky",
-      "summary": "V Nastavení, v sekci MIDI, se dá zvolit výstup „Hodiny a transport na výstup“: zvolený výstup MIDI dostává Start, Pokračovat, Stop a hodiny MIDI podle transportu, který právě vidíte (v Sekvenceru jeho vlastní, jinde Studia), při každém načtení je zvolené „Žádný“ a bez volby se nic neposílá; ovladač rychlosti u LFO, Náhody, Krokového modulátoru a sekvenceru napětí se jmenuje Rychlost"
+      "summary": "V Nastavení, v sekci MIDI, se dá zvolit výstup „Hodiny a transport na výstup“: zvolený výstup MIDI dostává Start, Pokračovat, Stop a hodiny MIDI podle transportu, který právě vidíte (v Sekvenceru jeho vlastní, jinde Studia), při každém načtení je zvolené „Žádný“ a bez volby se nic neposílá; ovladač rychlosti u LFO, Náhody, Krokového modulátoru a sekvenceru napětí se jmenuje Rychlost",
+      "commit": "3b618be",
+      "datetime": "2026-11-16T19:02:14+01:00"
     }
   ]
 }
