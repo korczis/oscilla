@@ -170,6 +170,15 @@ test('the seam is tests/browser/lib/midi-stub.cjs, it names itself and the reads
     for (const m of reads(/\binputs\.(\w+)/g)) {
       assert.ok(stub.PAGE_READS.inputs.includes(m), `inputs.${m} is compared by the suite`);
     }
+    // V510: the outputs (connectedOutputs names each one `output`).
+    for (const m of reads(/\boutputs\.(\w+)/g)) {
+      assert.ok(stub.PAGE_READS.outputs.includes(m), `outputs.${m} is compared by the suite`);
+    }
+    const outReads = reads(/\boutput\.(\w+)/g);
+    assert.ok(outReads.includes('send'), 'support.js reads output.send');
+    for (const m of outReads) {
+      assert.ok(stub.PAGE_READS.output.includes(m), `output.${m} is compared by the suite`);
+    }
   });
 
 test('docs/midi.md states every state with the copy of ADR 0058', () => {

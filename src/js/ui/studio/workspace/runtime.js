@@ -340,6 +340,12 @@ export function createWorkspaceRuntime(ctx, svc, ops) {
       tick();
       ops.announce('Returned to start');
     },
+
+    /** V510: the playing timeline's { origin, tempo, fromStart } for MIDI clock out, else null. */
+    studioClockAnchor() {
+      return ctx.transport && typeof ctx.transport.clockAnchor === 'function'
+        ? ctx.transport.clockAnchor() : null;
+    },
   };
   return { ops: { recompile, refreshStatus, allowMicrophone, admitEdit, onTransport, stopStudio },
     part };
