@@ -40,6 +40,7 @@ import { focusSafely, isFocusable } from './dialogs.js';
 import { sessionStore } from '../core/storage.js';
 import { OWNER, soundingOwner } from '../core/output-bus.js';
 import { learnReturnAction, learnToolOf } from './cross-links.js';
+import { deferDemoFocus } from './learn-focus.js';
 import { STATUS_PLAY_WORKSPACES, WORKSPACE_LABELS } from './shortcuts.js';
 import { statusPlayHint } from '../core/play-hints.js';
 import { registerEmptyPredicate } from './empty-states.js';
@@ -773,7 +774,7 @@ export function createWorkbench(svc) {
         this.sourceKind = this.pattern === 'tone' ? 'oscillator' : 'pattern';
       }
       // The Learn view is now hidden: focus the transport, where the demo is played.
-      if (fromKeyboard) this.$nextTick(() => focusSafely(document.getElementById('osc-hold-play')));
+      if (fromKeyboard) deferDemoFocus(this, focusSafely);
     },
     /**
      * A Learn topic's tool link was followed (its href opens the workspace through the router):
