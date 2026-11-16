@@ -1,0 +1,23 @@
+id: Q109
+milestone: M046
+serves:
+  - "engineering-integrity#queue-lands-tested-tree"
+title: "Owner question: how to reclaim disk taken by merged, clean OSCILLA worktrees on the shared Mac"
+slug: owner-question-worktree-disk-reclaim
+priority: p2
+profile: routine
+owner: "repository owner"
+objective: "Record the owner's decision on reclaiming disk from merged, clean worktrees under ~/dev/oscilla-wt, so the release gate's disk floor does not block landings and no session removes other sessions' worktrees on its own."
+why: "2026-11-16: oscilla-ff measured 6.8 GiB free; about 595 oscilla-wt worktrees whose branch is in origin/main and that have no tracked changes held about 29.7 GiB by du, mostly node_modules (~180 MB each). Most were created by other sessions; oscilla-43's go-ahead for a sweep was refused by its session's permission check as a destructive action across other seats' trees, so the question went to the owner."
+current_state: "Decided 2026-11-16: node_modules only. Asked by oscilla-43 (Claude Code session c9ae388a-1265-4c28-8fad-5fdaea45ef04) via AskUserQuestion. Question (verbatim): 'The Mac has 6.8 GiB free. About 595 OSCILLA worktrees under ~/dev/oscilla-wt have branches already merged to main and no uncommitted changes; together they hold ~29.7 GiB (du), mostly node_modules (~180 MB each). Most were created by other Claude sessions. How should space be reclaimed?' Options: 'node_modules only (Recommended)' (delete node_modules in merged, clean worktrees with no open process and no active Majordomus task, one by literal path, measuring df; recoverable with npm ci; worktrees and branches stay), 'Remove whole worktrees', 'Do nothing now'. Answer (verbatim): 'node_modules only (Recommended)'. By the time the answer arrived free disk had recovered to 76 GiB."
+scope:
+  - ".ai/repo/project/issues/Q109.yaml"
+depends_on: []
+acceptance_criteria:
+  - "The owner's answer is recorded quoting the question, the options and the answer with the date and session id; whole worktrees are removed only by a later owner decision."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: '2026-11-16'
+updated_at: '2026-11-16'
