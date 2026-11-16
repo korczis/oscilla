@@ -303,8 +303,11 @@
       "datetime": "2026-11-15T22:15:07+01:00"
     },
     {
+      "release": "3.40",
       "title": "Volání a odpověď z ovladače MIDI, mapa ovladače a další čeština",
-      "summary": "Režim volání a odpovědi: frázi zahranou na ovladači MIDI nástroj zopakuje jednou deterministickou odpovědí, kterou přeruší každá jiná hraná nota, a odpověď nikdy nevloží panel Synthu; sekce MIDI v Nastavení ukazuje mapu každého známého ovladače a rozsvítí ovládací prvek, který právě posílá; tlačítka Podržet a hrát, Spustit a volba Povolit nepřetržité přehrávání jsou česky i v upozorněních, Studio počítá uzly, spojení a klipy česky a stavový řádek nikdy neusekne slovo"
+      "summary": "Režim volání a odpovědi: frázi zahranou na ovladači MIDI nástroj zopakuje jednou deterministickou odpovědí, kterou přeruší každá jiná hraná nota, a odpověď nikdy nevloží panel Synthu; sekce MIDI v Nastavení ukazuje mapu každého známého ovladače a rozsvítí ovládací prvek, který právě posílá; tlačítka Podržet a hrát, Spustit a volba Povolit nepřetržité přehrávání jsou česky i v upozorněních, Studio počítá uzly, spojení a klipy česky a stavový řádek nikdy neusekne slovo",
+      "commit": "37c5001",
+      "datetime": "2026-11-16T10:54:17+01:00"
     }
   ]
 }
