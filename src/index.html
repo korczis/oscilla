@@ -3487,8 +3487,6 @@
                 <span class="bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded dark:bg-gray-700 dark:text-gray-300"
                   x-text="d.known ? 'Port: ' + d.roleText : 'Neznámé zařízení: hraje noty a CC'"></span>
               </span>
-              <!-- V509: the device's map, laid out from its derived profile (midi/device-map.js);
-                   the control that sent the latest message is lit, and each says what it moves. -->
               <details class="w-full" data-osc="midi.map" x-show="d.known && d.role === 'play'">
                 <summary class="flex items-center text-sm font-medium cursor-pointer min-h-11 text-primary-700 dark:text-primary-400">Mapa ovladačů</summary>
                 <div class="flex flex-wrap gap-1 mt-1" x-show="midiMap(d.deviceId).banks.length > 1">
@@ -3520,8 +3518,6 @@
           </template>
         </ul>
       </section>
-      <!-- V503 (ADR 0058's V503 note): call and response. Off on every load and never stored; the
-           player is a MIDI play port only, any other note cuts the answer (src/js/midi/response.js). -->
       <section class="mt-3" x-show="midiState === 'connected'" aria-labelledby="osc-midi-response-title">
         <label class="inline-flex items-center gap-3 cursor-pointer min-h-11">
           <input type="checkbox" class="sr-only peer" data-osc="midi.response"
