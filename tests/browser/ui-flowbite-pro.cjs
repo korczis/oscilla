@@ -598,16 +598,21 @@ function defineChecks() {
           const now = await page.evaluate(() => document.documentElement.dataset.theme);
           if (now !== theme) {
             await page.click('[data-osc="header.theme"]');
+            // The theme attribute is set in the click handler, the icon's x-show after it (Alpine's
+            // next flush): wait for the whole state, and report the last reading on a miss.
+            const icon = theme === 'dark' ? '#i-sun' : '#i-moon';
+            let last = null;
             const t = await until(() => page.evaluate(() => ({
               theme: document.documentElement.dataset.theme,
               stored: localStorage.getItem('oscilla.v2.theme'),
               icon: [...document.querySelectorAll('[data-osc="header.theme"] svg')]
                 .filter((s) => s.getClientRects().length).map((s) => s.querySelector('use')
-                  .getAttribute('href')) })).then((x) => (x.theme === theme ? x : null)),
-            { ms: 3000, what: `the theme button switches to ${theme}` }).catch(() => null);
-            want(t && t.stored === theme && t.icon.length === 1
-              && t.icon[0] === (theme === 'dark' ? '#i-sun' : '#i-moon'),
-            `${w} theme ${theme}: ${JSON.stringify(t)}`);
+                  .getAttribute('href')) })).then((x) => {
+              last = x;
+              return x.theme === theme && x.stored === theme && x.icon.length === 1
+                && x.icon[0] === icon ? x : null;
+            }), { ms: 3000, what: `the theme button switches to ${theme}` }).catch(() => null);
+            want(!!t, `${w} theme ${theme}: ${JSON.stringify(last)}`);
           }
           if (w < 500) {
             await page.tap('[data-osc="header.menu"]');
