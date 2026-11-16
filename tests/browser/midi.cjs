@@ -1549,6 +1549,121 @@ async function seamTransport(browser, b, origin, url) {
   }
 }
 
+// midi-seam-clock-out (V510): a stub output chosen in the MIDI section follows the transport in
+// view. A MIDI Start from the play port starts the Studio; the output receives Start (FA), then
+// Timing Clock (F8) stamped one tick of the document's tempo apart (24 PPQ, each with its own
+// timestamp); a MIDI Stop stops the Studio and the output receives Stop (FC). In the Sequencer
+// the output follows the sequence at the sequence's tempo. With "Žádný" chosen nothing more is
+// sent.
+// Two ticks' stamps may differ from the exact spacing by the clock offset's slew per reading
+// (clock-out-mode.js STAMP_SLEW_S, 0.02 ms) and float rounding: 0.05 ms bounds both.
+const SPACING_MS = 0.05;
+async function seamClockOut(browser, b, origin, url) {
+  const leg = `${b}/${origin}`;
+  const id = 'midi-seam-clock-out';
+  const PLAY = `${midiStub.STUB_NAME} · Arturia BeatStep Pro Arturia BeatStepPro`;
+  const OUT = `${midiStub.STUB_NAME} · Arturia BeatStep Pro out`;
+  const { context, page, errors } = await openPage(browser, url,
+    { init: { fn: midiStub.install, arg: {} }, also: { fn: audioProbe, arg: { sr: NOTES_RATE } } });
+  try {
+    await assertGroup(leg, id, page, 'seam');
+    await openSettings(page);
+    await page.locator('[data-osc="midi.connect"]').click(); // the gesture also starts audio
+    await stateIs(page, ['pending'], `${leg}: Connect MIDI asks`);
+    await page.evaluate(([n, o]) => window.__oscMidiSeam.resolve(0, [n], [o]), [PLAY, OUT]);
+    await stateIs(page, ['connected'], `${leg}: the stub port connects`);
+    const select = page.locator('[data-osc="midi.clock-out"]');
+    await select.waitFor({ state: 'visible', timeout: STEP_MS });
+    const offered = await select.evaluate((el) => [...el.options].map((o) => o.textContent.trim()));
+    const chosenFirst = await select.inputValue();
+    check(leg, id, 'the MIDI section offers the stub output, and none is chosen by default',
+      offered.includes(OUT) && offered[0] === 'Žádný' && chosenFirst === '',
+      JSON.stringify({ offered, chosenFirst }));
+    const sent = () => page.evaluate((o) => window.__oscMidiSeam.sent(o), OUT);
+    const msg = (bytes) => seam(page, 'message', PLAY, bytes);
+    const playing = (what) => page.evaluate((w) => (w === 'studio'
+      ? !!window.OSCILLA.app.studio.playing : !!window.OSCILLA.labs.sequencer.editor.playing), what);
+    const waitFor = (fn, what) => until(async () => ((await fn()) ? true : null),
+      { ms: STEP_MS, what }).then(() => true, () => false);
+    // Nothing is sent while no output is chosen, the Studio playing or not.
+    await msg([0xfa]);
+    await waitFor(() => playing('studio'), `${leg}: Start starts the Studio (no output)`);
+    await msg([0xfc]);
+    await waitFor(async () => !(await playing('studio')), `${leg}: Stop stops it`);
+    const none = (await sent()).length;
+    await page.locator('#osc-midi-clock-out').selectOption({ label: OUT });
+    // A run: Start, at least two beats of ticks, Stop.
+    await msg([0xfa]);
+    const ran = await until(async () => {
+      const log = await sent();
+      return log.filter((e) => e.data[0] === 0xf8).length >= 48 ? log : null;
+    }, { ms: STEP_MS, what: `${leg}: the output receives two beats of clock` }).catch(() => null);
+    // The tempo the Studio plays at, from its own anchor (the document's transport tempo).
+    const anchored = await page.evaluate(() => window.OSCILLA.app.studioClockAnchor());
+    const tempo = anchored ? anchored.tempo : null;
+    await msg([0xfc]);
+    const stopped = await until(async () => {
+      const log = await sent();
+      return log.some((e) => e.data[0] === 0xfc) ? log : null;
+    }, { ms: STEP_MS, what: `${leg}: the output receives Stop` }).catch(() => null);
+    const log = stopped || ran || [];
+    const statuses = log.map((e) => e.data[0]);
+    const ticks = log.filter((e) => e.data[0] === 0xf8);
+    const gaps = ticks.slice(1).map((e, i) => e.at - ticks[i].at);
+    const bpm = Number(tempo) > 0 ? Number(tempo) : 120;
+    const want = 60000 / (bpm * 24);
+    const worst = gaps.length ? Math.max(...gaps.map((g) => Math.abs(g - want))) : Infinity;
+    check(leg, id, `the chosen output receives Start, then clock stamped ${want.toFixed(3)} ms `
+      + `apart (${bpm} BPM, 24 PPQ), then Stop`, none === 0 && statuses[0] === 0xfa
+      && ticks.length >= 48 && ticks.every((e) => Number.isFinite(e.at)) && worst < SPACING_MS
+      && statuses[statuses.length - 1] === 0xfc,
+    JSON.stringify({ none, first: statuses[0], last: statuses[statuses.length - 1],
+      ticks: ticks.length, worst, tempo }));
+    // The Sequencer: the output follows the sequence at the sequence's own tempo.
+    await page.keyboard.press('Escape');
+    await until(() => page.evaluate(() => !document.getElementById('osc-dlg-settings').open),
+      { ms: STEP_MS, what: `${leg}: the Settings dialog closes` });
+    await page.evaluate(() => window.OSCILLA.app.setWorkspace('sequencer'));
+    const seqBpm = await page.evaluate(() => window.OSCILLA.labs.sequencer.editor.model.tempoBpm);
+    const mark = (await sent()).length;
+    await msg([0xfa]);
+    const seqRan = await until(async () => {
+      const l = (await sent()).slice(mark);
+      return l.filter((e) => e.data[0] === 0xf8).length >= 24 ? l : null;
+    }, { ms: STEP_MS, what: `${leg}: the output follows the sequence` }).catch(() => null);
+    await msg([0xfc]);
+    await waitFor(async () => !(await playing('sequencer')), `${leg}: Stop stops the sequence`);
+    const st = (seqRan || []).filter((e) => e.data[0] === 0xf8);
+    const sg = st.slice(1).map((e, i) => e.at - st[i].at);
+    const sWant = 60000 / (seqBpm * 24);
+    const sWorst = sg.length ? Math.max(...sg.map((g) => Math.abs(g - sWant))) : Infinity;
+    check(leg, id, `in the Sequencer the output follows the sequence: Start, then clock at its own `
+      + `${seqBpm} BPM`, !!seqRan && seqRan[0].data[0] === 0xfa && sWorst < SPACING_MS,
+    JSON.stringify({ first: seqRan && seqRan[0].data[0], ticks: st.length, sWorst, seqBpm }));
+    // "Žádný": nothing more is sent.
+    await openSettings(page);
+    await page.locator('#osc-midi-clock-out').selectOption({ value: '' });
+    const after = (await sent()).length;
+    await msg([0xfa]);
+    await waitFor(() => playing('sequencer'), `${leg}: Start plays the sequence again`);
+    // A quarter second of the sequence on the audio clock: a chosen output would have had about
+    // a dozen ticks in it.
+    const played = await waitFor(() => page.evaluate(() => {
+      const ed = window.OSCILLA.labs.sequencer.editor;
+      const t0 = ed.playing ? ed.loopSchedule().t0 : null;
+      const ctx = window.OSCILLA.engine.ctx;
+      return Number.isFinite(t0) && ctx && ctx.currentTime > t0 + 0.25;
+    }), `${leg}: the sequence plays a quarter second`);
+    const quiet = (await sent()).length;
+    await msg([0xfc]);
+    check(leg, id, 'with "Žádný" chosen nothing more is sent while the sequence plays',
+      played && quiet === after, JSON.stringify({ played, after, quiet }));
+    check(leg, id, 'no console or page error', errors.length === 0, errors.join(' | '));
+  } finally {
+    await context.close();
+  }
+}
+
 // keys-one-keyboard (K178, the owner's question of 2026-11-04: why does the keyboard behave
 // differently in every workspace): with the stub MIDI device connected, the Playground, the Synth
 // and the Studio (the Synth panel's nodes, visited first) each take the same octave (Z/X set once, in the Playground), light
@@ -2290,6 +2405,7 @@ async function main() {
             await seamDeviceMapPhone(browser, b, origin, url);
             await seamMonitor(browser, b, origin, url);
             await seamTransport(browser, b, origin, url);
+            await seamClockOut(browser, b, origin, url);
             await keyboardChecks(browser, b, origin, url);
             await keysInsertNotice(browser, b, origin, url);
             await keyboardEverywhere(browser, b, origin, url);

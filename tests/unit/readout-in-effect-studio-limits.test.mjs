@@ -21,6 +21,11 @@ import { formatFrequency } from '../../src/js/core/frequency.js';
 import { createIdGenerator, createStudioStore } from '../../src/js/studio/actions.js';
 import * as runtimeMod from '../../src/js/studio/runtime.js';
 import * as inspector from '../../src/js/ui/studio/inspector.js';
+import { NODE_REGISTRY } from '../../src/js/studio/registry.js';
+
+// The rate parameter's own label (the shared rate() helper of studio/nodes/modulation.js), never
+// retyped: the messages below name it.
+const RATE = NODE_REGISTRY.param('random', 'rate').label;
 import { createFakeAudioEnv } from './sequencer-fake-audio.mjs';
 
 const CODE = 'frequency-limited';
@@ -306,8 +311,8 @@ test('T023 review R1: a Rate capped by its range names the range, not 0.95 x Nyq
   assert.equal(got.length, 1, JSON.stringify(s.runtime.debugInfo().diagnostics));
   const d = got[0];
   assert.deepEqual(d.entity, { kind: 'node', id: s.rnd });
-  assert.equal(d.message, 'Random 1 Rate is 80 Hz, 130 Hz with its cables\' constant offset, '
-    + 'but plays 100 Hz: the Studio keeps Random 1 Rate at or below 100 Hz, the top of its '
+  assert.equal(d.message, `Random 1 ${RATE} is 80 Hz, 130 Hz with its cables' constant offset, `
+    + `but plays 100 Hz: the Studio keeps Random 1 ${RATE} at or below 100 Hz, the top of its `
     + 'range.');
   assert.equal(d.details.param, 'rate');
   assert.equal(d.details.target, 'rate');
@@ -318,7 +323,7 @@ test('T023 review R1: a Rate capped by its range names the range, not 0.95 x Nyq
     { truth: truthOf(s) }).fields.find((x) => x.key === 'rate');
   assert.equal(f.readout, '80 Hz (130 Hz with cables), plays 100 Hz');
   assert.equal(f.limitNote, 'Plays 100 Hz, its cables\' constant 50 Hz included: the Studio '
-    + 'keeps this rate at or below 100 Hz, the top of its range.');
+    + `keeps this ${RATE.toLowerCase()} at or below 100 Hz, the top of its range.`);
   const rv = inspector.runtimeView(s.store.getModel(), truthOf(s));
   assert.ok(!/Nyquist/.test(rv.text), rv.text);
   assert.match(rv.text, /Studio drží 2 hodnoty v rozsahu svých parametrů; viz/);
@@ -330,8 +335,8 @@ test('T023 review R1: a cable into a Rate names the Rate and its range', () => {
   assert.equal(got.length, 1, JSON.stringify(s.started.warnings));
   const d = got[0];
   assert.deepEqual(d.entity, { kind: 'edge', id: s.edge });
-  assert.equal(d.message, 'The cable LFO 1 → Random 1 Rate plays 63% of its depth (50 Hz of '
-    + '80 Hz): the Studio keeps Random 1 Rate at or below 100 Hz, the top of its range.');
+  assert.equal(d.message, `The cable LFO 1 → Random 1 ${RATE} plays 63% of its depth (50 Hz of `
+    + `80 Hz): the Studio keeps Random 1 ${RATE} at or below 100 Hz, the top of its range.`);
   assert.equal(d.details.param, 'rate');
   assert.equal(d.details.target, 'rate');
   assert.equal(d.details.bound, 'range');

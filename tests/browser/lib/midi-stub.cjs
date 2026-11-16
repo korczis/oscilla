@@ -13,7 +13,10 @@
 // check asserts absent. The test drives the stub, never the page:
 //
 //   calls()                    the options of every requestMIDIAccess call, in order
-//   resolve(i, names)          resolve request i with a fake MIDIAccess holding those inputs
+//   resolve(i, names[, outs])  resolve request i with a fake MIDIAccess holding those inputs
+//                              (and those outputs, V510)
+//   sent(name)                 what the page sent to output `name`: [{ data, at, now }], `at`
+//                              the send's timestamp (undefined: now), `now` when it was called
 //   reject(i, name, message)   reject request i with a DOMException of that name
 //   plug(name) / unplug(name)  an input appears / is disconnected on the latest access; a
 //                              statechange with its port is dispatched on the access and port
@@ -33,8 +36,10 @@
 const STUB_NAME = 'TEST STUB · MIDI input';
 const STUB_MANUFACTURER = 'OSCILLA test';
 const PAGE_READS = Object.freeze({
-  access: Object.freeze(['inputs', 'addEventListener', 'removeEventListener']),
+  access: Object.freeze(['inputs', 'outputs', 'addEventListener', 'removeEventListener']),
   inputs: Object.freeze(['forEach']),
+  outputs: Object.freeze(['forEach']),
+  output: Object.freeze(['id', 'name', 'state', 'send']),
   port: Object.freeze(['name', 'state', 'type', 'addEventListener', 'removeEventListener',
     'open']),
 });
@@ -72,8 +77,19 @@ function install(cfg) {
     }
   }
 
+  class StubOutput extends StubPort {
+    constructor(id, name) {
+      super(id, name, 'output');
+      this.log = [];
+    }
+
+    send(data, timestamp) {
+      this.log.push({ data: Array.from(data), at: timestamp, now: performance.now() });
+    }
+  }
+
   class StubAccess extends EventTarget {
-    constructor(names) {
+    constructor(names, outs = []) {
       super();
       this.listening = 0;
       this.inputs = new Map();
@@ -81,6 +97,10 @@ function install(cfg) {
       this.sysexEnabled = false;
       this.onstatechange = null;
       for (const n of names) this.add(n);
+      for (const n of outs) {
+        const port = new StubOutput(`stub-output-${this.outputs.size + 1}`, n);
+        this.outputs.set(port.id, port);
+      }
     }
 
     addEventListener(type, fn, options) {
@@ -109,8 +129,9 @@ function install(cfg) {
   }
 
   if (config.dry) {
-    const access = new StubAccess([NAME]);
+    const access = new StubAccess([NAME], [NAME]);
     const port = access.inputs.values().next().value;
+    const output = access.outputs.values().next().value;
     const kind = (proto, member) => {
       for (let p = proto; p; p = Object.getPrototypeOf(p)) {
         const d = Object.getOwnPropertyDescriptor(p, member);
@@ -124,8 +145,10 @@ function install(cfg) {
       access: typeof MIDIAccess === 'function' ? MIDIAccess.prototype : null,
       inputs: typeof MIDIInputMap === 'function' ? MIDIInputMap.prototype : null,
       port: typeof MIDIInput === 'function' ? MIDIInput.prototype : null,
+      outputs: typeof MIDIOutputMap === 'function' ? MIDIOutputMap.prototype : null,
+      output: typeof MIDIOutput === 'function' ? MIDIOutput.prototype : null,
     };
-    const objects = { access, inputs: access.inputs, port };
+    const objects = { access, inputs: access.inputs, port, outputs: access.outputs, output };
     const rows = [];
     for (const [group, members] of Object.entries(config.reads || {})) {
       for (const member of members) {
@@ -176,8 +199,8 @@ function install(cfg) {
     name: NAME,
     manufacturer: MAKER,
     calls: () => requests.map((r) => r.options),
-    resolve(i, names) {
-      const access = new StubAccess(names || []);
+    resolve(i, names, outs) {
+      const access = new StubAccess(names || [], outs || []);
       latest = access;
       const r = settle(i);
       r.access = access;
@@ -191,6 +214,12 @@ function install(cfg) {
       return true;
     },
     port: (name) => find(name),
+    sent(name) {
+      if (!latest) throw new Error('midi stub: no access has been resolved');
+      const out = [...latest.outputs.values()].find((p) => p.name === name);
+      if (!out) throw new Error(`midi stub: no output named ${name}`);
+      return out.log.map((e) => ({ ...e, data: e.data.slice() }));
+    },
     plug(name) {
       if (!latest) throw new Error('midi stub: no access has been resolved');
       latest.emit(latest.add(name));

@@ -166,6 +166,7 @@ const CONTRACT = [
   ['midi.connect', 'action', 'button'], ['midi.devices', 'readout', 'section'],
   ['midi.monitor', 'readout', 'section'], ['midi.monitor-clear', 'action', 'button'],
   ['midi.response', 'switch', 'input'], ['midi.map', 'readout', 'details'],
+  ['midi.clock-out', 'choice', 'select'],
   ['midi.map-bank', 'action', 'button'],
   ['midi.clock', 'readout', 'span'],
   ['studio.armed', 'readout', 'span'],

@@ -205,8 +205,9 @@ test('K238: S&H Rate is refused only while an unmuted Clock clocks it, as the co
   assert.ok(clock, 'Keys Gate is normalled into the S&H Clock (n23)');
   const clocked = (m) => compileStudio(m).nodes.get(nodeOf(m, 'sh').id).clocked;
   assert.equal(clocked(st.getModel()), true);
-  assert.match(jackReason(st.getModel(), PANEL, 'sh.rate'),
-    /Rate nemá účinek, dokud je zapojený Clock/);
+  const rate = PANEL.faceOf('sh').find((c) => c.key === 'rate').label;
+  assert.ok(jackReason(st.getModel(), PANEL, 'sh.rate')
+    .includes(`${rate} nemá účinek, dokud je zapojený Clock`));
   const r = st.dispatch({ type: 'EDGE_UPDATE', edgeId: clock.id, props: { muted: true } });
   assert.equal(r.ok, true, r.reason);
   assert.equal(clocked(st.getModel()), false, 'the compiler ignores a muted Clock cable');

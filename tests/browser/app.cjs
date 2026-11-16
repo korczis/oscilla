@@ -581,12 +581,13 @@ function defineChecks() {
       'referenceCapturing', 'setInputNow', 'showResult', 'responseView', 'deviceId',
       'ioDeviceId', 'refreshInputs', 'irView'];
     // OSCILLA.studio and its live transport (K169 review R1): the transport's one Inject hook,
-    // debugRefuseNextPlay, refuses outside TEST CONTEXT.
+    // debugRefuseNextPlay, refuses outside TEST CONTEXT. clockAnchor (V510) observes: the grid
+    // MIDI clock out follows, null while nothing plays.
     const STUDIO_KEYS = ['store', 'model', 'selection', 'runtime', 'transport', 'editor', 'dirty',
       'projectId', 'templateId', 'measurementRun', 'rendering', 'trace', 'library', 'counts'];
     const TRANSPORT_KEYS = ['start', 'stop', 'arm', 'disarm', 'live', 'armed', 'liveVoices',
       'heldNotes', 'locate', 'returnToStart', 'setLoop', 'sync', 'admit', 'escape', 'playhead',
-      'debugInfo', 'debugRefuseNextPlay', 'dispose', 'on', 'playing', 'step'];
+      'debugInfo', 'debugRefuseNextPlay', 'dispose', 'on', 'playing', 'step', 'clockAnchor'];
     const got = await page.evaluate(() => {
       const O = window.OSCILLA;
       const m = O.measure;
@@ -1359,7 +1360,7 @@ function defineChecks() {
       && window.OSCILLA.app.midiState === 'connected'));
     const notOffered = [...(midiOffered ? [] : ['midi.connect']),
       ...(midiConnected ? [] : ['midi.monitor-clear', 'midi.response', 'midi.map',
-        'midi.map-bank'])];
+        'midi.map-bank', 'midi.clock-out'])];
     const neverVisible = list.filter((c) => !c.visible && !notOffered.includes(c.osc))
       .map((c) => c.osc);
     // Controls the audit must have met (they exist only in a state the audit sets up).

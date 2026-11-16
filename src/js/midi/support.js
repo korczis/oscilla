@@ -93,6 +93,22 @@ function connectedNames(access) {
 }
 
 /**
+ * The connected outputs of a MIDIAccess, in its order (V510): { id, name, port }. An access
+ * without outputs (a test stub, an older browser) has none.
+ */
+function connectedOutputs(access) {
+  const out = [];
+  if (!access || !access.outputs || typeof access.outputs.forEach !== 'function') return out;
+  access.outputs.forEach((output) => {
+    if (output && output.state === 'connected' && typeof output.send === 'function') {
+      out.push({ id: String(output.id || output.name || out.length), name: portName(output.name),
+        port: output });
+    }
+  });
+  return out;
+}
+
+/**
  * How long the load-time permission query may take before the page states `unknown` (and
  * offers Connect MIDI). A query that answers later still chooses the state, if Connect MIDI has
  * not been chosen by then, and its PermissionStatus is kept.
@@ -123,6 +139,7 @@ export function createMidiSupport({ navigator: nav, isSecureContext, site = FILE
     text: state ? midiText(state, { site, ...detail }) : '',
     canConnect: available(),
     inputs: state === 'connected' ? detail.names.slice() : [],
+    outputs: live ? connectedOutputs(live.access) : [], // V510
   });
 
   const set = (next, d = {}) => {
