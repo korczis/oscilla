@@ -74,7 +74,7 @@ export default [
   defineComponent({
     id: 'studio.compact.expand',
     kind: 'open',
-    label: 'Expand Studio',
+    label: 'Otevřít Studio',
     docs: 'Opens the full Studio workspace on the same document.',
     state: { none: 'it changes the workspace, not the document' },
     effect: { route: 'studio' },

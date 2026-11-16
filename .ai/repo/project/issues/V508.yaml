@@ -38,4 +38,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-15
-updated_at: 2026-11-15
+updated_at: 2026-11-16T02:10:55Z
+started_at: 2026-11-16T02:09:32Z
+started_event: sha256:4166e072befe43cbc2699938e30528e98d9a6a841ca3805199a5963fbdcf1576
+verified_at: 2026-11-16T02:10:03Z
+verified_event: sha256:a5aefb4ab94853db95fe5a1f229afb7e2ae7020623f9aea4492bf0a6237ac10a
+completed_at: 2026-11-16T02:10:55Z
+completed_event: sha256:841e914a8a57f77a9edf1f1a2a8a98f4f3a238620ee646e5d77d7dcbebd48f74
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "node --test tests/unit/midi/*.test.mjs; node tests/browser/midi.cjs"
+    result: "landed in train T22, PR 555 (main 474ce9c3, member PR 553's stack, review C3-555-1 fixed there); stamped after K247, on which it depends, on main merge commit eb3f043880c5457ed19f09f42aa6f1bdef607134 (train T24, PR 567, v3.39.0). Criteria re-checked on main eb3f043880c5457ed19f09f42aa6f1bdef607134: transportAction maps FA, FB, FC from any port and the DAW port's Note On 94, 93, 91, 86 only (transport.test); midiTransport plays the Sequencer's own transport in the Sequencer and the Studio's elsewhere, Start from the start, Continue from where it is, Stop keeps the keys' armed run (transport.test, midi-seam-transport); the clock meter reads BPM over the last whole beat on the timestamps, null before it and after CLOCK_GAP_MS, shown and cleared in the MIDI section (transport.test, midi-seam-transport); ADR 0058's V508 note (line 586). Unit: 159/0 on eb3f043880c5457ed19f09f42aa6f1bdef607134; the deciding CI run 43772740109 green on the train head fc117462 (unit, the browser legs in chromium, firefox and webkit with midi.cjs, fail-first, review-verdict). Open outside this issue: studioPlay's refusal sentences are English (c3), the next Czech pass."
+    artifact: ".ai/repo/reviews/555.yaml"
+    commit: eb3f043880c5457ed19f09f42aa6f1bdef607134
+    recorded_at: 2026-11-16T02:10:34Z

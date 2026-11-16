@@ -41,7 +41,7 @@ export function bindPageKeys({ keys, cmp, stopSequencer, stopAll = null }) {
       } }),
     keys.bind({ id: 'instrument.space', keys: ['Space'], scope: { workspace: '*' },
       when: () => instrumentTakesSpace(cmp.workspace), group: 'Instrument',
-      label: 'Hold to Play (a programmed pattern triggers once)',
+      label: 'Podržet a hrát (naprogramovaný vzor zazní jednou)',
       run: (e) => cmp.onKeyDown(e), up: (e) => cmp.onKeyUp(e) }),
     keys.bind({ id: 'keys.dock', keys: [DOCK_KEY], scope: { workspace: '*' },
       when: () => !!cmp.kbdDockYields, group: 'Keyboard',

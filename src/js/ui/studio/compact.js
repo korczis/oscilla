@@ -18,6 +18,7 @@ import {
 } from '../../studio/a11y.js';
 import { moveClipResult, nudgeClipResult } from '../../studio/timeline.js';
 import { compactLayout } from './graph-layout.js';
+import { clipsText, graphCountsText } from './counts-text.js';
 import { cablePath, pastThreshold, portAnchor } from './graph-geometry.js';
 import { coarsePointer, h, replaceChildren, s, setAttr, setText } from './graph-dom.js';
 import { keepInScrollerView } from '../app.js';
@@ -77,8 +78,8 @@ export function compactView(model, selection, opts = {}) {
   });
   return {
     title: model.metadata.title,
-    counts: `${model.graph.nodes.length} nodes · ${model.graph.edges.length} connections · `
-      + `${clips.length} clips`,
+    counts: `${graphCountsText(model.graph.nodes.length, model.graph.edges.length)} · `
+      + clipsText(clips.length),
     // Each cable names its two ports, so it is drawn from and to them (portAnchor, G004).
     path: { columns: layout.columns, rows: layout.rows, nodes, links: layout.links.map((l) => ({
       ...l, fromPort: edgeById.get(l.id).from.port, toPort: edgeById.get(l.id).to.port })) },
@@ -119,7 +120,7 @@ export function mountCompact(host, svc) {
     text: compactTime(0) });
   const title = h('span', { class: 'osc-sc-doc', 'data-osc': 'studio.compact.title' });
   const expand = h('button', { type: 'button', class: 'osc-btn osc-btn-primary osc-sc-expand',
-    'data-osc': 'studio.compact.expand', 'data-osc-link': 'open-in', text: 'Expand Studio',
+    'data-osc': 'studio.compact.expand', 'data-osc-link': 'open-in', text: 'Otevřít Studio',
     onClick: () => svc.expand() });
   const links = s('svg', { class: 'osc-sc-links', 'aria-hidden': 'true' });
   const pathGrid = h('div', { class: 'osc-sc-grid', role: 'group',

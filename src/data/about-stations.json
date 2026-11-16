@@ -301,6 +301,13 @@
       "summary": "Dialog Nastavení a stavové texty MIDI mluví česky (Frekvenční rozsah, Vstup MIDI, Připojit MIDI, Obnovit nástroj); karta krokového sekvenceru napětí, jehož kroky jsou všechny přeskočené, řekne, že nic nehraje, a počet kroků na kartě odpovídá tomu, co zní; počty kroků v syntezátoru se odvozují z jejich zdroje; jedna klávesnice je ověřená na každé pracovní ploše",
       "commit": "e68d582",
       "datetime": "2026-11-15T22:15:07+01:00"
+    },
+    {
+      "release": "3.40",
+      "title": "Volání a odpověď z ovladače MIDI, mapa ovladače a další čeština",
+      "summary": "Režim volání a odpovědi: frázi zahranou na ovladači MIDI nástroj zopakuje jednou deterministickou odpovědí, kterou přeruší každá jiná hraná nota, a odpověď nikdy nevloží panel Synthu; sekce MIDI v Nastavení ukazuje mapu každého známého ovladače a rozsvítí ovládací prvek, který právě posílá; tlačítka Podržet a hrát, Spustit a volba Povolit nepřetržité přehrávání jsou česky i v upozorněních, Studio počítá uzly, spojení a klipy česky a stavový řádek nikdy neusekne slovo",
+      "commit": "37c5001",
+      "datetime": "2026-11-16T10:54:17+01:00"
     }
   ]
 }
