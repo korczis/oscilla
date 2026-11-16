@@ -1,0 +1,24 @@
+id: E076
+milestone: M046
+serves:
+  - "engineering-integrity#browser-suites-harnessed"
+title: "integration-map's keyboard edges on webkit/file miss their 10 s wait since 2026-11-16, a different edge each run"
+slug: integration-map-webkit-keyboard-wait
+priority: p2
+profile: implementation
+objective: "Pin and fix why, on CI's webkit from file:// only, an integration-map.cjs edge followed by keyboard intermittently does not show its target state within the 10 000 ms step deadline while the same edge by pointer and touch, and on /oscilla/ over http, passes. The page stays on the state it was in (on #574 the previous edge's Studio template, step-bass, instead of sweep-sequence), the shape of a keyboard activation that never registered."
+why: "Required webkit leg 2 went red on three unrelated branches on 2026-11-16, each on another edge, keyboard on webkit/file at 10.1-10.2 s (oscilla-c3's scan of webkit leg 2 in every CI run since 2026-11-14): #570 run 43784425619 playground > export.url, keyboard 10147 ms; #573 run 43807270194 playground > header.about, keyboard 10132 ms (#573 is Rychlost only, on main eb3f0438, without #569 or #570); #574 (train T25) run 43854286072 sequencer > seq.toStudioTemplate > studio&st=sweep-sequence, keyboard 10221 ms, pointer 324 ms, touch 452 ms. Before 2026-11-16, 0 in 10 runs (T24's and its members' were clean). Classified by oscilla-c3 as a webkit runner shape, not a member's."
+current_state: "Open, cause not pinned. Filed 2026-11-16 by oscilla-0b on oscilla-c3's request from its classification of #574's leg 2."
+scope:
+  - "tests/browser/integration-map.cjs"
+depends_on: []
+acceptance_criteria:
+  - "The cause is pinned from a webkit failure log (the key events, focus and state with their stacks), stated in this issue's current_state."
+  - "integration-map.cjs's keyboard edges pass 20 alternated webkit/file rounds in a row under load, with main failing at least once in the same window (or the fix is a product change with a test that fails on main)."
+  - "A reviewer's verdict."
+validation:
+  - "node tests/browser/integration-map.cjs --browsers webkit --origins file"
+evidence_required:
+  - "verified"
+created_at: '2026-11-16'
+updated_at: '2026-11-16'
