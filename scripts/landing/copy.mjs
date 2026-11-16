@@ -21,7 +21,7 @@ export const WORKSPACE_COPY = Object.freeze({
       + 'zjištění, která se na ně odvolávají.' },
   analyzer: { name: 'Analyzátor',
     text: 'Spektrogram výstupu a analyzátor mikrofonu: živé pohledy, ne kalibrované měření.' },
-  filter: { name: 'Filter Lab',
+  filter: { name: 'Filtry',
     text: 'Bikvadratický filtr a odezva, kterou pro něj spočítá prohlížeč, nastavená typem, '
       + 'mezní frekvencí a Q.' },
   compare: { name: 'Porovnání',
@@ -31,9 +31,9 @@ export const WORKSPACE_COPY = Object.freeze({
       + 'generátoru a jeho analýzy.' },
   sequencer: { name: 'Sekvencer',
     text: 'Blokové sekvence tónů, sweepů, pulzů a modulace, vedle kompaktního Studia.' },
-  presets: { name: 'Presety',
+  presets: { name: 'Předvolby',
     text: 'Vestavěná i uložená nastavení nástroje a historie toho, co se hrálo.' },
-  learn: { name: 'Učení',
+  learn: { name: 'Výuka',
     text: 'Karty pojmů od frekvence po signálovou cestu, většina s ukázkou k přehrání.' },
   studio: { name: 'Studio',
     text: 'Signálový graf propojený kabely, s časovou osou, transportem a automatizací, '
@@ -203,7 +203,14 @@ export function checkCopy(facts) {
   }
   for (const w of facts.workspaces || []) {
     if (!WORKSPACE_COPY[w.id]) missing.push(`workspace "${w.id}"`);
+    // The card names the workspace as the navigation does (U106: the labels are Czech).
+    else if (w.label && WORKSPACE_COPY[w.id].name !== w.label) {
+      missing.push(`workspace "${w.id}" named "${w.label}" in the navigation`);
+    }
     if (w.group && !GROUP_COPY[w.group]) missing.push(`group "${w.group}"`);
+    else if (w.groupLabel && GROUP_COPY[w.group] && GROUP_COPY[w.group] !== w.groupLabel) {
+      missing.push(`group "${w.group}" named "${w.groupLabel}" in the navigation`);
+    }
   }
   for (const e of facts.engines || []) {
     if (!ENGINE_COPY[e.id]) missing.push(`engine "${e.id}"`);

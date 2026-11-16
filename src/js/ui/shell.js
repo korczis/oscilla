@@ -7,7 +7,7 @@
 // dashboard's own sidebar.js is Pro source and stays out: everything here is OSCILLA's code.
 //
 // Hacking the navigation: a workspace is one row of WORKSPACE_REGISTRY (id, label, icon, group,
-// words) and, for its icon, one <symbol id="i-ws-<id>"> of the sprite in src/index.html. The
+// words, lang) and, for its icon, one <symbol id="i-ws-<id>"> of the sprite in src/index.html. The
 // order, the groups, the sidebar, the search, the URL route ids (ui/navigation.js), the
 // shortcut dialog's names (ui/shortcuts.js), About's workspace list, the page header and the
 // README's navigation paragraph all follow from it; there is no second list.
@@ -27,12 +27,19 @@
 //   empty    { when, title, body, action: { label, to } }: the page's empty state, shown while
 //            the predicate `when` (registered by its adapter, ui/empty-states.js) is true;
 //            action.to is a registry id.
+//
+// The labels are Czech (U106, rule project.czech-prose, Q104; decided by oscilla-c3 under Q090,
+// 2026-11-15); the page is lang="cs". Studio, Synth and Playground stay as names, so their rows
+// carry lang: 'en', which the shell binds where the label stands alone (the nav item, the page
+// header, the breadcrumb). A Czech sentence that declines one ("v Playgroundu") gets no lang.
+// `words` keeps the English names, so a search for "measure" or "filter lab" still finds them.
 
 import { roving } from './keys/roving.js';
 
 /** The workspaces, in navigation order. group: the sidebar group holding it, or none. */
 export const WORKSPACE_REGISTRY = Object.freeze([
-  { id: 'playground', label: 'Playground', words: 'instrument tone oscillator play hold',
+  { id: 'playground', label: 'Playground', lang: 'en',
+    words: 'instrument tone oscillator play hold',
     summary: 'Nástroj na jedné obrazovce: generátor, analýza signálu, analyzátor mikrofonu, '
       + 'řízené měření, sekvencer vzorů a kompaktní Studio.',
     related: [
@@ -40,7 +47,7 @@ export const WORKSPACE_REGISTRY = Object.freeze([
       { id: 'synth', why: 'Hlas s filtry, obálkami a klávesami' },
       { id: 'learn', why: 'Karty pojmů, jejichž ukázky hrají tady' },
     ] },
-  { id: 'measure', label: 'Measure', words: 'frequency response sweep impulse room test',
+  { id: 'measure', label: 'Měření', words: 'measure frequency response sweep impulse room test',
     summary: 'Řízené měření řetězce reproduktoru, místnosti a mikrofonu: frekvenční '
       + 'charakteristika, impulsní odezva a RTA, u každého běhu s hodnocením kvality.',
     related: [
@@ -49,14 +56,15 @@ export const WORKSPACE_REGISTRY = Object.freeze([
         hash: '&st=measurement-sweep' },
       { id: 'learn', why: 'Vysvětlení logaritmických stupnic a limitů reproduktorů' },
     ] },
-  { id: 'experiments', label: 'Experiments', words: 'saved records findings compare history',
+  { id: 'experiments', label: 'Experimenty', words: 'saved records findings compare history',
     summary: 'Uložená měření jako experimenty: jejich definice, porovnání s referenčním '
       + 'měřením a zjištění, která se na ně odvolávají.',
     related: [
       { id: 'measure', why: 'Spusťte měření, které experiment zaznamená' },
       { id: 'analyzer', why: 'Živé spektrum mikrofonu ještě před kalibrovaným měřením' },
     ] },
-  { id: 'analyzer', label: 'Analyzer', group: 'analyze', words: 'spectrum microphone fft rta',
+  { id: 'analyzer', label: 'Analyzátor', group: 'analyze',
+    words: 'analyzer spectrum microphone fft rta',
     summary: 'Spektrogram výstupu a analyzátor mikrofonu: živé pohledy, nikoli kalibrované '
       + 'měření.',
     related: [
@@ -64,7 +72,7 @@ export const WORKSPACE_REGISTRY = Object.freeze([
       { id: 'experiments', why: 'Porovnejte uložené experimenty' },
       { id: 'learn', why: 'Vysvětlení harmonických, vzorkování a aliasingu' },
     ] },
-  { id: 'filter', label: 'Filter Lab', group: 'analyze', words: 'lowpass highpass eq curve',
+  { id: 'filter', label: 'Filtry', group: 'analyze', words: 'filter lab lowpass highpass eq curve',
     summary: 'Bikvadratický filtr a odezva, kterou pro něj spočítá prohlížeč; nastavuje se '
       + 'typem, mezní frekvencí a Q.',
     related: [
@@ -73,7 +81,7 @@ export const WORKSPACE_REGISTRY = Object.freeze([
         hash: '&st=filter-automation' },
       { id: 'analyzer', why: 'Spektrum toho, co slyší mikrofon' },
     ] },
-  { id: 'compare', label: 'Compare', group: 'analyze', words: 'phase hearing ranges bio',
+  { id: 'compare', label: 'Porovnání', group: 'analyze', words: 'compare phase hearing ranges bio',
     summary: 'Analyzátor mikrofonu vedle bioakustických rozsahů slyšení a pohledů '
       + 'na fázi a stereo.',
     related: [
@@ -84,7 +92,7 @@ export const WORKSPACE_REGISTRY = Object.freeze([
     // Compare's own job is the generator against the microphone: entering it selects the
     // microphone panel's Compare tab (page audit, Compare fix 1).
     enter: { 'mic.tab': 'compare' } },
-  { id: 'synthesis', label: 'Synthesis', group: 'synthesis',
+  { id: 'synthesis', label: 'Syntéza', group: 'synthesis',
     words: 'envelope adsr additive harmonics dual binaural',
     summary: 'Aditivní harmonické, obálka ADSR, pohledy na fázi a stereo a duální oscilátor, '
       + 'vedle generátoru a jeho analýzy.',
@@ -95,7 +103,8 @@ export const WORKSPACE_REGISTRY = Object.freeze([
       { id: 'studio', why: 'Zázněje dvou rozladěných tónů jako dokument Studia',
         hash: '&st=stereo-beat' },
     ] },
-  { id: 'sequencer', label: 'Sequencer', group: 'synthesis', words: 'pattern steps blocks song',
+  { id: 'sequencer', label: 'Sekvencer', group: 'synthesis',
+    words: 'sequencer pattern steps blocks song',
     summary: 'Blokové sekvence tónů, přeletů, pulzů a modulace vedle kompaktního Studia; '
       + 'krokový sekvencer s pady je v Synthu na záložce Bicí.',
     related: [
@@ -103,7 +112,7 @@ export const WORKSPACE_REGISTRY = Object.freeze([
       { id: 'studio', why: 'Sekvence sweepů jako dokument Studia', hash: '&st=sweep-sequence' },
       { id: 'presets', why: 'Presety vzorů jako výchozí bod' },
     ] },
-  { id: 'presets', label: 'Presets', group: 'synthesis', words: 'library load sounds',
+  { id: 'presets', label: 'Předvolby', group: 'synthesis', words: 'presets library load sounds',
     summary: 'Vestavěná i uložená nastavení nástroje a historie toho, co se hrálo.',
     related: [
       { id: 'playground', why: 'Tady načtený preset zazní: tlačítkem Trigger nebo podržením' },
@@ -114,14 +123,14 @@ export const WORKSPACE_REGISTRY = Object.freeze([
       body: 'Nastavte zvuk v Playgroundu a uložte ho tady tlačítkem Uložit aktuální… nebo '
         + 'tlačítkem Uložit preset ve stavové liště.',
       action: { label: 'Otevřít Playground', to: 'playground' } } },
-  { id: 'learn', label: 'Learn', words: 'lessons guide acoustics',
+  { id: 'learn', label: 'Výuka', words: 'learn lessons guide acoustics',
     summary: 'Karty pojmů od frekvence po signálovou cestu, většina s ukázkou k přehrání.',
     related: [
       { id: 'analyzer', why: 'Tvary vln, harmonické a aliasing v živém spektru' },
       { id: 'synth', why: 'Modulace, AM a FM na záložce Enginy v Synthu' },
       { id: 'measure', why: 'Logaritmické stupnice a reproduktory v reálném měření' },
     ] },
-  { id: 'studio', label: 'Studio', words: 'graph nodes cables timeline patch',
+  { id: 'studio', label: 'Studio', lang: 'en', words: 'graph nodes cables timeline patch',
     summary: 'Signálový graf, který propojujete kabely, s časovou osou, transportem '
       + 'a automatizací, běžící na Web Audio.',
     related: [
@@ -130,7 +139,7 @@ export const WORKSPACE_REGISTRY = Object.freeze([
       { id: 'filter', why: 'Odezva filtru, kterou automatizují šablony' },
     ] },
   // Synth (K058) is top level after Studio by the owner's decision Q019.
-  { id: 'synth', label: 'Synth', words: 'synthesizer engines voices keys midi patch',
+  { id: 'synth', label: 'Synth', lang: 'en', words: 'synthesizer engines voices keys midi patch',
     summary: 'Semimodulární monofonní hlas na modelu Studia s patch bayí a ukotvenými '
       + 'klávesami; záložka Enginy s hlasy aditivními, FM, AM / ring, wavetable, hard sync '
       + 'a perkusními, záložka XY a záložka Bicí s kroky bicích.',
@@ -139,7 +148,7 @@ export const WORKSPACE_REGISTRY = Object.freeze([
       { id: 'sequencer', why: 'Blokové sekvence tónů a sweepů' },
       { id: 'learn', why: 'Vysvětlení modulace, AM a FM' },
     ] },
-  { id: 'about', label: 'About', words: 'credits licence version',
+  { id: 'about', label: 'O aplikaci', words: 'about credits licence version',
     summary: 'Tato stránka: co je OSCILLA, jak vznikla a co přijde dál.',
     related: [
       { id: 'playground', why: 'Začněte u nástroje' },
@@ -152,8 +161,8 @@ export const WORKSPACE_REGISTRY = Object.freeze([
 
 /** The sidebar groups, in the order their first workspace appears. */
 export const GROUP_REGISTRY = Object.freeze({
-  analyze: Object.freeze({ label: 'Analyze', icon: 'i-ws-analyze' }),
-  synthesis: Object.freeze({ label: 'Synthesis', icon: 'i-ws-synthesis-group' }),
+  analyze: Object.freeze({ label: 'Analýza', icon: 'i-ws-analyze' }),
+  synthesis: Object.freeze({ label: 'Syntéza', icon: 'i-ws-synthesis-group' }),
 });
 
 /** Workspace ids in navigation order (the URL `m` values). */
@@ -166,6 +175,22 @@ export const NAV_GROUPS = Object.freeze(Object.fromEntries(Object.keys(GROUP_REG
 /** id -> label, for every workspace. */
 export const WORKSPACE_LABELS = Object.freeze(Object.fromEntries(WORKSPACE_REGISTRY
   .map((w) => [w.id, w.label])));
+
+/** The language of a workspace's label: 'en' for the kept names, null for the Czech ones. */
+export function workspaceLang(id) {
+  const w = WORKSPACE_REGISTRY.find((r) => r.id === id);
+  return (w && w.lang) || null;
+}
+
+/**
+ * A workspace's label as the object of a Czech verb or preposition ("Otevřít Syntézu", "Zpět na
+ * Výuku"): a feminine label in -a takes -u; every other label (Měření, Filtry, Sekvencer,
+ * Playground, ...) reads the same in the accusative.
+ */
+export function workspaceAccusative(id) {
+  const label = WORKSPACE_LABELS[id] || WORKSPACE_LABELS.playground;
+  return /[^aeiouyáéíóúůý]a$/.test(label) && !workspaceLang(id) ? `${label.slice(0, -1)}u` : label;
+}
 
 function byId(id) {
   return WORKSPACE_REGISTRY.find((w) => w.id === id);
@@ -237,7 +262,9 @@ export function navMatches(id, query) {
   const w = byId(id);
   if (!w) return false;
   const group = w.group ? GROUP_REGISTRY[w.group].label : '';
-  const words = fold(`${w.label} ${group} ${w.id} ${w.words || ''}`).split(/[^a-z0-9]+/);
+  // The group's id too: the English group name ("analyze") still finds its workspaces (U106).
+  const words = fold(`${w.label} ${group} ${w.group || ''} ${w.id} ${w.words || ''}`)
+    .split(/[^a-z0-9]+/);
   return q.split(/\s+/).every((part) => words.some((word) => word.startsWith(part)));
 }
 

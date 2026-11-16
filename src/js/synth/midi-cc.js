@@ -22,6 +22,7 @@
 //   ccTarget(cc, played, faceOf) -> 'module.key' | null
 //   ccValue(value, param)        -> the control's value at position value / 127
 //   ccEdit(cc, value, deps)      -> { cid, value, label, text } | null   (computes it)
+//   ccControl(cc, deps)          -> { cid, x, name } | null   the control and its one name
 
 import { fromNorm, formatValue } from '../ui/synth/knob.js';
 
@@ -57,12 +58,23 @@ export function ccValue(value, param) {
  * document, a switch or a cable. deps: { faceOf, played, controlOf }. synth/gestures.js applies
  * it inside the one undo burst it keeps for the wheel and the controller alike (C3-548-1).
  */
-export function ccEdit(cc, value, { faceOf, played, controlOf }) {
+export function ccEdit(cc, value, deps) {
+  const t = ccControl(cc, deps);
+  if (!t) return null;
+  const v = ccValue(value, t.x.c.param);
+  return { cid: t.cid, value: v, label: `Změnit ${t.name} (MIDI CC ${cc})`,
+    text: `CC ${cc} → ${t.name}: ${formatValue(v, t.x.c.param)}` };
+}
+
+/**
+ * The panel control CC `cc` moves now, and its name: { cid, x, name } (x is controlOf(cid)), or
+ * null where its slot names no knob or amount of the document. The one place the name is made:
+ * ccEdit's status line and undo label, and the MIDI section's device map (midi/device-map.js,
+ * V509) read it here, so a slot's control and its name never differ between them.
+ */
+export function ccControl(cc, { faceOf, played, controlOf }) {
   const cid = ccTarget(cc, played(), faceOf);
   const x = cid && controlOf(cid);
   if (!x || !x.node || (x.c.kind !== 'knob' && x.c.kind !== 'amount')) return null;
-  const v = ccValue(value, x.c.param);
-  const name = `${x.mid.toUpperCase()} ${x.c.label}`;
-  return { cid, value: v, label: `Změnit ${name} (MIDI CC ${cc})`,
-    text: `CC ${cc} → ${name}: ${formatValue(v, x.c.param)}` };
+  return { cid, x, name: `${x.mid.toUpperCase()} ${x.c.label}` };
 }

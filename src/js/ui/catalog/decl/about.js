@@ -32,7 +32,7 @@ export default [
       sites: ['src/index.html'] },
     kind: 'open',
     label: 'Workspace name link',
-    docs: 'Opens the workspace an item of the About list names.',
+    docs: 'Opens the workspace an item of the O aplikaci list names.',
     state: 'ui.workspace',
     effect: { route: 'the workspace of the item' },
     in: 'about.workspaces',

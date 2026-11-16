@@ -64,6 +64,11 @@ export const RANGE_MODES = [
   { id: 'custom', label: 'Custom', hint: 'user-defined' },
   { id: 'advanced', label: 'Advanced', hint: '1 Hz – digital limit' },
 ];
+// The range names the app shows (Q104): RANGE_MODES above is V1 data the freeze golden pins.
+export const RANGE_NAMES = Object.freeze({
+  human: 'Lidský sluch (20 Hz – 20 kHz)', high: 'Vysoké (8 kHz – digitální limit)',
+  custom: 'Vlastní (zadané uživatelem)', advanced: 'Pokročilé (1 Hz – digitální limit)',
+});
 
 // V1: THIRD_OCTAVE_FREQUENCIES, OCTAVE_STEP_FREQUENCIES, SPECTRUM_MARKERS (index.html@a7b7a23)
 export const THIRD_OCTAVE_FREQUENCIES = [

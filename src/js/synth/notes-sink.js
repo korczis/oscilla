@@ -11,7 +11,10 @@
 // armedText() says what the keys and the pad play, named from the node the route plays (the
 // panel's Keys: the panel's title; an engine or a routed node: its name), never a fixed sentence.
 //
-//   createSynthNotes(deps) -> { noteOn(note, velocity), noteOff(note), legato(note, { from,
+// V503: a note's on and off may carry `at`, a context time (the call-and-response answer, planned
+// on the audio clock); without it the transport plays it now, as every key.
+//
+//   createSynthNotes(deps) -> { noteOn(note, velocity, { at }), noteOff(note, { at }), legato(note, { from,
 //     velocity }), allOff(), disarm(reason), armedText() }
 
 import { forcedOff } from '../audio/gate.js';
@@ -24,7 +27,7 @@ export function createSynthNotes({ get, transport, ensurePanel, cmp, say, played
   const held = new Map(); // note -> the id of the node its note-on played
 
 
-  function noteOn(note, velocity) {
+  function noteOn(note, velocity, { at } = {}) {
     const t = transport();
     if (!t || !ensurePanel()) return { ok: false, reason: 'no-audio' };
     if (cmp() && typeof cmp().ensureAudio === 'function') cmp().ensureAudio();
@@ -44,9 +47,9 @@ export function createSynthNotes({ get, transport, ensurePanel, cmp, say, played
       return { ok: false, reason: 'removed' };
     }
     const was = held.get(note);
-    if (was && was !== target.id) t.live(was, { kind: 'off', note });
+    if (was && was !== target.id) t.live(was, { kind: 'off', note, at });
     held.set(note, target.id);
-    const r = t.live(target.id, { kind: 'on', note, velocity });
+    const r = t.live(target.id, { kind: 'on', note, velocity, at });
     if (r && r.dropped) say(droppedText(target, r.dropped));
     if (r && r.ok === false && /range$/.test(r.code || '')) say(r.reason, true); // K060
     if (r && r.owned) say(r.owned.reason); // K103: the timeline owns that gate while it plays
@@ -79,7 +82,8 @@ export function createSynthNotes({ get, transport, ensurePanel, cmp, say, played
     const k = present() ? played() : null;
     const id = held.has(note) ? held.get(note) : k && k.id;
     held.delete(note);
-    return t && id ? t.live(id, { kind: 'off', note, forced: forcedOff(info) }).ok : false;
+    return t && id ? t.live(id, { kind: 'off', note, forced: forcedOff(info),
+      at: info && info.at }).ok : false;
   }
 
   /** Every note of every note source of the panel off (Escape, a tab change, MIDI all-off). */

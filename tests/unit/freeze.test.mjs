@@ -158,7 +158,7 @@ const DEVIATIONS = {
   'presets.data/LEARN_TOPICS': (all) => all.filter((t) => !t.demo.href).map((t) => {
     if (t.id === 'samplerate') {
       const q = structuredClone(t);
-      const added = '; the Filter Lab models its response at 48 kHz and labels it.';
+      const added = '; the Filtry page models its response at 48 kHz and labels it.';
       assert.ok(q.body.endsWith(added), 'V2 fix: samplerate names the Filter Lab model rate');
       q.body = `${q.body.slice(0, -added.length)}.`;
       return q;

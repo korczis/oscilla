@@ -24,8 +24,8 @@ depends_on:
   - "K178"
   - "V507"
 acceptance_criteria:
-  - "KEYBOARD_VIEWS is WORKSPACE_IDS; routeOf() of an unlisted workspace is DEFAULT_ROUTE (plays studioSink, armed, leave, folded); armedDefaults() names every workspace armed (tests/unit/keys-routes.test.mjs)."
-  - "midi/ui.js centralSink gives the workspace's sink, else the Synth panel; the engine voice plays only where neither exists (tests/unit/midi)."
+  - "KEYBOARD_VIEWS is WORKSPACE_IDS; routeOf() of an unlisted workspace is DEFAULT_ROUTE (plays keysInstrument, armed, leave, folded; amended 2026-11-15 from studioSink, which review C3-553-1 replaced by keysInstrument); armedDefaults() names every workspace armed (tests/unit/keys-routes.test.mjs)."
+  - "midi/ui.js centralSink gives the workspace row's sink, keysInstrument (ui/studio/workspace/keys.js): the Studio document's note target, else the Synth panel where the document holds it or insertDecision lets the key insert it (said once with its own Zpět, C3-553-1); the engine voice plays only where neither exists: a document of the user's that plays no notes and cannot take the panel, or the Studio itself, where a key inserts nothing (M086) (tests/unit/midi/devices.test.mjs; amended 2026-11-15 to the reviewed code)."
   - "In every workspace an armed computer key arms the Studio transport and sounds through it, no Playground engine voice sounds, the dock (or its handle on a folded page) is shown and unfolds the same keys (tests/browser/midi.cjs keys-everywhere-central)."
   - "LEAVE_POLICY ends the keys' armed-only runs out of every workspace (tests/unit/leave-policy.test.mjs)."
   - "ADR 0058 records the K247 note; docs/midi.md and the Settings copy no longer say the keys play the Playground's voice."

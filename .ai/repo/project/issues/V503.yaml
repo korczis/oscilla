@@ -7,17 +7,32 @@ slug: midi-response-mode
 priority: p2
 profile: implementation
 objective: "Implement one bounded response mode (drone plus answer, or call and response) as a pure rule from input events to output events, scheduled on the AudioContext clock; the same input gives the same output."
-current_state: "Updated 2026-10-18. The scope names only MIDI paths plus the one integration file the criteria need, so that majordomus intent realization does not infer unrelated earlier work as realising this intent (audit finding main-plan F9, 2026-10-18)."
+current_state: "Decided 2026-11-15 (ADR 0058's V503 note): call and response, agreed under Q090 by oscilla-c3 (rev-seat-2, claude-code c0f0687c) with amendments A1-A7, oscilla-43 adding the timer test and the one voice path. Built by oscilla-ff (session cae276ab-2d90-45d2-babb-a1f8023668d2) on feat/v503-midi-response from main 474ce9c3: the pure phrase recorder and answer (src/js/midi/response.js) with their unit tests first; the note-layer path, the clock mapping in audio/clock.js, the switch and the browser check follow on the same branch. Earlier record (2026-10-18): the scope names only MIDI paths plus the one integration file the criteria need (audit finding main-plan F9)."
 scope:
   - "src/js/midi"
+  - "src/js/audio/clock.js"
+  - "src/index.html"
+  - "src/js/ui/catalog/decl/midi.js"
+  - "scripts/ui-catalog/trace/midi.mjs"
   - "tests/unit/midi"
+  - "tests/unit/ui-catalog.test.mjs"
+  - "tests/browser/midi.cjs"
   - "tests/README.md"
+  - "docs/midi.md"
+  - "docs/CLAIMS.yaml"
+  - ".ai/repo/adrs"
   - "dist"
 depends_on:
   - "V502"
 acceptance_criteria:
-  - "Implement one bounded response mode (drone plus answer, or call and response) as a pure rule from input events to output events, scheduled on the AudioContext clock; the same input gives the same output."
-  - "Decision: .ai/repo/adrs/0058-midi-is-an-optional-local-input-layer-over-the-audio-engine.md; the visual identity lock applies."
+  - "The decision is ADR 0058's V503 note (call and response, its bounds, no feedback, the one voice path, the clock, the switch), agreed under Q090 by oscilla-c3 with amendments A1-A7 and recorded before the code that implements it."
+  - "answer() is a pure function of the phrase: the same timestamped phrase gives the identical answer; it is the phrase at the fifth (same onsets, lengths and order, velocity max(1, round(v x 0.8))) within RESPONSE_MAX_NOTES, RESPONSE_MAX_MS, the polyphony, MIDI 127 and the running context's safeMaximum, a note beyond a bound dropped and never moved (tests/unit/midi/response.test.mjs)."
+  - "The phrase end is the last Note Off with no key held plus PHRASE_GAP_MS, decided by a pure check on the caller's clock; a unit test fails if it uses setTimeout, setInterval or requestAnimationFrame (oscilla-43's ask)."
+  - "No feedback: an answer's notes (source answer) never enter the phrase recorder, a MIDI output or a recording as the player's input; a unit test feeds an answer back and gets no answer (A1)."
+  - "Answer notes take the same path as the player's keys (notes.js's owner table, the one instrument of K247, one NOTE_POLYPHONY pool, the session safety limit, refused while another owner holds the output) and are cut when the player plays again (A5; oscilla-43's ask), proven by unit tests on the note layer and tests/browser/midi.cjs midi-seam-response through the stub device."
+  - "The answer starts at the phrase end + PHRASE_GAP_MS mapped to context time by audio/clock.js from one getOutputTimestamp reading; a start already past begins at now + START_OFFSET_S with the later onsets kept; mapping error 0 on a fake clock (A3, A4)."
+  - "midi/response.js imports only core/music.js and references no timer, randomness, wall clock, fetch, XMLHttpRequest, WebSocket, Worker or import() (a unit test reads its source, A6)."
+  - "The switch \"Otázka a odpověď\" in the MIDI section is catalogued (data-osc hook, trace, control-census row), off on every load and not persisted (A7); Flowbite Pro markup, Czech copy, the UI ratchets do not rise."
 validation:
   - "npm run release-gate"
 evidence_required:

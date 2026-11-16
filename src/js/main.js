@@ -770,7 +770,7 @@ function integrationInit() {
     // The address then names the detail again (ADR 0048).
     if (ws === 'experiments') {
       cmp.experimentsRefresh().then(() => cmp.recordsNameDetail(), (err) => cmp.notify('error',
-        'Experiments unavailable', err.message || String(err)));
+        'Experimenty nejsou dostupné', err.message || String(err)));
     }
   };
   cmp.$watch('workspace', (ws) => {
