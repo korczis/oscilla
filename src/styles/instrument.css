@@ -1315,6 +1315,11 @@
   white-space: nowrap;
 }
 
+/* The status readout (U114, oscilla-c3 under Q090): each field goes with its dot as one item,
+   and index.html gives the readout flex-wrap with a one-line height, so a field the bar has no
+   room for wraps into the hidden second line whole and stays in the readout's title; none is cut
+   mid-word ("Zesí" at 1536 px on v3.38.1). The items stand in the order they may drop from the
+   end: frequency and the level in effect never, then duration, waveform and pattern. */
 .osc-sb-readout {
   display: flex;
   align-items: center;

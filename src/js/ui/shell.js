@@ -115,7 +115,7 @@ export const WORKSPACE_REGISTRY = Object.freeze([
   { id: 'presets', label: 'Předvolby', group: 'synthesis', words: 'presets library load sounds',
     summary: 'Vestavěná i uložená nastavení nástroje a historie toho, co se hrálo.',
     related: [
-      { id: 'playground', why: 'Tady načtený preset zazní: tlačítkem Trigger nebo podržením' },
+      { id: 'playground', why: 'Tady načtený preset zazní: tlačítkem Spustit nebo podržením' },
       { id: 'synth', why: 'Synth má vlastní patche' },
       { id: 'synthesis', why: 'Tady hrají presety duálního oscilátoru' },
     ],

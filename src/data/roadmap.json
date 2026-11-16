@@ -12,8 +12,8 @@
     {
       "id": "M045",
       "title": "MIDI jam companion: first usable version",
-      "done": 5,
-      "required": 9,
+      "done": 6,
+      "required": 12,
       "phase": "now"
     },
     {
@@ -55,7 +55,7 @@
       "id": "M054",
       "title": "The whole interface shows the current product",
       "done": 20,
-      "required": 77,
+      "required": 78,
       "phase": "now"
     },
     {
@@ -82,7 +82,7 @@
     {
       "id": "M061",
       "title": "Interconnection: live analysis views, sequence exchange, workspace bridges and one keyboard",
-      "done": 5,
+      "done": 6,
       "required": 8,
       "phase": "now"
     },
@@ -117,7 +117,7 @@
     {
       "id": "M067",
       "title": "Instrument wave 2: modulation everywhere, labs, probes, sequencer depth, follower and MEASURE",
-      "done": 2,
+      "done": 3,
       "required": 25,
       "phase": "now"
     },

@@ -246,10 +246,10 @@ test('A1: a preset loaded in Presets says what plays it there and links to its t
     const { presetLoadedNotice } = await import('../../src/js/core/preset-notice.js');
     const { createInstrument } = await import('../../src/js/core/instrument.js');
     for (const [programmed, source, href, words] of [
-      [true, 'single', '#m=playground', /^Stiskněte mezerník .*TRIGGER v Playgroundu/],
-      [false, 'single', '#m=playground', /^Podržte mezerník .*HOLD TO PLAY v Playgroundu/],
-      [false, 'sweep', '#m=playground', /^Podržte mezerník .*HOLD TO PLAY v Playgroundu/],
-      [true, 'dual', '#m=synthesis', /^Stiskněte mezerník .*TRIGGER v Syntéze/],
+      [true, 'single', '#m=playground', /^Stiskněte mezerník .*tlačítko Spustit v Playgroundu/],
+      [false, 'single', '#m=playground', /^Podržte mezerník .*tlačítko Podržet a hrát v Playgroundu/],
+      [false, 'sweep', '#m=playground', /^Podržte mezerník .*tlačítko Podržet a hrát v Playgroundu/],
+      [true, 'dual', '#m=synthesis', /^Stiskněte mezerník .*tlačítko Spustit v Syntéze/],
     ]) {
       const n = presetLoadedNotice('presets', programmed, source);
       assert.match(n.message, words);
@@ -260,10 +260,10 @@ test('A1: a preset loaded in Presets says what plays it there and links to its t
     // Under a coarse pointer (a phone: no Space key) the notice offers the tap: the link to
     // the workspace whose own control starts the sound, worded to match; no Space.
     for (const [programmed, source, href, words] of [
-      [true, 'single', '#m=playground', 'Otevřete Playground a zahrajte ho tlačítkem TRIGGER.'],
+      [true, 'single', '#m=playground', 'Otevřete Playground a zahrajte ho tlačítkem Spustit.'],
       [false, 'single', '#m=playground',
-        'Otevřete Playground a zahrajte ho tlačítkem HOLD TO PLAY.'],
-      [true, 'dual', '#m=synthesis', 'Otevřete Syntézu a zahrajte ho tlačítkem TRIGGER.'],
+        'Otevřete Playground a zahrajte ho tlačítkem Podržet a hrát.'],
+      [true, 'dual', '#m=synthesis', 'Otevřete Syntézu a zahrajte ho tlačítkem Spustit.'],
     ]) {
       const n = presetLoadedNotice('presets', programmed, source, true);
       assert.equal(n.message, words);
@@ -273,12 +273,12 @@ test('A1: a preset loaded in Presets says what plays it there and links to its t
     }
     assert.deepEqual(presetLoadedNotice('playground', true, 'single', true),
       presetLoadedNotice('playground', true, 'single', false), 'the V1 text stands on a phone');
-    // Where the transport is on screen, the V1 text stands and nothing is linked.
+    // Where the transport is on screen, the sentence names its controls (U114) and links nothing.
     for (const mode of ['playground', 'dual', 'sweep']) {
       assert.deepEqual(presetLoadedNotice(mode, true, 'single'),
-        { message: 'Press TRIGGER (or Space) to play it.', action: null });
+        { message: 'Stiskněte Spustit (nebo mezerník) a zazní.', action: null });
       assert.deepEqual(presetLoadedNotice(mode, false, 'single'),
-        { message: 'Press and hold HOLD TO PLAY.', action: null });
+        { message: 'Stiskněte a držte Podržet a hrát.', action: null });
     }
     // Through the instrument: Load in Presets carries the link; nowhere does it say TRIGGER
     // without the workspace that has it.
@@ -291,7 +291,8 @@ test('A1: a preset loaded in Presets says what plays it there and links to its t
       app.applyPreset(p);
       const loaded = app.alerts.find((x) => x.title.startsWith('Loaded'));
       if (!loaded) continue; // partly applied: a warning, no "Loaded"
-      assert.doesNotMatch(loaded.message, /^Press TRIGGER/, `${p.id}: ${loaded.message}`);
+      assert.doesNotMatch(loaded.message, /^(Press TRIGGER|Stiskněte Spustit \(nebo)/,
+        `${p.id}: ${loaded.message}`);
       assert.match(loaded.message, /mezerník/, p.id);
       assert.ok(loaded.action && /^#m=(playground|synthesis)$/.test(loaded.action.href), p.id);
     }

@@ -83,8 +83,9 @@ const VIEWPORT = (() => {
   }
   return { width: Number(m[1]), height: Number(m[2]) };
 })();
-// src/styles/responsive.css hides the status bar's extras (.osc-sb-extra, the gain readout
-// among them) below 1280 px: there the readout's text is judged and its being hidden expected.
+// The gain field's labelled text is screen-reader only below md (768 px; the phone bar shows
+// its dB value instead, U114): the suite runs at 1536 and 390, and below 1280 it expects the
+// labelled text hidden while its content is still judged.
 const SB_EXTRAS_SHOWN = VIEWPORT.width >= 1280;
 
 // Timing semantics (§212, docs/v31/timeline.md "Clip start"): a clip starts at the frame where

@@ -1059,6 +1059,308 @@ async function seamSink(browser, b, origin, url) {
 
 // midi-seam-cc (V506): the controller's pedal and knobs (src/js/midi/notes.js sustain,
 // src/js/synth/midi-cc.js), driven through the stub device.
+// midi-seam-response (V503, ADR 0058's V503 note; oscilla-c3's condition (1)): on a fresh page
+// in the Playground, the entry route, call and response switched on answers a stub phrase
+// audibly on the one instrument: after the phrase's last Note Off the Studio transport holds the
+// answer at the fifth (G4 for C4) and the analyser sounds while the player holds nothing, then it
+// ends by itself; a player's Note On during an answer cuts it (the player always wins).
+async function seamResponse(browser, b, origin, url) {
+  const leg = `${b}/${origin}`;
+  const id = 'midi-seam-response';
+  const NAME = midiStub.STUB_NAME;
+  const { context, page, errors } = await openPage(browser, `${url}#m=playground`,
+    { init: { fn: midiStub.install, arg: {} }, also: { fn: audioProbe, arg: { sr: NOTES_RATE } } });
+  try {
+    await assertGroup(leg, id, page, 'seam');
+    await openSettings(page);
+    await page.locator('[data-osc="midi.connect"]').click(); // the gesture also starts audio
+    await stateIs(page, ['pending'], `${leg}: Connect MIDI asks`);
+    await seam(page, 'resolve', 0, [NAME]);
+    await stateIs(page, ['connected'], `${leg}: the stub device connects`);
+    await page.keyboard.press('Escape');
+    // Each message carries its own time (the stub's timeStamp), as a device's do: the phrase is
+    // timed by its events, so its notes are as long as their stamps say, whatever the host's pace.
+    const msg = (bytes, stamp) => seam(page, 'message', NAME, bytes, stamp);
+    const pnow = () => page.evaluate(() => performance.now());
+    const answering = () => page.evaluate(() => window.OSCILLA.app.midiAnswering());
+    // The switch in the MIDI section turns it on (data-osc midi.response, A7), as a player does.
+    await openSettings(page);
+    // The player clicks the visible switch (its label); the input itself is sr-only.
+    await page.locator('label:has([data-osc="midi.response"])').click();
+    await page.keyboard.press('Escape');
+    const on = await until(() => page.evaluate(() => (window.OSCILLA.app.midiResponse ? true
+      : null)), { ms: STEP_MS, what: `${leg}: the switch turns call and response on` })
+      .catch(() => false);
+    // The phrase: C4 for 300 ms; its answer is G4, PHRASE_GAP_MS after the Note Off.
+    let t0 = await pnow();
+    await msg([0x90, 60, 100], t0);
+    await heard(page, (m) => m.peak > 0.005, `${leg}: the player's note sounds`);
+    await msg([0x80, 60, 0], t0 + 300);
+    let answered;
+    try {
+      answered = await until(async () => {
+        const i = await instrument(page);
+        const m = await sound(page);
+        return i.held.includes(67) && !i.held.includes(60) && m.peak > 0.005 ? { i, m } : null;
+      }, { ms: STEP_MS, what: `${leg}: the answer sounds on the instrument` });
+    } catch (error) {
+      if (!(error instanceof WaitTimeout)) throw error;
+      answered = { timedOut: error.message, i: await instrument(page), m: await sound(page) };
+    }
+    const ended = await until(async () => {
+      const i = await instrument(page);
+      return i.held.length === 0 ? i : null;
+    }, { ms: STEP_MS, what: `${leg}: the answer ends by itself` }).catch(() => null);
+    check(leg, id, 'call and response on the entry route: after the phrase the one instrument '
+      + 'holds the answer at the fifth and the analyser sounds while the player holds nothing; '
+      + 'it ends by itself', on === true && !answered.timedOut && ended !== null,
+    JSON.stringify({ on, held: answered.i && answered.i.held,
+      peak: answered.m && answered.m.peak, timedOut: answered.timedOut, ended: !!ended }));
+    // The player always wins: a phrase of four notes 300 ms apart (by their stamps), then a Note
+    // On during its answer.
+    t0 = await pnow();
+    for (const [k, n] of [60, 62, 64, 65].entries()) {
+      await msg([0x90, n, 100], t0 + k * 300);
+      await msg([0x80, n, 0], t0 + k * 300 + 250);
+    }
+    const playing = await until(async () => ((await answering())
+      && (await instrument(page)).held.some((n) => [67, 69, 71, 72].includes(n)) ? true : null),
+    { ms: STEP_MS, what: `${leg}: the second answer sounds` }).catch(() => false);
+    await msg([0x90, 84, 100], await pnow()); // C6: no note of the answer (G4, A4, B4, C5)
+    const cut = await until(async () => {
+      const i = await instrument(page);
+      return !i.held.some((n) => [67, 69, 71, 72].includes(n)) && !(await answering()) ? i
+        : null;
+    }, { ms: STEP_MS, what: `${leg}: the player's note cuts the answer` }).catch(() => null);
+    await msg([0x80, 84, 0], await pnow());
+    check(leg, id, 'a Note On of the player during an answer cuts it', playing === true
+      && cut !== null, JSON.stringify({ playing, cut: cut && cut.held }));
+    await page.evaluate(() => window.OSCILLA.app.midiResponseToggle(false));
+    check(leg, id, 'no console or page error', errors.length === 0, errors.join(' | '));
+  } finally {
+    await context.close();
+  }
+}
+
+// midi-seam-response-keys (V503, A7; oscilla-c3's review probes 1 and 3): the switch is reached
+// and toggled by the keyboard, with a visible focus ring, in every engine (Tab where the engine
+// tabs to checkboxes; WebKit, which does not by default, by the input's own focus, so the input is
+// focusable and named either way), and on a phone at 320 and 390 px the switch row and its Czech
+// label are whole inside the dialog and nothing else is on top of the switch.
+async function seamResponseKeys(browser, b, origin, url) {
+  const leg = `${b}/${origin}`;
+  const id = 'midi-seam-response-keys';
+  const NAME = midiStub.STUB_NAME;
+  for (const vp of [{ width: 1280, height: 800 }, { width: 390, height: 844 },
+    { width: 320, height: 568 }]) {
+    const context = await browser.newContext({ viewport: vp, hasTouch: vp.width < 500,
+      isMobile: false });
+    await context.addInitScript(midiStub.install, {});
+    const page = await context.newPage();
+    page.setDefaultTimeout(30000);
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+    try {
+      await page.goto(`${url}#m=playground`, { waitUntil: 'load' });
+      await until(() => page.evaluate(() => document.documentElement.dataset.ready === 'true'),
+        { ms: LOAD_MS, what: `${leg}: the page is ready` });
+      await assertGroup(leg, id, page, 'seam');
+      // On a phone Settings sits in the status bar's Actions menu: opened the way a finger does.
+      const settings = page.locator('[data-osc="action.settings"]').locator('visible=true');
+      if (!(await settings.count())) {
+        await page.locator('[data-osc="status.actionsMenu"]').locator('visible=true').first()
+          .click();
+      }
+      await settings.first().click();
+      await until(() => page.evaluate(() => document.getElementById('osc-dlg-settings').open),
+        { ms: STEP_MS, what: `${leg}: the Settings dialog opens` });
+      const connect = page.locator('[data-osc="midi.connect"]');
+      await connect.scrollIntoViewIfNeeded();
+      await connect.click();
+      await stateIs(page, ['pending'], `${leg}: Connect MIDI asks`);
+      await seam(page, 'resolve', 0, [NAME]);
+      await stateIs(page, ['connected'], `${leg}: the stub device connects`);
+      const sw = page.locator('[data-osc="midi.response"]');
+      const at = `${vp.width} px`;
+      if (vp.width >= 1000) {
+        // The keyboard: Tab from Connect MIDI's row until the switch has the focus (bounded).
+        await page.locator('[data-osc="midi.status"]').scrollIntoViewIfNeeded();
+        let reached = false;
+        if (b !== 'webkit') {
+          await page.evaluate(() => document.getElementById('osc-midi-title').focus?.());
+          for (let i = 0; i < 40 && !reached; i += 1) {
+            await page.keyboard.press('Tab');
+            reached = await page.evaluate(() => document.activeElement
+              && document.activeElement.dataset.osc === 'midi.response');
+          }
+        } else {
+          // WebKit tabs to checkboxes only with Option: the platform's own keyboard path.
+          await page.evaluate(() => document.getElementById('osc-midi-title').focus?.());
+          for (let i = 0; i < 40 && !reached; i += 1) {
+            await page.keyboard.press('Alt+Tab');
+            reached = await page.evaluate(() => document.activeElement
+              && document.activeElement.dataset.osc === 'midi.response');
+          }
+        }
+        const ring = await page.evaluate(() => getComputedStyle(document.querySelector(
+          '[data-osc="midi.response"] + span')).boxShadow);
+        await page.keyboard.press('Space');
+        const onByKey = await until(() => page.evaluate(() => (window.OSCILLA.app.midiResponse
+          && document.querySelector('[data-osc="midi.response"]').checked ? true : null)),
+        { ms: STEP_MS, what: `${leg}: Space turns the switch on` }).catch(() => false);
+        await page.keyboard.press('Space');
+        const offByKey = await until(() => page.evaluate(() => (!window.OSCILLA.app.midiResponse
+          && !document.querySelector('[data-osc="midi.response"]').checked ? true : null)),
+        { ms: STEP_MS, what: `${leg}: Space turns it off again` }).catch(() => false);
+        check(leg, id, `${at}: the switch is reached by the keyboard (${b === 'webkit' ? 'Option+Tab'
+          : 'Tab'}) with a visible focus ring, and Space turns it on and off`,
+        reached && ring && ring !== 'none' && onByKey === true && offByKey === true,
+        JSON.stringify({ reached, ring, onByKey, offByKey }));
+      } else {
+        await sw.scrollIntoViewIfNeeded();
+        const fit = await page.evaluate(() => {
+          const input = document.querySelector('[data-osc="midi.response"]');
+          const label = input.closest('label');
+          const text = document.getElementById('osc-midi-response-title');
+          const dlg = document.getElementById('osc-dlg-settings').getBoundingClientRect();
+          const r = label.getBoundingClientRect();
+          const knob = input.nextElementSibling.getBoundingClientRect();
+          const cx = knob.left + knob.width / 2;
+          const cy = knob.top + knob.height / 2;
+          const top = document.elementFromPoint(cx, cy);
+          return { inDialog: r.left >= dlg.left - 0.5 && r.right <= dlg.right + 0.5,
+            textWhole: text.scrollWidth <= text.clientWidth + 1,
+            onTop: !!top && (top === input || label.contains(top)), h: Math.round(r.height) };
+        });
+        check(leg, id, `${at}: the switch row and its Czech label are whole inside the dialog `
+          + 'and nothing is on top of the switch', fit.inDialog && fit.textWhole && fit.onTop
+          && fit.h >= 44, JSON.stringify(fit));
+      }
+      check(leg, id, `${at}: no page error`, errors.length === 0, errors.join(' | '));
+    } finally {
+      await context.close();
+    }
+  }
+}
+
+// midi-seam-device-map (V509): a stub port named as a KeyLab mkII's play port is listed with its
+// map. Opened, the map lays the profile's controls out by bank, a CC 74 from the port lights
+// Encoder 1 and the map names what it moves on the Synth (LPF Cutoff); bank 2 shows the same
+// encoder sending CC 35, which moves nothing; pad 1 (note 36 on channel 10) lights in bank 1.
+async function seamDeviceMap(browser, b, origin, url) {
+  const leg = `${b}/${origin}`;
+  const id = 'midi-seam-device-map';
+  const PLAY = `${midiStub.STUB_NAME} · KeyLab mkII 61 MIDI`;
+  const { context, page, errors } = await openPage(browser, url,
+    { init: { fn: midiStub.install, arg: {} } });
+  try {
+    await assertGroup(leg, id, page, 'seam');
+    await openSettings(page);
+    await page.locator('[data-osc="midi.connect"]').click();
+    await stateIs(page, ['pending'], `${leg}: Connect MIDI asks`);
+    await seam(page, 'resolve', 0, [PLAY]);
+    await stateIs(page, ['connected'], `${leg}: the stub KeyLab connects`);
+    const map = page.locator('[data-osc="midi.map"]').first();
+    await map.locator('summary').click();
+    const row = (key) => map.locator(`[data-control="${key}"]`);
+    const read = (key) => row(key).evaluate((el) => ({ lit: el.dataset.lit,
+      text: el.innerText.replace(/\s+/g, ' ').trim() })).catch(() => null);
+    const msg = (bytes) => seam(page, 'message', PLAY, bytes);
+    await msg([0xb0, 74, 64]);
+    const enc = await until(async () => {
+      const r = await read('encoder1@1');
+      return r && r.lit === 'true' ? r : null;
+    }, { ms: STEP_MS, what: `${leg}: CC 74 lights Encoder 1` }).catch(() => read('encoder1@1'));
+    check(leg, id, 'a CC 74 from the port lights Encoder 1, which names the Synth control it '
+      + 'moves (LPF Cutoff)', !!enc && enc.lit === 'true' && /Enkodér 1/.test(enc.text)
+      && /v Synthu: LPF Cutoff/.test(enc.text), JSON.stringify(enc));
+    await map.locator('[data-osc="midi.map-bank"]', { hasText: 'Banka 2' }).click();
+    const b2 = await until(() => read('encoder1@2'), { ms: STEP_MS,
+      what: `${leg}: bank 2 shows its Encoder 1` }).catch(() => null);
+    check(leg, id, 'bank 2 shows the same encoder, which moves nothing there (CC 35)',
+      !!b2 && /nic neovládá/.test(b2.text), JSON.stringify(b2));
+    await map.locator('[data-osc="midi.map-bank"]', { hasText: 'Banka 1' }).click();
+    await msg([0x99, 36, 100]);
+    await msg([0x89, 36, 0]);
+    const pad = await until(async () => {
+      const r = await read('pad1@1');
+      return r && r.lit === 'true' ? r : null;
+    }, { ms: STEP_MS, what: `${leg}: pad 1 lights` }).catch(() => read('pad1@1'));
+    check(leg, id, 'pad 1 (note 36 on channel 10) lights and plays notes', !!pad
+      && pad.lit === 'true' && /hraje noty/.test(pad.text), JSON.stringify(pad));
+    check(leg, id, 'no console or page error', errors.length === 0, errors.join(' | '));
+  } finally {
+    await context.close();
+  }
+}
+
+// midi-seam-device-map-phone (V509; oscilla-c3's probe 4): on a phone at 390 and 320 px, a port
+// with a long name ("KeyLab mkII 61 MIDI") is listed whole and its map opens inside the Settings
+// dialog: the name, the summary and every row of bank 1 within the dialog's width, the summary at
+// least 44 px tall, and nothing on top of the summary.
+async function seamDeviceMapPhone(browser, b, origin, url) {
+  const leg = `${b}/${origin}`;
+  const id = 'midi-seam-device-map-phone';
+  const PLAY = `${midiStub.STUB_NAME} · KeyLab mkII 61 MIDI`;
+  for (const vp of [{ width: 390, height: 844 }, { width: 320, height: 568 }]) {
+    const context = await browser.newContext({ viewport: vp, hasTouch: true });
+    await context.addInitScript(midiStub.install, {});
+    const page = await context.newPage();
+    page.setDefaultTimeout(30000);
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+    try {
+      await page.goto(`${url}#m=playground`, { waitUntil: 'load' });
+      await until(() => page.evaluate(() => document.documentElement.dataset.ready === 'true'),
+        { ms: LOAD_MS, what: `${leg}: the page is ready` });
+      await assertGroup(leg, id, page, 'seam');
+      const settings = page.locator('[data-osc="action.settings"]').locator('visible=true');
+      if (!(await settings.count())) {
+        await page.locator('[data-osc="status.actionsMenu"]').locator('visible=true').first()
+          .click();
+      }
+      await settings.first().click();
+      await until(() => page.evaluate(() => document.getElementById('osc-dlg-settings').open),
+        { ms: STEP_MS, what: `${leg}: the Settings dialog opens` });
+      const connect = page.locator('[data-osc="midi.connect"]');
+      await connect.scrollIntoViewIfNeeded();
+      await connect.click();
+      await stateIs(page, ['pending'], `${leg}: Connect MIDI asks`);
+      await seam(page, 'resolve', 0, [PLAY]);
+      await stateIs(page, ['connected'], `${leg}: the stub KeyLab connects`);
+      const summary = page.locator('[data-osc="midi.map"] summary').first();
+      await summary.scrollIntoViewIfNeeded();
+      await summary.click();
+      await page.locator('[data-osc="midi.map"] [data-control="encoder1@1"]').first()
+        .waitFor({ state: 'visible', timeout: STEP_MS });
+      const fit = await page.evaluate(() => {
+        const dlg = document.getElementById('osc-dlg-settings').getBoundingClientRect();
+        const map = document.querySelector('[data-osc="midi.map"]');
+        const li = map.closest('li');
+        const sum = map.querySelector('summary');
+        const inside = (el) => {
+          const r = el.getBoundingClientRect();
+          return r.left >= dlg.left - 0.5 && r.right <= dlg.right + 0.5;
+        };
+        const rows = [...map.querySelectorAll('[data-control]')];
+        const name = li.querySelector('span');
+        sum.scrollIntoView({ block: 'center' });
+        const s = sum.getBoundingClientRect();
+        const top = document.elementFromPoint(s.left + s.width / 2, s.top + s.height / 2);
+        return { nameWhole: name.scrollWidth <= name.clientWidth + 1 && inside(name),
+          rowsInside: rows.every(inside), rows: rows.length, summaryH: Math.round(s.height),
+          onTop: !!top && (top === sum || sum.contains(top)) };
+      });
+      check(leg, id, `${vp.width} px: the long port name and the opened map are whole inside the `
+        + 'dialog, the summary is 44 px or taller and nothing covers it', fit.nameWhole
+        && fit.rowsInside && fit.rows > 0 && fit.summaryH >= 44 && fit.onTop, JSON.stringify(fit));
+      check(leg, id, `${vp.width} px: no page error`, errors.length === 0, errors.join(' | '));
+    } finally {
+      await context.close();
+    }
+  }
+}
+
 async function seamCc(browser, b, origin, url) {
   const leg = `${b}/${origin}`;
   const id = 'midi-seam-cc';
@@ -1982,6 +2284,10 @@ async function main() {
             await seamNotes(browser, b, origin, url);
             await seamSink(browser, b, origin, url);
             await seamCc(browser, b, origin, url);
+            await seamResponse(browser, b, origin, url);
+            await seamResponseKeys(browser, b, origin, url);
+            await seamDeviceMap(browser, b, origin, url);
+            await seamDeviceMapPhone(browser, b, origin, url);
             await seamMonitor(browser, b, origin, url);
             await seamTransport(browser, b, origin, url);
             await keyboardChecks(browser, b, origin, url);

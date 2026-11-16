@@ -1,0 +1,40 @@
+id: V511
+milestone: M045
+serves:
+  - "midi-jam-companion#midi-output-sysex"
+title: "SysEx output: OSCILLA writes to a controller's display and lights, only after a recorded decision to ask for the SysEx permission"
+slug: midi-output-sysex
+priority: p1
+profile: implementation
+objective: "Lands as feat(midi) only after its first criterion. ADR 0058 decided requestMIDIAccess({ sysex: false }); writing to the KeyLab mkII's display and pad lights, and sending MMC, needs sysex: true, which shows the browser a different consent prompt. Criterion 1 is that decision, recorded as an ADR 0058 note quoting the owner's order verbatim as its reason and settled with oscilla-c3 under Q090 before any code: whether SysEx is asked for at all, only on an explicit separate action, and what the page says. Then, if decided yes: the messages the device's display and lights take are measured on the owner's device (clean-room: sent and observed, never copied from the maker's files), written as derived facts with their evidence, and sent only on that separate action."
+why: "The owner's order of 2026-11-15 in session cae276ab-2d90-45d2-babb-a1f8023668d2 (Claude Code), verbatim in part: \"pridej sekci midi nastroju\", \"mapping midi, features , protocol ...\", \"napoj cely midi stack\", \"midi instrumenting\", \"dotahni veskere issues souvisejici s midi, napoj na ui, otestuj, vyzkousej, over, ze funguje, ne roubovani, ale realne napoejni , ciste\". The owner asked for the controllers' full protocol to be used; the display and lights are the remaining half of the KeyLab's surface, and they are SysEx."
+current_state: "Planned 2026-11-15 by oscilla-ff; split from V510 with oscilla-43 the same day. Not started: blocked on its decision (criterion 1)."
+scope:
+  - "src/js/midi"
+  - "src/index.html"
+  - "src/js/ui/catalog/decl/midi.js"
+  - "scripts/ui-catalog/trace/midi.mjs"
+  - "tests/unit/midi"
+  - "tests/unit/ui-catalog.test.mjs"
+  - "tests/browser/midi.cjs"
+  - "tests/README.md"
+  - "docs/midi.md"
+  - "docs/CLAIMS.yaml"
+  - ".ai/repo/adrs"
+  - "dist"
+  - "scripts/midi"
+depends_on:
+  - "V510"
+acceptance_criteria:
+  - "The decision is recorded as an ADR 0058 note before any code: the owner's order quoted verbatim as its reason, oscilla-c3's agreement under Q090 named, and what the consent prompt asks and when."
+  - "If decided yes: SysEx is requested only on its own explicit action (never on load, never with Connect MIDI); refusing it leaves every V501-V510 behaviour unchanged (tests/unit/midi/support.test.mjs, tests/browser/midi.cjs)."
+  - "Every message sent is a derived fact measured on the owner's device and recorded with its evidence (scripts/midi tooling, docs/midi-devices.md); none is copied from the maker's files (project.midi-profiles-derived)."
+  - "The display shows what the workspace's transport and selected control are, and clears when MIDI disconnects (tests on the stub's output)."
+validation:
+  - "node --test tests/unit/midi/*.test.mjs"
+  - "node tests/browser/midi.cjs"
+  - "npm run verify"
+evidence_required:
+  - "verified"
+created_at: 2026-11-15
+updated_at: 2026-11-15

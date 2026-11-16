@@ -15,6 +15,7 @@
 //                               the control of `device` whose factory message `event` is (an
 //                               event of notes.js parseMidiMessage); bank 1 first
 //   controlLabel(control)    -> its Czech label ("Enkodér 1", "Fader 9", "Pad 3 (banka 2)")
+//   kindLabel(kind)          -> the Czech name of a control kind ("Enkodér", "Pad")
 //
 // A port is matched by its name only: the Web MIDI name is the operating system's endpoint name
 // ("KeyLab mkII 61 MIDI", "KeyLab mkII 61 DAW"), which contains the device's model name. The
@@ -107,6 +108,13 @@ const ID_LABELS = Object.freeze({
   play: 'Přehrát', stop: 'Zastavit', record: 'Nahrávání', rec: 'Nahrávání',
   rewind: 'Přetočit zpět', fastforward: 'Přetočit vpřed', loop: 'Smyčka',
 });
+
+/** The Czech name of a profile's control kind ("Enkodér", "Pad"), or the kind's own words. */
+export function kindLabel(kind) {
+  const k = String(kind || '');
+  return KIND_LABELS[k] || KIND_LABELS[norm(k)]
+    || k.replace(/[_-]+/g, ' ').replace(/^./, (c) => c.toUpperCase());
+}
 
 /** The Czech label of a profile control. */
 export function controlLabel(control) {
