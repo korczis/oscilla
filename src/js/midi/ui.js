@@ -18,7 +18,8 @@
 import { routeOf } from './routes.js';
 import { createMidiSupport, midiSite } from './support.js';
 import { createMidiNotes } from './notes.js';
-import { recognise, controlOf } from './devices.js';
+import { recognise, controlOf, DEVICES } from './devices.js';
+import { createDeviceMaps } from './device-map-ui.js';
 import { decodeMidi } from './message.js';
 import { createMidiMonitor, describeMidi } from './monitor.js';
 import { createClockMeter, transportAction, transportTarget, CLOCK_GAP_MS } from './transport.js';
@@ -78,7 +79,8 @@ export const ROLE_TEXT = Object.freeze({ play: 'hraní', daw: 'ovládání DAW',
 /** One row of the MIDI section's device list: an input's name and what OSCILLA knows of it. */
 export function inputRow(name) {
   const w = recognise(name);
-  return { name, device: w.device ? w.device.name : '', role: w.role,
+  return { name, deviceId: w.device ? w.device.id : null,
+    device: w.device ? w.device.name : '', role: w.role,
     roleText: ROLE_TEXT[w.role], known: !!w.device,
     controls: w.device ? w.device.controls.length : 0 };
 }
@@ -97,6 +99,7 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
   let monitor = null;
   let arming = 0; // > 0 while a note of the keys or MIDI is being taken by the instrument (K247)
   let response = null; // call and response (V503), on the one instrument
+  const maps = createDeviceMaps({ devices: DEVICES.devices }); // V509
   const part = {
     midiState: null,
     midiText: '',
@@ -105,6 +108,8 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
     midiLog: [],      // the monitor's rows, newest first (V507)
     midiClockBpm: null, // the tempo of an incoming MIDI clock, or null (V508)
     midiResponse: false, // call and response is on (V503); off on every load, never stored
+    midiLit: null,     // the device map's control that sent the latest message (V509)
+    midiMapBank: {},   // the bank each device's map shows, by device id (V509)
 
     /** Called once by the component's init: the load-time read, never a request. */
     midiInit() {
@@ -166,7 +171,10 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
       if (typeof cmp.kbdInit === 'function') cmp.kbdInit({ notesFor });
       const ids = new WeakMap(); // input -> a number for the note keys, never shown or stored
       const who = new WeakMap(); // input -> recognise(its name) (V507)
-      monitor = createMidiMonitor({ publish: (rows) => { cmp.midiLog = rows; } });
+      // The device map's lit control follows the monitor's redraw (V509): at most every
+      // MONITOR_FLUSH_MS, never per message.
+      let lit = null;
+      monitor = createMidiMonitor({ publish: (rows) => { cmp.midiLog = rows; cmp.midiLit = lit; } });
       // The clock's tempo, published at most every CLOCK_SHOW_MS and cleared once it stops.
       const clock = createClockMeter();
       let shownAt = -Infinity;
@@ -200,6 +208,7 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
           const m = decodeMidi(data);
           if (m.kind === 'clock') { clockTick(stamp); return; } // 24 a beat: measured, unlisted
           const control = controlOf(w.device, m);
+          if (control) lit = maps.litKey(w.device, m);
           const act = transportAction(m, w.role); // V508: Start, Stop, the DAW buttons
           const did = act ? cmp.midiTransport(act) : null;
           if (m.kind !== 'active-sensing') {
@@ -321,6 +330,16 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
      * Every MIDI note off: Measure or Studio PLAY takes the output (main.js stopPlayback), or
      * the sequencer starts (main.js, around the editor's play).
      */
+    /** The map of known device `id` in the bank chosen for it (V509, midi/device-map-ui.js). */
+    midiMap(id) {
+      return maps.map(id, this.midiMapBank[id]);
+    },
+
+    /** Show bank `bank` of device `id`'s map. */
+    midiMapShowBank(id, bank) {
+      this.midiMapBank = { ...this.midiMapBank, [id]: bank };
+    },
+
     /** True while an answer of call and response plays or is planned (V503). */
     midiAnswering() {
       return !!(response && response.answering());

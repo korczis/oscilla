@@ -1243,6 +1243,57 @@ async function seamResponseKeys(browser, b, origin, url) {
   }
 }
 
+// midi-seam-device-map (V509): a stub port named as a KeyLab mkII's play port is listed with its
+// map. Opened, the map lays the profile's controls out by bank, a CC 74 from the port lights
+// Encoder 1 and the map names what it moves on the Synth (LPF Cutoff); bank 2 shows the same
+// encoder sending CC 35, which moves nothing; pad 1 (note 36 on channel 10) lights in bank 1.
+async function seamDeviceMap(browser, b, origin, url) {
+  const leg = `${b}/${origin}`;
+  const id = 'midi-seam-device-map';
+  const PLAY = `${midiStub.STUB_NAME} · KeyLab mkII 61 MIDI`;
+  const { context, page, errors } = await openPage(browser, url,
+    { init: { fn: midiStub.install, arg: {} } });
+  try {
+    await assertGroup(leg, id, page, 'seam');
+    await openSettings(page);
+    await page.locator('[data-osc="midi.connect"]').click();
+    await stateIs(page, ['pending'], `${leg}: Connect MIDI asks`);
+    await seam(page, 'resolve', 0, [PLAY]);
+    await stateIs(page, ['connected'], `${leg}: the stub KeyLab connects`);
+    const map = page.locator('[data-osc="midi.map"]').first();
+    await map.locator('summary').click();
+    const row = (key) => map.locator(`[data-control="${key}"]`);
+    const read = (key) => row(key).evaluate((el) => ({ lit: el.dataset.lit,
+      text: el.innerText.replace(/\s+/g, ' ').trim() })).catch(() => null);
+    const msg = (bytes) => seam(page, 'message', PLAY, bytes);
+    await msg([0xb0, 74, 64]);
+    const enc = await until(async () => {
+      const r = await read('encoder1@1');
+      return r && r.lit === 'true' ? r : null;
+    }, { ms: STEP_MS, what: `${leg}: CC 74 lights Encoder 1` }).catch(() => read('encoder1@1'));
+    check(leg, id, 'a CC 74 from the port lights Encoder 1, which names the Synth control it '
+      + 'moves (LPF Cutoff)', !!enc && enc.lit === 'true' && /Enkodér 1/.test(enc.text)
+      && /v Synthu: LPF Cutoff/.test(enc.text), JSON.stringify(enc));
+    await map.locator('[data-osc="midi.map-bank"]', { hasText: 'Banka 2' }).click();
+    const b2 = await until(() => read('encoder1@2'), { ms: STEP_MS,
+      what: `${leg}: bank 2 shows its Encoder 1` }).catch(() => null);
+    check(leg, id, 'bank 2 shows the same encoder, which moves nothing there (CC 35)',
+      !!b2 && /nic neovládá/.test(b2.text), JSON.stringify(b2));
+    await map.locator('[data-osc="midi.map-bank"]', { hasText: 'Banka 1' }).click();
+    await msg([0x99, 36, 100]);
+    await msg([0x89, 36, 0]);
+    const pad = await until(async () => {
+      const r = await read('pad1@1');
+      return r && r.lit === 'true' ? r : null;
+    }, { ms: STEP_MS, what: `${leg}: pad 1 lights` }).catch(() => read('pad1@1'));
+    check(leg, id, 'pad 1 (note 36 on channel 10) lights and plays notes', !!pad
+      && pad.lit === 'true' && /hraje noty/.test(pad.text), JSON.stringify(pad));
+    check(leg, id, 'no console or page error', errors.length === 0, errors.join(' | '));
+  } finally {
+    await context.close();
+  }
+}
+
 async function seamCc(browser, b, origin, url) {
   const leg = `${b}/${origin}`;
   const id = 'midi-seam-cc';
@@ -2168,6 +2219,7 @@ async function main() {
             await seamCc(browser, b, origin, url);
             await seamResponse(browser, b, origin, url);
             await seamResponseKeys(browser, b, origin, url);
+            await seamDeviceMap(browser, b, origin, url);
             await seamMonitor(browser, b, origin, url);
             await seamTransport(browser, b, origin, url);
             await keyboardChecks(browser, b, origin, url);

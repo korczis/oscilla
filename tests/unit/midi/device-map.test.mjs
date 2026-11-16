@@ -96,3 +96,19 @@ test('litKey names the control that sent a message, bank 1 first', () => {
   assert.equal(litKey(keylab, decodeMidi([0xb0, 3, 1])), null, 'CC 3: no control sends it');
   assert.equal(litKey(null, decodeMidi([0xb0, 74, 1])), null);
 });
+
+test('the MIDI section\'s maps: the panel names a CC from its declaration, per device and bank', async () => {
+  const { PANEL_ACTS, createDeviceMaps } = await import('../../../src/js/midi/device-map-ui.js');
+  assert.deepEqual(PANEL_ACTS({ message: 'cc', number: 74 }),
+    { kind: 'synth', text: `v Synthu: ${ccControl(74, panelDeps()).name}` });
+  const maps = createDeviceMaps({ devices: DEVICES.devices });
+  const one = maps.map('keylab-mkii');
+  assert.equal(one.bank, 1);
+  assert.equal(maps.map('keylab-mkii'), one, 'cached per device and bank');
+  const two = maps.map('keylab-mkii', 2);
+  assert.equal(two.bank, 2);
+  assert.notEqual(two, one);
+  assert.deepEqual(maps.map('no-such-device').groups, []);
+  assert.equal(maps.litKey(keylab, decodeMidi([0xb0, 74, 1])), 'encoder1@1');
+  assert.equal(maps.litKey(null, decodeMidi([0xb0, 74, 1])), null);
+});

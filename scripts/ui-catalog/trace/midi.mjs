@@ -20,6 +20,10 @@ export default {
   'midi.response': entry({ plan: ['G001', 'V503'],
     intents: ['midi-jam-companion#midi-response-deterministic'],
     tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/midi.cjs'] }),
+  'midi.map': entry({ plan: ['G001', 'V509'], intents: ['midi-jam-companion#midi-device-map'],
+    tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/midi.cjs'] }),
+  'midi.map-bank': entry({ plan: ['G001', 'V509'], intents: ['midi-jam-companion#midi-device-map'],
+    tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/midi.cjs'] }),
   'midi.monitor-clear': entry({ ...v507,
     tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/midi.cjs'] }),
 };
