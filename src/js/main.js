@@ -73,6 +73,7 @@ import { createTrace } from './core/trace.js';
 import { createNavigation, v1ModeFor } from './ui/navigation.js';
 import { createUnsavedGuard } from './ui/unsaved.js';
 import { sequenceDigest } from './sequencer/editor.js';
+import { createSequencerTransport } from './sequencer/transport-handle.js';
 import { createMeasureUi } from './ui/measure.js';
 import { createExperimentsUi } from './ui/experiments.js';
 import { createFindingsUi } from './ui/findings.js';
@@ -915,24 +916,8 @@ function createOscillaComponent(ui) {
   });
   const navigation = createNavigation();
   // Optional input (ADR 0058): reads support at load, never requests; notes sound through engine.
-  // V508: a controller's Start, Continue, Stop and DAW buttons drive the Sequencer's own
-  // transport in the Sequencer (its panel's play, stop and loop, as its buttons do).
-  const sequencerTransport = {
-    play() { if (!labs.sequencer) return false; labs.sequencer.editor.play();
-      labs.sequencer.render(); return true; },
-    stop() { if (!labs.sequencer) return false; labs.sequencer.editor.stop(); return true; },
-    loop() { if (!labs.sequencer) return false; const ed = labs.sequencer.editor;
-      ed.setLoop(!ed.model.loop); labs.sequencer.render(); return true; },
-    playing: () => !!(labs.sequencer && labs.sequencer.editor.playing),
-    // V510: the playing sequence's first pass on the audio clock and its tempo, for MIDI clock.
-    anchor() {
-      const ed = labs.sequencer && labs.sequencer.editor;
-      if (!ed || !ed.playing) return null;
-      const { t0 } = ed.loopSchedule();
-      return Number.isFinite(t0) && ed.model.tempoBpm > 0
-        ? { origin: t0, tempo: ed.model.tempoBpm, fromStart: true } : null;
-    },
-  };
+  // V508, V510: a controller's transport and MIDI clock out reach the Sequencer's own.
+  const sequencerTransport = createSequencerTransport(labs);
   const midi = createMidiUi({ engine, sequencerPlaying, bus, sequencerTransport });
   const cmp = compose(instrument, ui, workbench, measure, experiments, findings, connections,
     studio, navigation, midi, createCrossLinksUi(), provenancePart(), aboutPart(), proClassesPart(),
