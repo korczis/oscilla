@@ -208,7 +208,9 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
           const m = decodeMidi(data);
           if (m.kind === 'clock') { clockTick(stamp); return; } // 24 a beat: measured, unlisted
           const control = controlOf(w.device, m);
-          if (control) lit = maps.litKey(w.device, m);
+          // The map lights the control of every listed message, and none for a message no
+          // control sent (a key of the keybed), so a lit control is always the latest (V509).
+          if (m.kind !== 'active-sensing') lit = control ? maps.litKey(w.device, m) : null;
           const act = transportAction(m, w.role); // V508: Start, Stop, the DAW buttons
           const did = act ? cmp.midiTransport(act) : null;
           if (m.kind !== 'active-sensing') {

@@ -1294,6 +1294,73 @@ async function seamDeviceMap(browser, b, origin, url) {
   }
 }
 
+// midi-seam-device-map-phone (V509; oscilla-c3's probe 4): on a phone at 390 and 320 px, a port
+// with a long name ("KeyLab mkII 61 MIDI") is listed whole and its map opens inside the Settings
+// dialog: the name, the summary and every row of bank 1 within the dialog's width, the summary at
+// least 44 px tall, and nothing on top of the summary.
+async function seamDeviceMapPhone(browser, b, origin, url) {
+  const leg = `${b}/${origin}`;
+  const id = 'midi-seam-device-map-phone';
+  const PLAY = `${midiStub.STUB_NAME} · KeyLab mkII 61 MIDI`;
+  for (const vp of [{ width: 390, height: 844 }, { width: 320, height: 568 }]) {
+    const context = await browser.newContext({ viewport: vp, hasTouch: true });
+    await context.addInitScript(midiStub.install, {});
+    const page = await context.newPage();
+    page.setDefaultTimeout(30000);
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+    try {
+      await page.goto(`${url}#m=playground`, { waitUntil: 'load' });
+      await until(() => page.evaluate(() => document.documentElement.dataset.ready === 'true'),
+        { ms: LOAD_MS, what: `${leg}: the page is ready` });
+      await assertGroup(leg, id, page, 'seam');
+      const settings = page.locator('[data-osc="action.settings"]').locator('visible=true');
+      if (!(await settings.count())) {
+        await page.locator('[data-osc="status.actionsMenu"]').locator('visible=true').first()
+          .click();
+      }
+      await settings.first().click();
+      await until(() => page.evaluate(() => document.getElementById('osc-dlg-settings').open),
+        { ms: STEP_MS, what: `${leg}: the Settings dialog opens` });
+      const connect = page.locator('[data-osc="midi.connect"]');
+      await connect.scrollIntoViewIfNeeded();
+      await connect.click();
+      await stateIs(page, ['pending'], `${leg}: Connect MIDI asks`);
+      await seam(page, 'resolve', 0, [PLAY]);
+      await stateIs(page, ['connected'], `${leg}: the stub KeyLab connects`);
+      const summary = page.locator('[data-osc="midi.map"] summary').first();
+      await summary.scrollIntoViewIfNeeded();
+      await summary.click();
+      await page.locator('[data-osc="midi.map"] [data-control="encoder1@1"]').first()
+        .waitFor({ state: 'visible', timeout: STEP_MS });
+      const fit = await page.evaluate(() => {
+        const dlg = document.getElementById('osc-dlg-settings').getBoundingClientRect();
+        const map = document.querySelector('[data-osc="midi.map"]');
+        const li = map.closest('li');
+        const sum = map.querySelector('summary');
+        const inside = (el) => {
+          const r = el.getBoundingClientRect();
+          return r.left >= dlg.left - 0.5 && r.right <= dlg.right + 0.5;
+        };
+        const rows = [...map.querySelectorAll('[data-control]')];
+        const name = li.querySelector('span');
+        sum.scrollIntoView({ block: 'center' });
+        const s = sum.getBoundingClientRect();
+        const top = document.elementFromPoint(s.left + s.width / 2, s.top + s.height / 2);
+        return { nameWhole: name.scrollWidth <= name.clientWidth + 1 && inside(name),
+          rowsInside: rows.every(inside), rows: rows.length, summaryH: Math.round(s.height),
+          onTop: !!top && (top === sum || sum.contains(top)) };
+      });
+      check(leg, id, `${vp.width} px: the long port name and the opened map are whole inside the `
+        + 'dialog, the summary is 44 px or taller and nothing covers it', fit.nameWhole
+        && fit.rowsInside && fit.rows > 0 && fit.summaryH >= 44 && fit.onTop, JSON.stringify(fit));
+      check(leg, id, `${vp.width} px: no page error`, errors.length === 0, errors.join(' | '));
+    } finally {
+      await context.close();
+    }
+  }
+}
+
 async function seamCc(browser, b, origin, url) {
   const leg = `${b}/${origin}`;
   const id = 'midi-seam-cc';
@@ -2220,6 +2287,7 @@ async function main() {
             await seamResponse(browser, b, origin, url);
             await seamResponseKeys(browser, b, origin, url);
             await seamDeviceMap(browser, b, origin, url);
+            await seamDeviceMapPhone(browser, b, origin, url);
             await seamMonitor(browser, b, origin, url);
             await seamTransport(browser, b, origin, url);
             await keyboardChecks(browser, b, origin, url);

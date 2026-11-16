@@ -112,3 +112,44 @@ test('the MIDI section\'s maps: the panel names a CC from its declaration, per d
   assert.equal(maps.litKey(keylab, decodeMidi([0xb0, 74, 1])), 'encoder1@1');
   assert.equal(maps.litKey(null, decodeMidi([0xb0, 74, 1])), null);
 });
+
+test('midi/ui.js lights the latest message\'s control: event 1 at once, the last of a burst, none for a key', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  const { createMidiUi } = await import('../../../src/js/midi/ui.js');
+  const { MONITOR_FLUSH_MS } = await import('../../../src/js/midi/monitor.js');
+  const ls = new Set();
+  const port = { name: 'KeyLab mkII 61 MIDI', state: 'connected', type: 'input',
+    open: () => Promise.resolve(),
+    addEventListener: (k, fn) => { if (k === 'midimessage') ls.add(fn); },
+    removeEventListener: (k, fn) => ls.delete(fn),
+    send: (b) => { for (const fn of ls) fn({ data: Uint8Array.from(b), timeStamp: Date.now() }); } };
+  const access = { inputs: { forEach: (fn) => fn(port) }, addEventListener() {},
+    removeEventListener() {} };
+  const win = { navigator: { requestMIDIAccess: () => Promise.resolve(access),
+    permissions: { query: () => Promise.resolve({ state: 'granted', addEventListener() {} }) } },
+  isSecureContext: true, location: { protocol: 'https:', host: 'x' }, addEventListener() {} };
+  const engine = { noteOn: () => ({ ok: true }), noteOff: () => true, notesOff: () => 0 };
+  const ui = createMidiUi({ win, engine, now: () => Date.now() });
+  Object.assign(ui, { workspace: 'measure', notify() {}, a4: 440, waveform: 'sine', attack: 10,
+    release: 30, safetyLimit: 2, continuousAllowed: false });
+  await ui.midiInit();
+  ui.midiConnect();
+  await t.mock.timers.runAll();
+  await new Promise((r) => setImmediate(r));
+  port.send([0xb0, 74, 10]); // event 1: shown at once (the monitor's leading edge)
+  assert.equal(ui.midiLit, 'encoder1@1');
+  t.mock.timers.tick(MONITOR_FLUSH_MS);
+  // A burst 1 ms apart over three controls: the last one is lit after the redraw.
+  const fader1 = keylab.controls.find((c) => c.id === 'fader1' && c.bank === 1);
+  const enc2 = keylab.controls.find((c) => c.id === 'encoder2' && c.bank === 1);
+  port.send([0xb0, 74, 20]);
+  t.mock.timers.tick(1);
+  port.send([0xb0, enc2.number, 30]);
+  t.mock.timers.tick(1);
+  port.send([0xb0, fader1.number, 40]);
+  t.mock.timers.tick(MONITOR_FLUSH_MS);
+  assert.equal(ui.midiLit, 'fader1@1', 'the last of the burst');
+  port.send([0x90, 60, 100]); // a key of the keybed: no control of the profile
+  t.mock.timers.tick(MONITOR_FLUSH_MS);
+  assert.equal(ui.midiLit, null, 'a key lights nothing and clears the last control');
+});
