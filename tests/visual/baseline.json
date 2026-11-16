@@ -354,8 +354,8 @@
       },
       "reference": "sha256:9810048c8325f6dedc0b9c1e584bdaa2a1484c1ee91ece7c5177601337cf725b",
       "runs": 3,
-      "total": 5.66,
-      "totalExclData": 5.58,
+      "total": 5.76,
+      "totalExclData": 5.7,
       "regions": {
         "header": {
           "mismatch": 16.4,
@@ -382,8 +382,8 @@
           "dataPp": 0.5
         },
         "source": {
-          "mismatch": 4.05,
-          "mismatchExclData": 4.05,
+          "mismatch": 4.02,
+          "mismatchExclData": 4.02,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
@@ -400,8 +400,8 @@
           "dataPp": 0.5
         },
         "device": {
-          "mismatch": 12.14,
-          "mismatchExclData": 12.14,
+          "mismatch": 12.23,
+          "mismatchExclData": 12.23,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
@@ -413,19 +413,19 @@
         },
         "sequencer": {
           "mismatch": 6.29,
-          "mismatchExclData": 2.25,
+          "mismatchExclData": 2.26,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "studio": {
-          "mismatch": 4.14,
-          "mismatchExclData": 4.58,
+          "mismatch": 5.39,
+          "mismatchExclData": 5.97,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "statusbar": {
-          "mismatch": 4.29,
-          "mismatchExclData": 4.29,
+          "mismatch": 4.3,
+          "mismatchExclData": 4.3,
           "runToRunPct": 0,
           "dataPp": 0.5
         }
@@ -600,9 +600,9 @@
           28
         ],
         "studioExpand": [
-          1242.72,
+          1209.78,
           819.23,
-          104.13,
+          101,
           30
         ]
       },
