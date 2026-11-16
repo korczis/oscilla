@@ -513,10 +513,23 @@ function phoneBars() {
   if (label.scrollWidth > label.clientWidth + 1 || lb.right > state.right + 0.5) {
     bad.push('status label clipped');
   }
-  const readout = boxes([...document.querySelectorAll('[data-osc="status.readout"] > *')]);
+  // The readout is one line high and wraps (U114, Q090): a field with no room goes whole onto
+  // the hidden second line, so it is judged only when it is on the visible line, and there it
+  // is whole (C3-574-1: a wrapped-away field past the state box read as clipped on CI fonts).
+  const ro = document.querySelector('[data-osc="status.readout"]').getBoundingClientRect();
+  const onLine = (p) => p.b.bottom > ro.top + 0.5 && p.b.top < ro.bottom - 0.5;
+  const items = [...document.querySelectorAll('[data-osc="status.readout"] > *')].filter(vis);
+  // the fields wrapped away, reported so a run shows where each went (not judged)
+  const wrapped = items.map((el) => ({ t: el.textContent.trim(), b: el.getBoundingClientRect() }))
+    .filter((p) => !onLine(p)).map((p) => ({ t: p.t, top: Math.round(p.b.top - ro.top),
+      over: Math.round((p.b.right - state.right) * 10) / 10 }));
+  const readout = boxes(items).filter(onLine);
   for (const p of readout) {
     if (p.b.left < lb.right - 0.5) bad.push(`${p.n} over the status label`);
     if (p.b.right > state.right + 1) bad.push(`${p.n} clipped by ${p.b.right - state.right} px`);
+    if (p.b.top < ro.top - 0.5 || p.b.bottom > ro.bottom + 0.5 || p.b.right > ro.right + 0.5) {
+      bad.push(`${p.n} cut by the readout`);
+    }
   }
   const doc = document.documentElement;
   if (doc.scrollWidth > doc.clientWidth) {
@@ -524,7 +537,7 @@ function phoneBars() {
   }
   if (header.scrollWidth > header.clientWidth + 1) bad.push('header scrolls horizontally');
   if (sb.scrollWidth > sb.clientWidth + 1) bad.push('status bar scrolls horizontally');
-  return { label: label.textContent.trim(), bad };
+  return { label: label.textContent.trim(), bad, wrapped };
 }
 
 // ------------------------------------------------------------------------------ checks
@@ -5017,6 +5030,7 @@ function defineChecks() {
       RUN.skip(browserName, 'phone-bars-with-microphone', 'no fake capture device in this browser');
     }
     const res = {};
+    const wrapped = {};
     for (const mic of mics) {
       if (mic) {
         await page.evaluate(() => window.OSCILLA.labs.mic.start());
@@ -5032,6 +5046,12 @@ function defineChecks() {
           const r = await page.evaluate(phoneBars);
           res[`${w}/${name}${mic ? '/mic' : ''}`] = { shown: st.shown, want: st.want,
             state: IS[name](st), bad: r.bad };
+          for (const x of r.wrapped) {
+            const k = `${x.t} (${w}${mic ? '/mic' : ''})`;
+            const was = wrapped[k];
+            wrapped[k] = { below: x.top, overMax: Math.max(x.over, was ? was.overMax : -Infinity),
+              cases: (was ? was.cases : 0) + 1 };
+          }
           await reset();
         }
       }
@@ -5051,7 +5071,7 @@ function defineChecks() {
     const merged = [...rows].filter(([, set]) => set.size !== Object.keys(states).length)
       .map(([row, set]) => `${row}: ${[...set].join(', ')}`);
     return { ok: !bad.length && !merged.length, cases: Object.keys(res).length, merged,
-      bad: Object.fromEntries(bad.slice(0, 6)) };
+      bad: Object.fromEntries(bad.slice(0, 6)), wrapped };
   });
 
   // About: the last primary nav item, keyboard-operable, a native full-width view whose links
