@@ -1,0 +1,23 @@
+# Written by scripts/release-record.mjs from what was published.
+# Evidence, not a plan: every digest and size below was read off the published bytes.
+schema: release/v1
+version: "3.41.0"
+tag: v3.41.0
+channel: stable
+commit: a53486b7c6a4ab528f4e7fb9bfae8eb6b7c39c2e
+published_at: "2026-11-16T21:18:35Z"
+notes_url: https://github.com/korczis/oscilla/releases/tag/v3.41.0
+required_targets:
+  - web
+artifacts:
+  - target: web
+    name: oscilla-v3.41.0.html
+    url: https://github.com/korczis/oscilla/releases/download/v3.41.0/oscilla-v3.41.0.html
+    sha256: a4d487f873df54849d791103d7271474f9a8ddddacaae4440773c3754dd2ffe6
+    size: 3668589
+# Landing note (oscilla-0b, oscilla-c3, 2026-11-16): PR 581 (train T26) was merged by hand at
+# 20:33:37Z by the shared korczis account, before oscilla-c3's "legs OK" and with no auto-merge
+# armed; no agent session (0b, ff, 43, c3) ran the merge. The receipt still binds a53486b7
+# (run 43934773988: 14 base jobs = 14 head jobs, headTree == prTree), so the gate held.
+# First publish: verify-deploy failed on /lab/ regenerated with majordomus 1.0.2 against CI's
+# pinned 1.0.1; resumed after the tag (R021) with 1.0.1 first on PATH.
