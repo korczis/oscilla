@@ -147,8 +147,7 @@
   .osc-sb-actions-wrap { grid-column: 5; }
 
   .osc-sb-sub,
-  .osc-sb-div,
-  .osc-sb-extra {
+  .osc-sb-div {
     display: none;
   }
 
