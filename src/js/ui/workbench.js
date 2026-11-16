@@ -431,7 +431,7 @@ export function createWorkbench(svc) {
     get ppFields() { return this.ppSweep ? SWEEP_FORM : this.currentPattern.params; },
     ppId(d) { return this.ppSweep ? `sw-${d.key}` : this.paramId(d); },
     ppLabel(d) { return this.ppSweep ? this.sweepLabel(d) : shownText(d.label); },
-    ppAriaLabel(d) { return this.ppSweep ? null : d.label + this.paramUnit(d); },
+    ppAriaLabel(d) { return this.ppSweep ? null : shownText(d.label) + this.paramUnit(d); },
     ppValue(d) { return this.ppSweep ? this.sweepValue(d) : this.paramValue(d); },
     ppSet(d, raw) {
       if (this.ppSweep) this.setSweepField(d, raw);
