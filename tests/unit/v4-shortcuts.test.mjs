@@ -152,11 +152,12 @@ test('review of #159: keys are keys; where they apply is stated beside them', ()
   }
   assert.equal(SPACE_MEANING.instrument.keys, 'Space');
   assert.equal(SPACE_MEANING.instrument.where, '(hold)');
-  // Hold, Trigger and the frequency slider are not on screen in every instrument workspace at
-  // every width: their rows say so instead of implying the control is there.
+  // Podržet a hrát, Spustit and the frequency slider are not on screen in every instrument
+  // workspace at every width: their rows say so ("kde jsou", "kde je"; U114) instead of
+  // implying the control is there.
   const play = shortcutHelp('analyzer').rows;
   for (const id of ['trigger', 'octave']) {
-    assert.match(play.find((r) => r.id === id).where, /where shown/, id);
+    assert.match(play.find((r) => r.id === id).where, /kde (jsou|je)$/, id);
   }
 });
 

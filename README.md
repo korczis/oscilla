@@ -23,7 +23,7 @@ Pages deploy, beside the unchanged app.
 Each link opens its workspace and starts nothing until you press a button.
 
 1. **[Hear and see a tone](https://korczis.github.io/oscilla/#m=playground).** Hold
-   **Hold to Play** (or Space) for the default 440 Hz sine, and watch its waveform, spectrum and
+   **Podržet a hrát** (Hold to Play) (or Space) for the default 440 Hz sine, and watch its waveform, spectrum and
    spectrogram; letting go stops it (claims `tone-plays-and-releases`, `space-one-owner`).
 2. **[Measure your speaker, room and microphone chain](https://korczis.github.io/oscilla/#m=measure&mr=eyJ2IjoxLCJkIjozLCJuIjoyfQ).**
    The link fills the Measure setup with two 3-second log sweeps. Check the setup, start quietly
@@ -398,7 +398,7 @@ entries come from one registry (`src/js/ui/shell.js`), so adding a workspace is 
   second after the last key is let go (at once when the focus leaves it). The Sequencer's
   blocks keep their own envelopes, so the lab never reaches them. A release edited while a note is held (here, or Settings Release with the
   envelope off) is the one letting go of that note uses, shortened to end by the hard limit
-  or a pattern's own end; a note that reaches either, or a Trigger note's end, fades over the
+  or a pattern's own end; a note that reaches either, or the end of a note started by **Spustit** (Trigger), fades over the
   release it started with. The Pattern sequencer and Studio keep their own envelopes. A lab field
   answers a committed entry with the value that applies: one past its limit reads as the limit
   (Attack 5000 ms reads 2 s), and text that does not parse gives way to the value in use.

@@ -1,0 +1,43 @@
+id: V509
+milestone: M045
+serves:
+  - "midi-jam-companion#midi-device-map"
+title: "The MIDI instruments section: each connected known controller shown from its derived profile, every control lit as it sends and naming what it moves"
+slug: midi-device-map
+priority: p1
+profile: implementation
+objective: "Lands as feat(midi). The Settings dialog's MIDI section gains, for each connected input of a known device (devices.js recognise), a view of that device laid out from its derived profile in src/data/midi-devices.json: its encoders, faders, pads, buttons and keys in the profile's own groups, each with its control label (devices.js controlLabel). A control lights while it sends (the same decoded message the monitor shows, message.js decodeMidi, through the monitor's own flush), and names the OSCILLA control it moves, taken from the one source that moves it: synth/midi-cc.js CC_SLOTS through ccEdit for the Synth panel, transport.js MCU_BUTTONS for the DAW port, the notes for the keys; a control none of them reads is shown as acting on nothing. An unknown input shows the monitor only. Built on Flowbite Pro (ADR 0061), Czech copy (Q104), every control catalogued (decl + trace + contract row)."
+why: "The owner's order of 2026-11-15 in session cae276ab-2d90-45d2-babb-a1f8023668d2 (Claude Code), verbatim in part: \"pridej sekci midi nastroju\", \"mapping midi, features , protocol ...\", \"napoj cely midi stack\", \"midi instrumenting\", \"dotahni veskere issues souvisejici s midi, napoj na ui, otestuj, vyzkousej, over, ze funguje, ne roubovani, ale realne napoejni , ciste\". V507 lists the devices and their port roles and shows the messages, but the player cannot see their controller's own layout or which knob drives what; the profile already holds the layout (derived, never hand-typed), so the section needs no new data, only a view over it."
+current_state: "Planned 2026-11-15 by oscilla-ff (session cae276ab-2d90-45d2-babb-a1f8023668d2) after T22 (PR 555, v3.38.0) landed V506-V508; scope agreed with oscilla-43 the same day (one source for the control names, CC_SLOTS / controlOf, is an acceptance criterion). Built after Czech pass 5 (oscilla-0b), which edits the same Settings MIDI section."
+scope:
+  - "src/js/midi"
+  - "src/index.html"
+  - "src/js/ui/catalog/decl/midi.js"
+  - "scripts/ui-catalog/trace/midi.mjs"
+  - "tests/unit/midi"
+  - "tests/unit/ui-catalog.test.mjs"
+  - "tests/browser/midi.cjs"
+  - "tests/README.md"
+  - "docs/midi.md"
+  - "docs/CLAIMS.yaml"
+  - ".ai/repo/adrs"
+  - "dist"
+  - "src/js/synth/midi-cc.js"
+  - "src/data/midi-devices.json"
+depends_on:
+  - "V507"
+  - "V506"
+  - "V508"
+acceptance_criteria:
+  - "Each connected input of a known device has a view in the MIDI section laid out from its profile's own groups (src/data/midi-devices.json): no control name, number or position is typed in src/js or src/index.html (a unit test derives the view from the profile and finds every profile control in it)."
+  - "What a control moves is read from the one source that moves it (CC_SLOTS through ccEdit, MCU_BUTTONS, the notes): a unit test changes a CC_SLOTS entry and the view's name for that control follows; a control none of them reads says it acts on nothing."
+  - "A control lights while it sends, from the monitor's decoded message, redrawn at most every MONITOR_FLUSH_MS (tests/browser/midi.cjs midi-seam-device-map: a stub KeyLab mkII's CC 74 lights Encoder 1 and names LPF Cutoff)."
+  - "Flowbite Pro markup, Czech copy, every new control catalogued; the UI catalog, Czech prose and Flowbite ratchets do not rise."
+validation:
+  - "node --test tests/unit/midi/*.test.mjs"
+  - "node tests/browser/midi.cjs"
+  - "npm run verify"
+evidence_required:
+  - "verified"
+created_at: 2026-11-15
+updated_at: 2026-11-15

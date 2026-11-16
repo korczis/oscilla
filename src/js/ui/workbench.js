@@ -13,6 +13,7 @@ import {
   MAX_OUTPUT_GAIN, MAX_PROGRAMMED_S, STORAGE_KEYS, WAVEFORM_NAMES,
 } from '../core/constants.js';
 import { clamp, round } from '../core/math.js';
+import { shownText } from '../core/frozen-display.js';
 import {
   formatFrequency, formatMs, frequencyToNormalized, normalizedToFrequency,
 } from '../core/frequency.js';
@@ -203,11 +204,12 @@ export function createWorkbench(svc) {
       return s.masterLevel;
     },
     get holdLabel() {
-      // The idle name stays V1's: the frozen V1 notices (tests/freeze) quote HOLD TO PLAY.
+      // Czech (U114, c3 under Q090); the frozen V1 notices that quote HOLD TO PLAY are shown
+      // through core/frozen-display.js, so the page names this control one way.
       if (this.status === 'SUSPENDED') return 'Čeká na zvuk';
       if (this.playing && this.releasing) return 'Doznívá';
       if (this.playing) return this.latched ? 'Hraje (zamčeno)' : 'Hraje';
-      return 'Hold to Play';
+      return 'Podržet a hrát';
     },
     get statusLabel() {
       if (this.status === 'ERROR') return 'CHYBA';
@@ -283,8 +285,8 @@ export function createWorkbench(svc) {
      * the full readout is still there to read.
      */
     get statusReadoutTitle() {
-      return [this.statusFreqText, this.statusWaveText, this.statusPatternText,
-        this.statusDurationText, this.statusGainText].join(' · ');
+      return [this.statusFreqText, this.statusGainText, this.statusDurationText,
+        this.statusWaveText, this.statusPatternText].join(' · ');
     },
     get statusGainText() {
       // The level actually in effect: the Studio's Master Output while it holds the master stage
@@ -295,6 +297,8 @@ export function createWorkbench(svc) {
       const db = gainLevelDb(m);
       return `Master ${Number.isFinite(db) ? `${db.toFixed(1)} dB` : '-∞ dB'}`;
     },
+    // the phone bar's dB alone; the labelled level stays for screen readers (U114, c3)
+    get statusGainValue() { return this.statusGainText.replace(/^\S+ /, ''); },
     get vizSummaryHarm() {
       const wave = this.source === 'dual' ? this.dual.a.wave : this.waveform;
       const f = this.source === 'dual' ? this.dualFa : this.metricFrequencyIdle;
@@ -354,7 +358,7 @@ export function createWorkbench(svc) {
         return `Průběh, nehraje: vypočtená vlna ${(WAVEFORM_NAMES[wave] || wave).toLowerCase()} `
           + `${formatFrequency(f)} v ${w}. `
           + (statusPlayHint(this.workspace, 'scope') // C030: the Play on screen there
-            || 'Živý průběh analyzátoru výstupu ukáže Hold to Play.');
+            || 'Živý průběh analyzátoru výstupu ukáže tlačítko Podržet a hrát.');
       }
       const sparse = f > 0 && sr > 0 && sr / f < 4;
       const shown = this.scopeShownMs;
@@ -427,8 +431,8 @@ export function createWorkbench(svc) {
     get ppSweep() { return this.source === 'sweep'; },
     get ppFields() { return this.ppSweep ? SWEEP_FORM : this.currentPattern.params; },
     ppId(d) { return this.ppSweep ? `sw-${d.key}` : this.paramId(d); },
-    ppLabel(d) { return this.ppSweep ? this.sweepLabel(d) : d.label; },
-    ppAriaLabel(d) { return this.ppSweep ? null : d.label + this.paramUnit(d); },
+    ppLabel(d) { return this.ppSweep ? this.sweepLabel(d) : shownText(d.label); },
+    ppAriaLabel(d) { return this.ppSweep ? null : shownText(d.label) + this.paramUnit(d); },
     ppValue(d) { return this.ppSweep ? this.sweepValue(d) : this.paramValue(d); },
     ppSet(d, raw) {
       if (this.ppSweep) this.setSweepField(d, raw);
@@ -465,7 +469,7 @@ export function createWorkbench(svc) {
         : 'Pevný limit platí', this.continuousAllowed
         ? 'Držení, zamčení a smyčka sekvence v sekvenceru hrají, dokud je nezastavíte. Držte '
           + 'nízkou úroveň.'
-        : `Držení, Trigger a Tón pevné délky skončí po ${this.safetyLimit} s; smyčka sekvence `
+        : `Držení, Spustit a Tón pevné délky skončí po ${this.safetyLimit} s; smyčka sekvence `
           + `v sekvenceru skončí po ${MAX_PROGRAMMED_S} s.`);
     },
     // setSafetyLimit is the instrument's (core/instrument.js): it reaches the sounding voice.

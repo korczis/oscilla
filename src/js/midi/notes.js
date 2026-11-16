@@ -83,7 +83,8 @@ export function parseMidiMessage(data) {
  * note is gone; `noted(on, note, source)` tells it each note that starts or ends (its trace,
  * C050). Without a claim, `ownedBy()` names who owns the output ('measurement',
  * 'reference', 'studio', 'sequencer') or returns null, as before the bus. `refused(by)`
- * is told once per run of refused notes (the caller says so to the user).
+ * is told once per run of refused notes, with the refused note's source (the caller says so to
+ * the user; V503's answer says its own refusal, midi/response-mode.js).
  * The MIDI inputs and the on-screen and computer keyboard (K026, src/js/midi/keyboard.js) play
  * through the same layer, each with its own `source` in the note key. `starting(on)` is told
  * around each note the instrument takes (K247): the note that arms it makes the playback bus
@@ -108,7 +109,8 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
   const pedalOf = (source, channel) => `${source}:${channel}`;
   // The input a source belongs to: the keyboard's `kbd-<source>`, else a MIDI input's number.
   const inputOf = (source) => (typeof source === 'string' && source.startsWith('kbd-')
-    ? source.slice(4) : typeof source === 'string' && source.startsWith('xy') ? 'xy' : 'midi');
+    ? source.slice(4) : typeof source === 'string' && source.startsWith('xy') ? 'xy'
+      : source === 'answer' ? 'answer' : 'midi');
 
   /** Who refuses a note that would start on the engine now: the bus's claim, else ownedBy(). */
   function refusedBy() {
@@ -122,22 +124,29 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
     if (!held.held().length) release();
   }
 
-  /** Note `note` (0-127) at `velocity` (1-127) from `source`: { ok, reason? | id, ... }. */
-  function noteOn(note, velocity, source = 0, channel = 0) {
+  /**
+   * Note `note` (0-127) at `velocity` (1-127) from `source`: { ok, reason? | id, ... }. `at`, a
+   * context time, plans it on the audio clock (V503's answer); only the one instrument takes a
+   * planned note, so without a sink it is refused (the engine's own voice starts now or never).
+   */
+  function noteOn(note, velocity, source = 0, channel = 0, { at } = {}) {
     const key = keyOf(source, channel, note);
     sustained.delete(key); // pressed again: its own Note Off decides now
-    const sink = route(); // the one instrument plays the note (K065, K247), one path for all
+    // The one instrument plays the note (K065, K247), one path for all; the source lets it
+    // refuse what only a player may do (V503: an answer never inserts the Synth panel).
+    const sink = route(source);
     // The instrument is the Studio document, so the Studio row of the owner table never refuses
     // its keys; a measurement, a level reference capture and the sequencer still do (C036).
     if (sink) {
       const by = ownedBy();
       if (by && by !== 'studio') {
-        if (refusing !== by) refused(by);
+        if (refusing !== by) refused(by, source);
         refusing = by;
         return { ok: false, reason: by };
       }
       refusing = null;
     }
+    if (!sink && at !== undefined) return { ok: false, reason: 'no-instrument' };
     const to = sink || ENGINE;
     // A re-press on the same player retriggers there (the engine fades the old note under the
     // new one); on another player hold() first releases it where it sounded.
@@ -155,7 +164,7 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
       }
       let r;
       starting(true);
-      try { r = sink.noteOn(note, velocity); } finally { starting(false); }
+      try { r = sink.noteOn(note, velocity, { at }); } finally { starting(false); }
       if (r && r.ok !== false) held.hold(key, { sink, note, velocity, input: inputOf(source) });
       return played(r, note, source);
     }
@@ -163,7 +172,7 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
     if (!engine) return { ok: false, reason: 'no-audio' };
     const by = refusedBy();
     if (by) {
-      if (refusing !== by) refused(by);
+      if (refusing !== by) refused(by, source);
       refusing = by;
       return { ok: false, reason: by };
     }
@@ -215,7 +224,7 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
 
   /** Release note `note` from `source` with its release time; false when it is not sounding. */
   /** `forced` (blur, hide, Escape): a stop never deferred by the minimum gate (K184). */
-  function noteOff(note, source = 0, channel = 0, { forced = false } = {}) {
+  function noteOff(note, source = 0, channel = 0, { forced = false, at } = {}) {
     const key = keyOf(source, channel, note);
     if (!forced && pedals.has(pedalOf(source, channel)) && held.sinkOf(key)) {
       sustained.set(key, { note, source, channel });
@@ -225,7 +234,7 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
     // A key not held here: where it would sound now.
     const sink = held.releaseKey(key) || route() || ENGINE;
     const off = sink === ENGINE ? ENGINE.noteOff(note, { key, forced })
-      : sink.noteOff(note, { key, forced });
+      : sink.noteOff(note, { key, forced, at });
     noted(false, note, source);
     releaseIfIdle();
     return off;

@@ -329,8 +329,8 @@
         <!-- U100: on a short phone an info or success toast is one line; a warning or an error
              (a refusal's stated reason, project.no-silent-feedback) always wraps whole. -->
         <div class="osc-toast-text min-w-0" :class="(a.level === 'info' || a.level === 'success') && '[@media(max-height:700px)_and_(pointer:coarse)]:truncate'">
-          <strong x-text="a.title"></strong>
-          <span x-text="a.message"></span>
+          <strong x-text="shownText(a.title)"></strong>
+          <span x-text="shownText(a.message)"></span>
           <template x-if="a.action">
             <a :href="a.action.href" data-osc="alert.action" data-osc-link="jump" @click="alertActionFollowed(a.id)"
               x-text="a.action.text"></a>
@@ -635,7 +635,7 @@
                   </template>
                 </div>
                 <p class="osc-pp-error" role="alert" x-show="planError" x-text="planError"></p>
-                <p class="osc-pp-warn" x-show="planWarnings.length" x-text="planWarnings.join(' ')"></p>
+                <p class="osc-pp-warn" x-show="planWarnings.length" x-text="planWarnings.map(shownText).join(' ')"></p>
               </div>
             </div>
 
@@ -676,11 +676,11 @@
                 @lostpointercapture="keyHolding || holdEnd()" @pointerleave="keyHolding || holdLeave($event)"
                 @keydown.space.prevent="holdKey($event)" @keyup.space.prevent="holdEnd()"
                 @blur="holdEnd()" @keydown.enter.prevent="triggerKey($event)" @contextmenu.prevent>
-                <svg aria-hidden="true"><use href="#i-play"/></svg><span x-text="holdLabel">Hold to Play</span>
+                <svg aria-hidden="true"><use href="#i-play"/></svg><span x-text="holdLabel">Podržet a hrát</span>
               </button>
               <button type="button" class="osc-btn osc-btn-secondary osc-btn-lg osc-trigger" id="osc-trigger"
                 data-osc="source.trigger" @click="trigger()" @keydown.enter.prevent="triggerKey($event)"
-                :aria-label="isProgrammed ? 'Trigger: spustí naprogramovaný vzor' : 'Trigger: zazní po nastavenou dobu'">Trigger</button>
+                :aria-label="isProgrammed ? 'Spustit: přehraje naprogramovaný vzor' : 'Spustit: zazní po nastavenou dobu'">Spustit</button>
             </div>
             <p class="osc-sr-only" id="osc-transport-desc" x-text="transportText"></p>
           </section>
@@ -926,7 +926,7 @@
                 <button type="button" class="osc-toggle osc-dev-continuous" role="switch"
                   aria-checked="false" id="osc-continuous-toggle" data-osc="continuous-toggle"
                   :aria-checked="String(continuousAllowed)" @click="onContinuousToggle()">
-                  <span>Allow continuous playback</span>
+                  <span>Povolit nepřetržité přehrávání</span>
                   <span class="osc-toggle-track" aria-hidden="true"></span>
                 </button>
               </div>
@@ -935,7 +935,7 @@
                 a to v okamžiku jejího začátku plus nový limit. Vztahuje se i na Tón pevné délky.
                 Ostatní programované vzory končí svým vlastním koncem (nejvýš 30 s) a smyčka
                 sekvence v Pattern Sequenceru zní nejvýš 30 s; nepřetržité opakování sweepu nebo
-                nekonečná smyčka sekvenceru potřebuje „Allow continuous playback“.</p>
+                nekonečná smyčka sekvenceru potřebuje „Povolit nepřetržité přehrávání“.</p>
               <hr class="osc-divider osc-dev-sep">
               <p class="osc-dev-out-label">Výstupní zařízení</p>
               <p class="osc-dev-out" id="osc-dev-output" data-osc="device.output">Výchozí zvukový výstup</p>
@@ -3226,17 +3226,18 @@
           aria-hidden="true">&#x26A0;&#xFE0E;</span> <span x-text="ceilingText">VÝSTUP NA
           STROPU (oříznuto)</span></span>
       </span>
-      <span class="osc-sb-readout osc-num" data-osc="status.readout" :title="statusReadoutTitle">
+      <span class="osc-sb-readout osc-num flex-wrap content-start h-[1lh]" data-osc="status.readout"
+        :title="statusReadoutTitle">
         <span data-osc="status.frequency" x-text="statusFreqText">440 Hz</span>
-        <span class="osc-sb-dot" aria-hidden="true">•</span>
-        <span data-osc="status.waveform" x-text="statusWaveText">Sinus</span>
-        <span class="osc-sb-dot osc-sb-extra" aria-hidden="true">•</span>
-        <span class="osc-sb-extra" data-osc="status.pattern" x-text="statusPatternText">Spojitý tón</span>
-        <span class="osc-sb-dot osc-sb-extra" aria-hidden="true">•</span>
-        <span class="osc-sb-extra" data-osc="status.duration" x-text="statusDurationText">≤ 2 s</span>
-        <span class="osc-sb-dot osc-sb-extra" aria-hidden="true">•</span>
-        <span class="osc-sb-extra" data-osc="status.gain" x-text="statusGainText"
-          :title="gainTitle">Zesílení -21.9 dB</span>
+        <span class="inline-flex items-center gap-2"><span class="osc-sb-dot" aria-hidden="true">•</span><span
+          class="max-md:sr-only" data-osc="status.gain" x-text="statusGainText" :title="gainTitle">Zesílení -21.9 dB</span><span
+          class="md:hidden" aria-hidden="true" x-text="statusGainValue"></span></span>
+        <span class="inline-flex items-center gap-2"><span class="osc-sb-dot" aria-hidden="true">•</span><span
+          data-osc="status.duration" x-text="statusDurationText">≤ 2 s</span></span>
+        <span class="inline-flex items-center gap-2"><span class="osc-sb-dot" aria-hidden="true">•</span><span
+          data-osc="status.waveform" x-text="statusWaveText">Sinus</span></span>
+        <span class="inline-flex items-center gap-2"><span class="osc-sb-dot" aria-hidden="true">•</span><span
+          data-osc="status.pattern" x-text="statusPatternText">Spojitý tón</span></span>
       </span>
     </div>
 
@@ -3433,14 +3434,14 @@
         <p class="osc-muted osc-dialog-note osc-settings-wide" id="osc-set-env-help">Pevný limit
           (Zařízení a limity) plánují hodiny Web Audio, takže platí, i když se stránka zasekne.
           Vztahuje se i na Tón pevné délky. Ostatní programované vzory končí svým vlastním koncem
-          (nejvýš 30 s); nepřetržité opakování sweepu potřebuje „Allow continuous playback“. Nota
+          (nejvýš 30 s); nepřetržité opakování sweepu potřebuje „Povolit nepřetržité přehrávání“. Nota
           držená na klávesnici nebo klávese MIDI je po dobu držení výjimkou a zastaví se po
           uvolnění, Esc nebo když stránka ztratí fokus. Náběh platí od příští noty. Doznění
           upravené během držení noty platí po jejím uvolnění (se zapnutou laboratoří Envelope
           platí její Release), zkrácené tak, aby skončilo pevným limitem nebo vlastním koncem
-          vzoru; nota, která dosáhne jednoho z nich, nebo nota z Triggeru na svém konci doznívá
-          s Dozněním, se kterým začala.</p>
-        <label class="osc-label" for="osc-set-duration">Délka Triggeru (ms)</label>
+          vzoru; nota, která dosáhne jednoho z nich, nebo nota spuštěná tlačítkem Spustit na svém
+          konci doznívá s Dozněním, se kterým začala.</p>
+        <label class="osc-label" for="osc-set-duration">Délka spuštěné noty (ms)</label>
         <input class="osc-number" id="osc-set-duration" type="text" :value="duration"
           data-osc="settings.duration" @change="setEnv('duration', $event.target.value)">
         <label class="osc-label" for="osc-set-attack">Náběh (ms, bez ADSR)</label>
@@ -3486,9 +3487,52 @@
                 <span class="bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded dark:bg-gray-700 dark:text-gray-300"
                   x-text="d.known ? 'Port: ' + d.roleText : 'Neznámé zařízení: hraje noty a CC'"></span>
               </span>
+              <!-- V509: the device's map, laid out from its derived profile (midi/device-map.js);
+                   the control that sent the latest message is lit, and each says what it moves. -->
+              <details class="w-full" data-osc="midi.map" x-show="d.known && d.role === 'play'">
+                <summary class="flex items-center text-sm font-medium cursor-pointer min-h-11 text-primary-700 dark:text-primary-400">Mapa ovladačů</summary>
+                <div class="flex flex-wrap gap-1 mt-1" x-show="midiMap(d.deviceId).banks.length > 1">
+                  <template x-for="bk in midiMap(d.deviceId).banks" :key="bk">
+                    <button type="button" data-osc="midi.map-bank" @click="midiMapShowBank(d.deviceId, bk)"
+                      :aria-pressed="String(midiMap(d.deviceId).bank === bk)"
+                      class="inline-flex items-center h-9 px-3 text-xs font-medium border border-gray-300 border-solid rounded-lg [@media(pointer:coarse)]:min-h-11 dark:border-gray-600"
+                      :class="midiMap(d.deviceId).bank === bk ? 'bg-primary-600 text-white border-primary-600' : 'bg-white text-gray-900 dark:bg-gray-800 dark:text-white'"
+                      x-text="'Banka ' + bk"></button>
+                  </template>
+                </div>
+                <template x-for="g in midiMap(d.deviceId).groups" :key="g.kind">
+                  <div class="mt-2">
+                    <p class="text-xs font-semibold text-gray-500 dark:text-gray-400" x-text="g.label"></p>
+                    <ul class="grid grid-cols-1 gap-1 mt-1 sm:grid-cols-2">
+                      <template x-for="c in g.controls" :key="c.key">
+                        <li class="flex flex-wrap justify-between gap-x-2 px-2 py-1 text-xs rounded"
+                          :data-control="c.key" :data-lit="String(midiLit === c.key)"
+                          :class="midiLit === c.key ? 'bg-primary-100 text-primary-900 dark:bg-primary-900 dark:text-primary-100' : 'bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-white'">
+                          <span x-text="c.label"></span>
+                          <span class="text-gray-500 dark:text-gray-400" x-text="c.does.text"></span>
+                        </li>
+                      </template>
+                    </ul>
+                  </div>
+                </template>
+              </details>
             </li>
           </template>
         </ul>
+      </section>
+      <!-- V503 (ADR 0058's V503 note): call and response. Off on every load and never stored; the
+           player is a MIDI play port only, any other note cuts the answer (src/js/midi/response.js). -->
+      <section class="mt-3" x-show="midiState === 'connected'" aria-labelledby="osc-midi-response-title">
+        <label class="inline-flex items-center gap-3 cursor-pointer min-h-11">
+          <input type="checkbox" class="sr-only peer" data-osc="midi.response"
+            aria-describedby="osc-midi-response-help" :checked="midiResponse"
+            @change="midiResponseToggle($event.target.checked)">
+          <span aria-hidden="true" class="relative w-11 h-6 bg-gray-200 rounded-full peer dark:bg-gray-700 peer-focus-visible:ring-4 peer-focus-visible:ring-primary-300 dark:peer-focus-visible:ring-primary-800 peer-checked:bg-primary-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full after:w-5 after:h-5 after:transition-all dark:border-gray-600"></span>
+          <span id="osc-midi-response-title"
+            class="text-sm font-medium text-gray-900 dark:text-white">Otázka a odpověď</span>
+        </label>
+        <p id="osc-midi-response-help" class="text-sm text-gray-500 dark:text-gray-400">Zahrajte
+          frázi a pusťte klávesy: OSCILLA ji zopakuje o kvintu výš. Vaše další nota odpověď utne.</p>
       </section>
       <section class="mt-3" data-osc="midi.monitor" x-show="midiState === 'connected'"
         aria-labelledby="osc-midi-monitor-title">

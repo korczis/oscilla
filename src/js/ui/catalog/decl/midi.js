@@ -52,6 +52,30 @@ export default [
     state: { none: 'jen měří příchozí hodiny a tempo transportu nemění' },
   }),
   defineComponent({
+    id: 'midi.response',
+    kind: 'switch',
+    label: 'Otázka a odpověď',
+    docs: 'Zapne režim otázky a odpovědi: po frázi hráče zahraje OSCILLA odpověď o kvintu výš na '
+      + 'tomtéž nástroji; další nota hráče ji utne. Při každém načtení vypnuto.',
+    state: 'ui.midiResponse',
+  }),
+  defineComponent({
+    id: 'midi.map',
+    kind: 'readout',
+    label: 'Mapa ovladačů',
+    docs: 'Ovladače připojeného známého zařízení podle jeho odvozeného profilu, po bankách a '
+      + 'skupinách; u každého, co v OSCILLA ovládá, a ten, který poslal poslední zprávu, svítí.',
+    state: { none: 'jen ukazuje profil zařízení a poslední zprávu, nic nemění' },
+  }),
+  defineComponent({
+    id: 'midi.map-bank',
+    kind: 'action',
+    label: 'Banka',
+    docs: 'Ukáže v mapě ovladačů zvolenou banku zařízení.',
+    state: { none: 'volba banky žije jen se stránkou' },
+    effect: { command: 'ukázat v mapě ovladačů zvolenou banku' },
+  }),
+  defineComponent({
     id: 'midi.monitor-clear',
     kind: 'action',
     label: 'Vymazat',
