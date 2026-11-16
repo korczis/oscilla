@@ -1,0 +1,112 @@
+# Review verdict for pull request #574 (train/t25): train T25 and release v3.40.0 (a minor:
+# release:analyze derives minor from V503/V509's feat(midi)).
+# Members (each head verified an ancestor of eee8f6be by the reviewer): Czech pass 6 #569 U114
+# (oscilla-0b) at ca7e4131 (bf16d91c, then the review fixes 20810ec9, 0cc526fc, ca7e4131), #570
+# V509 5717e56a containing #568 V503 b76db184 (oscilla-ff), #566 554c04db (the census D.slide
+# comment, C3-558-2). Base members: the v3.39.0 record 1120cbe3, oscilla-43's one rebuild 26830fb7,
+# oscilla-0b's linux-x64 visual re-accept b4ab1d5d. Landing by oscilla-0b after oscilla-43 was
+# silent for 3.5 h (oscilla-43 told, a stop honoured at any point): 3b41f7a2 merges main fb508a50
+# (#571's 5 plan files), d6d5e223 the 3.40 About station, 37c5001d merges #569 20810ec9,
+# chore(release): v3.40.0 286395ba, eee8f6be merges #569 ca7e4131. 37c5001d and eee8f6be equal
+# git's automatic merge in src/ and tests/ (git merge-tree; only dist/index.html differs, rebuilt).
+# about-stations.mjs --check-station judges 286395ba, the newest non-merge commit with that subject,
+# against its parent (oscilla-0b: exit 0). Judged at eee8f6be on base origin/main fb508a50,
+# 2026-11-16, in the reviewer's own detached worktree ~/dev/oscilla-wt/review-526.
+#
+# Reviewer: rev-seat-2 (session oscilla-c3, claude-code c0f0687c), a separate top-level session
+# acting as rev-seat for every train (Q108 A). It built none of this: oscilla-0b built pass 6 and
+# integrated, oscilla-ff built V503 and V509, oscilla-43 the first integration. Disclosure: V503's
+# design and pass 6's (a)-(c) and the status-readout rule are partly this reviewer's Q090 decisions
+# (2026-11-15).
+#
+# The digest: origin/main's (fb508a50) scripts/review-verdict.mjs --content --list at eee8f6be:
+# 8ab3693381aebae6... over 4 guarded paths (src/js/audio/clock.js, src/js/synth/midi-cc.js,
+# src/js/synth/notes-sink.js, src/js/synth/studio-sink.js), the same at 286395ba.
+#
+# How it was judged:
+# - V503 (#568, reviewed at b76db184): response.js and response-mode.js (bounds 16 notes, 8 s,
+#   polyphony; plan at phrase end + gap mapped through clockOffsetS; refusal said once), clock.js
+#   clockOffsetS / perfToContextS / contextToPerfMs, notes.js `at` taken only by a sink, ui.js: an
+#   answer never inserts the panel and any other note cuts it. Its P3 notes are below.
+# - V509 (#570): the device map from the derived profile; what a CC moves through ccControl, the one
+#   name ccEdit uses (ff: ccEdit identical over 1152 cases). Fail-first of 5717e56a by mutation: the
+#   old `if (control) lit = ...` makes device-map.test.mjs "lights the latest message's control ...
+#   none for a key" fail (6 pass / 1 fail), the head line 7/7. src/index.html's cap 314000 for the
+#   map markup; the merged file is 313837 B.
+# - Pass 6 (#569): frozen V1 sentences stay byte-exact as data and are shown in Czech through
+#   core/frozen-display.js shownText (alerts' title and message, the plan warnings, the pattern
+#   labels). The status readout keeps frequency and the level, drops pattern, waveform, duration
+#   by width and never cuts a field: its check (navigation.cjs status-readout-fields) fails on
+#   main's dist (fb508a50, chromium file and http: every state at 1280 and 1536 and dual-long at
+#   390) as the Q090 ruling required. The Studio counts in Czech (counts-text.js).
+#   C3-574-1 (P1, closed): #569's own CI at bf16d91c (run 43774273287) failed app.cjs
+#   a11y-phone-bars-every-state in 3 engines (320/READY osc-sb-extra "clipped by 13.2 px",
+#   STOPPED 6.2). In the playwright 1.63 noble container (chromium, elementFromPoint per readout
+#   item) the head's readout at 320 shows only the frequency; the other fields are wrapped below the
+#   readout's one-line box, unseen: the check counted wrapped-away items as clipped. Closed by
+#   0cc526fc (phoneBars judges the visible line, adds "cut by the readout", reports `wrapped`); the
+#   container does not reproduce the 13 px (it depends on state left by earlier checks, CI only), so
+#   the closure's evidence is the CI legs of this verdict's run.
+#   C3-574-2 (P3, closed): at 320 px on linux the level wraps away (about 3 px short); main shows
+#   only the frequency there too; U114 records 320 px as the exception with that measure.
+#   C3-574-3 (P3, closed): .osc-sb-extra's display:none lost to the pass 6 items' inline-flex, an
+#   inert class; removed by ca7e4131 (debt 3599 -> 3596).
+#   C3-574-4 (P2, closed): the pattern field showed "Délka spuštěné noty" while its aria-label stayed
+#   "Trigger duration ..." (WCAG 2.5.3 label in name); closed by 20810ec9. Probed in the head's dist
+#   in chromium, firefox and webkit: aria-label "Délka spuštěné noty (milliseconds)".
+# - #566: a comment in tests/browser/control-census.cjs stating E075 as not pinned (C3-558-2).
+# - The 3.40 station is Czech and names what the train ships; roadmap counts derived.
+#
+# Measured by the reviewer (Node 22.20.0):
+# - At eee8f6be: build:check 0; GITHUB_BASE_REF=main npm test exit 0 (5872 tests, 5871 pass,
+#   0 fail); app 0 (66/66 x 6); v31-studio-transport 0 (131 checks; it reads the status gain text).
+# - At b4ab1d5d (the members before the main merge, the station, the label fix and the stamp):
+#   npm test 0 (5871/0); navigation 0; app 0; first-screen 0; iphone 0; journeys 0; sequencer 0;
+#   control-census 0; v31-studio-workflows 0; studio-trigger-gates 0; synth 0 (49/49 + 16/16 x 3).
+#   Exit 1, classified:
+#   - midi: only midi-measured-grant (chromium http) and midi-measured-connect (firefox http), which
+#     measure this Mac's own Web MIDI (a KeyLab mkII 61 and a BeatStep Pro attached):
+#     environmental, as on earlier trains; 877 checks pass, midi-seam-response(-keys) and the
+#     device-map checks among them.
+#   - cross-links: learn-demo-back (chromium file and http), E074's race (runLearnDemo's deferred
+#     focus to Hold to Play after a fast Back, pinned on T23). Alternated in the worktree, chromium:
+#     head 5 of 9 rounds red, main fb508a50 0 of 9. A bisect with the head's cross-links.cjs and
+#     --dist per member (5 rounds each): main 0, #569 bf16d91c 1, #570 5717e56a 0, head 0. No member
+#     raises it reproducibly; open under E074, whose fix (oscilla-0b, 8162676d: the guard; a unit
+#     red under the old unconditional focus, 4 pass / 2 fail) lands after T25 with its own verdict.
+#     CI chromium legs at eee8f6be passed it.
+# - Member CI read before the train: #570's run 43784425619 and #574's first run 43854286072
+#   webkit leg 2 failed integration-map webkit/file on one keyboard edge at 10.1-10.2 s; #573's run
+#   43807270194 (Rate -> Rychlost on main eb3f0438, none of T25's members) shows the same shape on
+#   another edge, and none of 10 earlier runs does: a webkit runner shape, filed by oscilla-0b after
+#   T25. #566's s-pads@webkit is the T15 audio wall-time shape.
+# Not run by the reviewer: link-integrity, ui-current, ui-flowbite-pro, surface-census, layout,
+# qa-regressions, v31-studio-links, integration-map and the rest of test:studio; the CI legs run
+# every one.
+#
+# P3 notes, open, none blocks: role="switch" absent on the response switch (V503); its 2-line HTML
+# comment repeats ADR 0058; after a Zpět removed the panel an answer's refusal says "klávesy teď
+# hrají jen vlastní hlas stránky" though a key would re-insert it; notes.js `refusing` is shared by
+# player and answer; the pattern field's unit "(milliseconds)" is English; English sentences around
+# Czech labels remain per file (Q104's transition).
+#
+# THE CONDITION of this verdict (as for the trains since #509): it binds once the reviewer has read
+# the six "Browser leg N (browser)" logs of this pull request's run at this verdict's commit and
+# found each leg's suite list equal to shards.cjs --plan at this head, "run-suites: all K suites
+# passed" and no FAIL line (app's a11y-phone-bars-every-state must pass in all three engines; an
+# integration-map webkit/file keyboard edge at ~10 s or learn-demo-back is judged against main before
+# any rerun, E075's Firefox envelope signature under E075), AND has run the release CI receipt check
+# against this run with the base ci.yml (fb508a50's). Auto-merge is armed only after the reviewer
+# reports "legs OK"; otherwise a superseding verdict.
+#
+# Verdict: merge, under the condition above. Findings: C3-574-1 to C3-574-4 closed.
+schema: review-verdict/v1
+pr: 574
+verdict: merge
+reviewer: oscilla-c3 rev-seat-2 (claude-code c0f0687c, a separate top-level session; built none of eee8f6be)
+content: 8ab3693381aebae6aef816e5e3e459bafd8a5dc5083e92371eb593a79acf5064
+findings:
+  - { id: C3-574-1, severity: P1, status: closed, title: "app.cjs phoneBars counted the readout's wrapped-away fields as clipped (#569's CI red at 320 in 3 engines); closed by 0cc526fc, judged in this verdict's CI legs" }
+  - { id: C3-574-2, severity: P3, status: closed, title: "the level wraps away at 320 px on linux (about 3 px short, main shows only the frequency too); U114 records the exception" }
+  - { id: C3-574-3, severity: P3, status: closed, title: "osc-sb-extra was inert on the pass 6 readout items (display:none lost to inline-flex); removed by ca7e4131" }
+  - { id: C3-574-4, severity: P2, status: closed, title: "the pattern field's aria-label stayed English while its visible label was Czech (label in name, WCAG 2.5.3); closed by 20810ec9" }
