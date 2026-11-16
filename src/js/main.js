@@ -924,6 +924,14 @@ function createOscillaComponent(ui) {
     loop() { if (!labs.sequencer) return false; const ed = labs.sequencer.editor;
       ed.setLoop(!ed.model.loop); labs.sequencer.render(); return true; },
     playing: () => !!(labs.sequencer && labs.sequencer.editor.playing),
+    // V510: the playing sequence's first pass on the audio clock and its tempo, for MIDI clock.
+    anchor() {
+      const ed = labs.sequencer && labs.sequencer.editor;
+      if (!ed || !ed.playing) return null;
+      const { t0 } = ed.loopSchedule();
+      return Number.isFinite(t0) && ed.model.tempoBpm > 0
+        ? { origin: t0, tempo: ed.model.tempoBpm, fromStart: true } : null;
+    },
   };
   const midi = createMidiUi({ engine, sequencerPlaying, bus, sequencerTransport });
   const cmp = compose(instrument, ui, workbench, measure, experiments, findings, connections,

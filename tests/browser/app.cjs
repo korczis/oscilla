@@ -1346,7 +1346,7 @@ function defineChecks() {
       && window.OSCILLA.app.midiState === 'connected'));
     const notOffered = [...(midiOffered ? [] : ['midi.connect']),
       ...(midiConnected ? [] : ['midi.monitor-clear', 'midi.response', 'midi.map',
-        'midi.map-bank'])];
+        'midi.map-bank', 'midi.clock-out'])];
     const neverVisible = list.filter((c) => !c.visible && !notOffered.includes(c.osc))
       .map((c) => c.osc);
     // Controls the audit must have met (they exist only in a state the audit sets up).

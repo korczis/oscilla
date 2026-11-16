@@ -658,3 +658,41 @@ with its amendments A1-A7, on 2026-11-15; oscilla-43 added the two acceptance as
 9. **The switch (A7).** One control in the MIDI section, "Otázka a odpověď", declared in the UI
    catalogue with its `data-osc` hook, trace and control-census row; off on every load and never
    persisted in the first version, so V503 changes no URL or storage contract.
+
+### 2026-11-16: the transport answers on a chosen output, MIDI clock and transport out (V510)
+
+**Note of 2026-11-16 (issue V510), amending the V508 note's decision 3 ("no output") for MIDI
+realtime messages only; the status stays `proposed`.** The owner's orders of 2026-11-15 in session
+cae276ab-2d90-45d2-babb-a1f8023668d2 (Claude Code), verbatim in part: "napoj cely midi stack" and
+"dotahni veskere issues souvisejici s midi, napoj na ui, otestuj, vyzkousej, over, ze funguje".
+Split from MIDI output with oscilla-43 on 2026-11-15: this issue needs no SysEx, so no new consent.
+
+1. **One chosen output, none by default.** The MIDI section lists the access's connected outputs
+   ("Hodiny a transport na výstup"); "Žádný" is chosen on every load and never stored, and with it
+   nothing is sent. Choosing another output first stops the old one; an output that leaves, or
+   whose send throws, is no longer followed (said once).
+2. **Realtime only.** Start (`FA`), Continue (`FB`), Stop (`FC`) and Timing Clock (`F8`, 24 per
+   quarter note, transport.js `CLOCK_PPQ`): plain MIDI, covered by the `{ sysex: false }` access
+   OSCILLA already asks for. MMC is SysEx (`F0 7F … F7`) and waits for V511; no Song Position
+   Pointer is sent, so a receiver told Continue plays on from its own position.
+3. **It follows the transport, not its buttons.** `midi/clock-out-mode.js` reads the transport in
+   view from its anchor (the Studio's `transport.clockAnchor()`; the Sequencer's first pass and
+   tempo): the context time of position 0, the tempo, and whether the run began at position 0.
+   Whatever starts or stops it (PLAY, a controller's Start, Return to start), the output follows:
+   a new run from position 0 is Start at its origin with its ticks from the first (a late wake
+   sends the missed ones at once, so a receiver's count stays the transport's), a run from
+   elsewhere is Continue with the first tick on the beat grid; no anchor is Stop; a tempo change
+   re-anchors at the next unsent tick. An armed run of the keys alone is not the timeline playing
+   (K104) and sends nothing.
+4. **On the audio clock.** Each tick is computed in context time (`clock-out.js`) and sent with
+   its own timestamp (`send(data, timestamp)`) on wakes of the engine's one transport clock every
+   25 ms with 100 ms of lookahead, so the main thread's lateness moves no tick. Context time maps to
+   performance time through the clock owner's offset reading (`audio/clock.js` `clockOffsetS`),
+   slewed by at most 0.02 ms per reading (`steadyStamp`): readings scatter by a fraction of a
+   millisecond in Chromium and WebKit and by several milliseconds in Firefox, whose output
+   timestamp moves in render steps, and that scatter would otherwise land on the ticks as jitter.
+5. **Measured, not assumed.** The browser gate checks the stamps on the stub's output (Start, then
+   clock one tick of the tempo apart within 0.05 ms, then Stop, in the Studio and the Sequencer, in
+   three engines). What the browser and the device make of those stamps, the clock's jitter on the
+   owner's BeatStep Pro following it, is measured with `scripts/midi/listen.swift` and recorded in
+   `docs/midi.md`; until then it is stated as not measured.

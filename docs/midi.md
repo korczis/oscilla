@@ -298,5 +298,31 @@ Continue the Studio refuses (a measurement owns the output: the playhead stays w
 the monitor row says only what each message did (`… → Studio: přehrát od začátku`). Record, Fast forward and the other
 DAW buttons act on nothing. The clock's tempo is read over the last whole beat on the messages'
 own timestamps and clears half a second after the clock stops; the transport never follows it by
-itself (ADR 0058, its V508 note). OSCILLA sends no MIDI.
+itself (ADR 0058, its V508 note). OSCILLA sends MIDI only on an output you choose (below).
+
+## Clock and transport out (V510)
+
+In the MIDI section, **Hodiny a transport na výstup** picks one connected output; **Žádný** is
+chosen on every load, and with it nothing is sent. The chosen output follows the transport in view
+(the Sequencer's own in the Sequencer, the Studio's everywhere else), whatever starts or stops it:
+
+| The transport | The output receives |
+|---|---|
+| starts from position 0 | Start (`FA`) at its first beat, then Timing Clock (`F8`, 24 per quarter note) at its tempo |
+| starts from elsewhere | Continue (`FB`), then the clock from the next tick on its beat grid |
+| changes tempo while playing | the clock at the new tempo from the next tick |
+| stops | Stop (`FC`) |
+
+Only these realtime messages are sent, under the same `{ sysex: false }` permission as the
+input: no MMC (it is SysEx; V511) and no Song Position Pointer, so a device told Continue plays on
+from its own position. Each tick is computed on the audio clock and sent ahead with its own
+timestamp (`src/js/midi/clock-out.js`, `clock-out-mode.js`), so a busy page moves no tick; the
+mapping from the audio clock to the page's clock is slewed by at most 0.02 ms per reading, since
+the readings scatter (by several milliseconds in Firefox). An output that leaves, or stops taking
+messages, is no longer followed, and the MIDI section says so once. ADR 0058, its V510 note.
+
+**Measured.** In the browser gate, on the test stub's output: Start, then clock one tick of the
+tempo apart within 0.05 ms, then Stop, in the Studio and the Sequencer, in Chromium, Firefox and
+WebKit (`tests/browser/midi.cjs` `midi-seam-clock-out`). On hardware, the clock's jitter at the
+owner's BeatStep Pro following it (`scripts/midi/listen.swift`) is **not measured yet**.
 
