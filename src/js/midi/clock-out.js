@@ -19,8 +19,10 @@
 //   toPerf(ctxS, stamp)          -> the performance.now() ms of context time ctxS, from a
 //                                   { contextTime, performanceTime } reading (getOutputTimestamp)
 //   createClockOut({ send, stamp })
-//       start(atS, bpm)          FA at atS, then ticks from atS
-//       resume(atS, bpm)         FB at atS, then ticks from atS
+//       start(atS, bpm)          FA at atS, then ticks from atS (song tick 0)
+//       resume(atS, bpm, k = 0)  FB at atS, then ticks from atS, the first being song tick k
+//       locate(k)                Song Position Pointer (F2) for song tick k, a multiple of 6
+//                                (the pointer counts sixteenths), sent now; only while stopped
 //       tempo(atS, bpm)          the ticks before atS at the old tempo, then the new one
 //                                   from the first unsent tick
 //       pass(to)                 sends every unsent tick before context time `to` (the
@@ -34,6 +36,11 @@ export const START = 0xfa;
 export const CONTINUE = 0xfb;
 export const STOP = 0xfc;
 export const TICK = 0xf8;
+export const SONG_POSITION = 0xf2;
+/** MIDI clocks per Song Position Pointer step (a sixteenth note). */
+export const SPP_TICKS = 6;
+/** The largest Song Position Pointer (14 bits). */
+export const SPP_MAX = 0x3fff;
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 
@@ -70,15 +77,22 @@ export function toPerf(ctxS, stamp) {
 export function createClockOut({ send, stamp }) {
   let run = null; // { bpm, k0, k0At, next }: `next` the first tick not yet sent
   const at = (ctxS) => toPerf(ctxS, stamp());
-  const begin = (status, atS, bpm) => {
-    if (!(bpm > 0) || !isNum(atS)) return false;
+  const begin = (status, atS, bpm, k0 = 0) => {
+    if (!(bpm > 0) || !isNum(atS) || !(Number.isInteger(k0) && k0 >= 0)) return false;
     send([status], at(atS));
-    run = { bpm, k0: 0, k0At: atS, next: 0 };
+    run = { bpm, k0, k0At: atS, next: k0 };
     return true;
   };
   return {
     start: (atS, bpm) => begin(START, atS, bpm),
-    resume: (atS, bpm) => begin(CONTINUE, atS, bpm),
+    resume: (atS, bpm, k = 0) => begin(CONTINUE, atS, bpm, k),
+    locate(k) {
+      if (run || !Number.isInteger(k) || k < 0 || k % SPP_TICKS) return false;
+      const p = Math.min(SPP_MAX, k / SPP_TICKS);
+      send([SONG_POSITION, p & 0x7f, (p >> 7) & 0x7f], undefined);
+      return true;
+    },
+
     tempo(atS, bpm) {
       if (!run || !(bpm > 0) || !isNum(atS)) return false;
       // The ticks before atS keep the old tempo (sent now, at their own times, when the change

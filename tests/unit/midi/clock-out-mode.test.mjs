@@ -13,8 +13,9 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createClockOutMode, CLOCK_OUT_LOOKAHEAD_S } from '../../../src/js/midi/clock-out-mode.js';
-import { START, CONTINUE, STOP, TICK, tickS } from '../../../src/js/midi/clock-out.js';
+import { createClockOutMode, CLOCK_OUT_LOOKAHEAD_S, CATCHUP_S }
+  from '../../../src/js/midi/clock-out-mode.js';
+import { START, CONTINUE, STOP, TICK, SONG_POSITION, tickS } from '../../../src/js/midi/clock-out.js';
 
 // Context time t maps to performance time t * 1000 + 5000 ms.
 const OFFSET_MS = 5000;
@@ -29,7 +30,8 @@ function rig({ anchor = null } = {}) {
     fire() { const f = this.pending; this.pending = null; if (f) f(); } };
   const mode = createClockOutMode({ clock, ctxNow: () => env.now, stamp,
     anchor: () => env.anchor, say: (r) => env.said.push(r) });
-  const port = (name) => ({ name, log: [], send(data, at) { this.log.push({ b: data[0], at }); } });
+  const port = (name) => ({ name, log: [],
+    send(data, at) { this.log.push({ b: data[0], at, data: Array.from(data) }); } });
   return { env, clock, mode, port };
 }
 
@@ -64,18 +66,6 @@ test('a run from position 0: Start at its origin, then ticks at 24 PPQ within th
   assert.equal(statuses(out).filter((b) => b === START).length, 1, 'one Start');
 });
 
-test('a run that began earlier sends Continue, the first tick on the grid at or after now', () => {
-  const { env, mode, port } = rig({ anchor: { origin: 9.0, tempo: 100 } });
-  env.now = 10.0;
-  const out = port('A');
-  mode.setOutput(out);
-  assert.equal(out.log[0].b, CONTINUE);
-  const dt = tickS(100);
-  const at = ctxOf(out.log[0].at);
-  assert.ok(at >= 10.0 - 1e-9 && at < 10.0 + dt, 'the next grid tick');
-  assert.ok(Math.abs(((at - 9.0) / dt) - Math.round((at - 9.0) / dt)) < 1e-6, 'on the grid');
-});
-
 test('a new origin is a new Start; a re-plan that keeps it is not', () => {
   const { env, clock, mode, port } = rig({ anchor: { origin: 10.05, tempo: 120, fromStart: true } });
   const out = port('A');
@@ -87,24 +77,9 @@ test('a new origin is a new Start; a re-plan that keeps it is not', () => {
   env.anchor = { origin: 10.25, tempo: 120, fromStart: true }; // returned to the start
   clock.fire();
   assert.equal(statuses(out).filter((b) => b === START).length, 2);
+  const st = statuses(out).filter((b) => b !== TICK);
+  assert.deepEqual(st, [START, STOP, START], 'Stop between the two runs (C3-572 P3)');
   assert.ok(Math.abs(ctxOf(out.log.filter((e) => e.b === START)[1].at) - 10.25) < 1e-9);
-});
-
-test('a tempo change re-anchors at the next unsent tick, none sent twice', () => {
-  const { env, clock, mode, port } = rig({ anchor: { origin: 10.0, tempo: 120, fromStart: true } });
-  env.now = 10.0;
-  const out = port('A');
-  mode.setOutput(out);
-  env.now = 10.5;
-  env.anchor = { origin: 10.0, tempo: 60, fromStart: true };
-  clock.fire();
-  env.now = 11.0;
-  clock.fire();
-  const at = ticks(out).map((e) => ctxOf(e.at));
-  for (let i = 1; i < at.length; i += 1) assert.ok(at[i] > at[i - 1], 'strictly later');
-  const gaps = at.slice(1).map((v, i) => v - at[i]);
-  assert.ok(Math.abs(gaps[0] - tickS(120)) < 1e-9, 'the old tempo first');
-  assert.ok(Math.abs(gaps[gaps.length - 1] - tickS(60)) < 1e-9, 'the new tempo after');
 });
 
 test('no anchor sends Stop once; another output stops the old one; none sends nothing', () => {
@@ -164,4 +139,121 @@ test('steadyStamp starts at the first reading and slews toward the later ones', 
   assert.ok(Math.abs(off() - 2.0) < 1e-12, 'and back');
   assert.ok(Math.abs(off() - (2.0 + STAMP_SLEW_S / 2)) < 1e-12, 'a near reading is reached');
   assert.equal(steadyStamp(() => null)(), null);
+});
+
+// The song tick of a Song Position Pointer message (14 bits of sixteenths, 6 clocks each).
+const sppTick = (e) => ((e.data[2] << 7) | e.data[1]) * 6;
+// Context times of the receiver's beats: every 24th tick after the last Start or Continue.
+const beatsOf = (p) => {
+  const out = [];
+  let n = 0;
+  for (const e of p.log) {
+    if (e.b === START) n = 0;
+    else if (e.b === SONG_POSITION) n = sppTick(e);
+    else if (e.b === TICK) { if (n % 24 === 0) out.push(ctxOf(e.at)); n += 1; }
+  }
+  return out;
+};
+
+test('joining a run 600 s in (C3-572 P1): SPP and Continue on the grid, no catch-up', () => {
+  const { env, mode, port } = rig({ anchor: { origin: 10.0, tempo: 120, fromStart: true } });
+  env.now = 610.0;
+  const out = port('A');
+  mode.setOutput(out);
+  assert.ok(out.log.length < 20, `a bounded burst (${out.log.length} sends)`);
+  assert.equal(out.log[0].b, SONG_POSITION);
+  assert.equal(out.log[1].b, CONTINUE);
+  const s = sppTick(out.log[0]);
+  assert.equal(s % 6, 0, 'a sixteenth');
+  const at = ctxOf(out.log[1].at);
+  assert.ok(Math.abs(at - (10.0 + s * tickS(120))) < 1e-9, 'Continue where the grid puts it');
+  assert.ok(at >= 610.0 - 1e-9 && at < 610.0 + 6 * tickS(120), 'the next sixteenth after now');
+  assert.ok(ticks(out).every((e) => ctxOf(e.at) >= at - 1e-9), 'no tick before it');
+});
+
+test('a run from 0 found later than CATCHUP_S (the view returns to the Studio): joined, not replayed', () => {
+  const { env, clock, mode, port } = rig({ anchor: { origin: 10.0, tempo: 120, fromStart: true } });
+  env.now = 10.0;
+  const out = port('A');
+  mode.setOutput(out);
+  env.anchor = null; // the Sequencer in view, nothing playing there
+  env.now = 30.0;
+  clock.fire();
+  env.anchor = { origin: 10.0, tempo: 120, fromStart: true }; // back in the Studio, still playing
+  env.now = 70.0;
+  const before = out.log.length;
+  clock.fire();
+  const fresh = out.log.slice(before);
+  assert.ok(fresh.length < 20, `a bounded burst (${fresh.length} sends)`);
+  assert.deepEqual(fresh.slice(0, 2).map((e) => e.b), [SONG_POSITION, CONTINUE]);
+  assert.ok(70.0 - 10.0 > CATCHUP_S);
+});
+
+test('a Studio tempo change keeps the receiver on the transport\'s beats (C3-572 P2)', () => {
+  // The Studio's grid: a tempo change moves every later tick, beats at multiples of 60/tempo.
+  const { env, clock, mode, port } = rig({ anchor: { origin: 0.5, tempo: 120, fromStart: true } });
+  env.now = 0.5;
+  const out = port('A');
+  mode.setOutput(out);
+  for (let t = 0.525; t < 1.1; t += 0.025) { env.now = t; clock.fire(); }
+  env.now = 1.1;
+  env.anchor = { origin: 0.5, tempo: 100, fromStart: true };
+  for (let t = 1.1; t < 3.2; t += 0.025) { env.now = t; clock.fire(); }
+  const after = beatsOf(out).filter((b) => b > 1.2);
+  assert.ok(after.length >= 3);
+  for (const b of after) {
+    const q = (b - 0.5) / 0.6;
+    assert.ok(Math.abs(q - Math.round(q)) < 1e-6, `beat ${b.toFixed(3)} on the 100 BPM grid`);
+  }
+  const st = statuses(out).filter((b) => b !== TICK);
+  assert.deepEqual(st, [START, STOP, SONG_POSITION, CONTINUE], 'relocated: FC, SPP, FB');
+});
+
+test('a Sequencer tempo segment relocates onto its grid with the song position', () => {
+  // The new tempo begins at a pass boundary, song tick 48 at 1.5 s.
+  const { env, clock, mode, port } = rig({ anchor: { run: 1, origin: 0.5, tempo: 120, tick0: 0,
+    fromStart: true } });
+  env.now = 0.5;
+  const out = port('A');
+  mode.setOutput(out);
+  for (let t = 0.525; t < 1.5; t += 0.025) { env.now = t; clock.fire(); }
+  env.now = 1.5;
+  env.anchor = { run: 1, origin: 1.5, tempo: 60, tick0: 48, fromStart: true };
+  for (let t = 1.5; t < 3.6; t += 0.025) { env.now = t; clock.fire(); }
+  const st = out.log.filter((e) => e.b !== TICK);
+  assert.deepEqual(st.map((e) => e.b), [START, STOP, SONG_POSITION, CONTINUE]);
+  const spp = sppTick(st[2]);
+  assert.ok(spp >= 48 && spp % 6 === 0, `the song position (${spp}) is past the segment start`);
+  assert.ok(Math.abs(ctxOf(st[3].at) - (1.5 + (spp - 48) * tickS(60))) < 1e-9, 'on its grid');
+  for (const b of beatsOf(out).filter((x) => x > 1.6)) {
+    assert.ok(Math.abs((b - 1.5) - Math.round(b - 1.5)) < 1e-6, `beat ${b.toFixed(3)} at 60 BPM`);
+  }
+});
+test('a port that closes is said once and sent to no more (C3-572 P3)', () => {
+  const { env, clock, mode } = rig({ anchor: { origin: 10.0, tempo: 120, fromStart: true } });
+  env.now = 10.0;
+  let calls = 0;
+  let open = true;
+  const p = { name: 'gone', send() { calls += 1; if (!open) throw new Error('InvalidStateError'); } };
+  mode.setOutput(p);
+  open = false;
+  const before = calls;
+  env.now = 11.0; // a late wake: many ticks due at once
+  clock.fire();
+  assert.equal(calls - before, 1, 'the first failing send ends them');
+  assert.deepEqual(env.said, ['send-failed']);
+});
+
+test('the mode wakes every 25 ms while a run is sent and every 100 ms while nothing plays', () => {
+  const ms = [];
+  let fn = null;
+  const clock = { wake(key, m, f) { ms.push(m); fn = f; }, cancel() {} };
+  let a = null;
+  const mode = createClockOutMode({ clock, ctxNow: () => 10, stamp, anchor: () => a });
+  mode.setOutput({ name: 'A', send() {} });
+  a = { origin: 10, tempo: 120, fromStart: true };
+  fn();
+  a = null;
+  fn();
+  assert.deepEqual(ms, [100, 25, 100]);
 });

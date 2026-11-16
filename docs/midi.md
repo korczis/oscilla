@@ -308,14 +308,15 @@ chosen on every load, and with it nothing is sent. The chosen output follows the
 
 | The transport | The output receives |
 |---|---|
-| starts from position 0 | Start (`FA`) at its first beat, then Timing Clock (`F8`, 24 per quarter note) at its tempo |
-| starts from elsewhere | Continue (`FB`), then the clock from the next tick on its beat grid |
-| changes tempo while playing | the clock at the new tempo from the next tick |
+| starts from position 0 (seen within 0.25 s) | Start (`FA`) at its first beat, then Timing Clock (`F8`, 24 per quarter note) at its tempo |
+| plays already (the output chosen later, the view back on it) or starts elsewhere | Song Position Pointer (`F2`) for the next sixteenth, Continue (`FB`) there, then the clock |
+| starts again or jumps while sent | Stop (`FC`) first, then as above |
+| changes tempo while playing | Stop, Song Position Pointer and Continue on the new beat grid |
 | stops | Stop (`FC`) |
 
-Only these realtime messages are sent, under the same `{ sysex: false }` permission as the
-input: no MMC (it is SysEx; V511) and no Song Position Pointer, so a device told Continue plays on
-from its own position. Each tick is computed on the audio clock and sent ahead with its own
+These messages need no SysEx and come under the same `{ sysex: false }` permission as the
+input; MMC is SysEx (V511). A tempo change moves the device to the new grid rather than bending
+its count, so its beats stay on OSCILLA's. Each tick is computed on the audio clock and sent ahead with its own
 timestamp (`src/js/midi/clock-out.js`, `clock-out-mode.js`), so a busy page moves no tick; the
 mapping from the audio clock to the page's clock is slewed by at most 0.02 ms per reading, since
 the readings scatter (by several milliseconds in Firefox). An output that leaves, or stops taking

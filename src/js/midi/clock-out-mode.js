@@ -1,25 +1,32 @@
 // MIDI clock and transport out on a chosen output, following the transport in view (plan issue
 // V510; ADR 0058, its V510 note; docs/midi.md "Clock and transport out"). clock-out.js places the
-// messages; this module decides when, from the transport's own anchor, never from its buttons:
-// whatever starts or stops the transport (its PLAY, a key's armed run aside, a controller's
-// Start), the output follows.
+// messages; this module decides when, from the transport's own grid, never from its buttons:
+// whatever starts, moves or stops the transport, the output follows.
 //
-//   - anchor() is the playing transport's { origin, tempo, fromStart }: the context time of its
-//     position 0, its tempo, and whether the run began at position 0 (the Studio's
-//     transport.clockAnchor(), the Sequencer's first pass and its tempo); null while nothing
-//     plays. A new origin is a new run: Start (FA) at the origin when the run began at position
-//     0, its ticks from the first (a late wake sends the ones it missed at once, so a receiver's
-//     song position stays the transport's), else Continue (FB) with the first tick on the beat
-//     grid at or after now.
-//     A tempo of its own run re-anchors at the next unsent tick (clock-out.js tempo). No anchor:
-//     Stop (FC).
-//   - It wakes on the engine's one transport clock (audio/clock.js createTransportClock) every
-//     CLOCK_OUT_TICK_MS while an output is chosen, and each wake sends the ticks before now +
-//     CLOCK_OUT_LOOKAHEAD_S, each stamped with its own time (send(data, timestamp)), so the
-//     browser delivers them on time whatever the main thread's lateness.
-//   - Choosing no output sends nothing; choosing another output first stops the old one.
-//   - A send that throws (the port closed) drops the output and says so once (say).
-//
+//   - anchor() is the playing transport's grid, or null while nothing plays:
+//       { run, origin, tempo, tick0 = 0, fromStart }
+//     song tick tick0 + k (24 per quarter note) falls at origin + k * 60 / (tempo * 24); `run`
+//     names the run (a new one on every start or locate), `fromStart` that it began at song
+//     position 0. The Studio's grid is the whole run at the document's tempo (a tempo change
+//     moves every later tick, transport.clockAnchor()); the Sequencer's is the run's current
+//     tempo segment (sequencer/transport-handle.js).
+//   - Entering a run: Start (FA) at its origin, its ticks from the first, when it began at 0 at
+//     most CATCHUP_S ago (a wake that came late sends that many missed ticks at once, so the
+//     receiver's count stays the transport's). Otherwise the output joins it: Song Position
+//     Pointer (F2) for the first sixteenth on the grid at or after now, then Continue (FB) there
+//     and the ticks from it. A new run while one is sent stops the old one first (FC).
+//   - The grid moving within a run (a tempo change) relocates the output to the new grid: FC,
+//     SPP, FB at its first sixteenth after now, so the receiver's beats stay on the transport's
+//     (re-anchoring the count instead would leave them off the grid for the rest of the run). The
+//     Sequencer's change comes at a pass boundary, which the lookahead has already sent ticks
+//     past, so it relocates too.
+//   - No anchor: Stop (FC), once.
+//   - It wakes on the engine's one transport clock every CLOCK_OUT_TICK_MS while a run is sent
+//     and every CLOCK_OUT_IDLE_MS while an output waits for one; each wake sends the ticks before
+//     now + CLOCK_OUT_LOOKAHEAD_S, each stamped with its own time (send(data, timestamp)), so
+//     the main thread's lateness moves no tick.
+//   - Choosing no output sends nothing; choosing another output first stops the old one. A send
+//     that throws (the port closed) ends every send to that port and says so once.
 //   - The stamps map context time to performance time through a slewed clock offset
 //     (steadyStamp): readings of the offset scatter (a fraction of a millisecond in Chromium and
 //     WebKit, several milliseconds in Firefox, whose output timestamp moves in render steps), and
@@ -31,15 +38,18 @@
 //     -> { setOutput(port | null), output(), tick(), dispose() }
 //   steadyStamp(readOffsetS, slewS = STAMP_SLEW_S) -> () => { contextTime, performanceTime } | null
 
-import { createClockOut, tickS } from './clock-out.js';
+import { createClockOut, tickS, SPP_TICKS } from './clock-out.js';
 
-/** How often the mode wakes while an output is chosen (UI bookkeeping, not the clock's time). */
+/** How often the mode wakes while a run is sent (UI bookkeeping, not the clock's time). */
 export const CLOCK_OUT_TICK_MS = 25;
+/** How often it wakes while an output is chosen and nothing plays. */
+export const CLOCK_OUT_IDLE_MS = 100;
 /** How far ahead of now each wake sends the ticks (each stamped with its own time). */
 export const CLOCK_OUT_LOOKAHEAD_S = 0.1;
-/** Two anchors closer than this are the same run (a re-plan keeps its origin). */
+/** How long after a run's start from 0 the output still starts it (Start and the missed ticks). */
+export const CATCHUP_S = CLOCK_OUT_IDLE_MS / 1000 + CLOCK_OUT_LOOKAHEAD_S + 0.05;
+/** Two origins closer than this are the same run (a re-plan keeps its origin). */
 export const ORIGIN_EPS_S = 0.001;
-
 /** How far the held clock offset moves toward one fresh reading, at most (seconds). */
 export const STAMP_SLEW_S = 0.00002;
 
@@ -60,40 +70,69 @@ export function steadyStamp(readOffsetS, slewS = STAMP_SLEW_S) {
   };
 }
 
+const valid = (a) => !!a && a.tempo > 0 && Number.isFinite(a.origin)
+  && Number.isInteger(a.tick0 ?? 0) && (a.tick0 ?? 0) >= 0;
+/** Where grid `a` places song tick `s`. */
+const gridAt = (a, s) => a.origin + (s - (a.tick0 || 0)) * tickS(a.tempo);
+const sameRun = (a, b) => (a.run !== undefined && b.run !== undefined ? a.run === b.run
+  : Math.abs(a.origin - b.origin) <= ORIGIN_EPS_S);
+const sameGrid = (a, b) => a.tempo === b.tempo && (a.tick0 || 0) === (b.tick0 || 0)
+  && Math.abs(a.origin - b.origin) <= ORIGIN_EPS_S;
+
 export function createClockOutMode({ clock, ctxNow, stamp, anchor, say = () => {} }) {
   let port = null;
   let out = null;
-  let run = null; // { origin, tempo } of the run being sent
+  let run = null; // the anchor of the run being sent
   let woken = false;
 
-  const wake = () => {
+  const wake = (ms) => {
     if (!clock || woken) return;
     woken = true;
-    clock.wake(WAKE_KEY, CLOCK_OUT_TICK_MS, () => { woken = false; mode.tick(); });
+    clock.wake(WAKE_KEY, ms, () => { woken = false; mode.tick(); });
   };
   const cancel = () => {
     if (clock) clock.cancel(WAKE_KEY);
     woken = false;
   };
 
-  const drop = (failed) => {
+  const drop = () => {
     port = null;
     out = null;
     run = null;
     cancel();
-    if (failed) say('send-failed');
+    say('send-failed');
   };
 
-  const open = (p) => createClockOut({
-    send: (bytes, at) => {
-      try {
-        p.send(bytes, at);
-      } catch {
-        drop(true);
-      }
-    },
-    stamp,
-  });
+  const open = (p) => {
+    let dead = false;
+    return createClockOut({
+      send: (bytes, at) => {
+        if (dead) return;
+        try {
+          p.send(bytes, at);
+        } catch {
+          dead = true;
+          if (port === p) drop();
+        }
+      },
+      stamp,
+    });
+  };
+
+  // Enter run `a` at `now`: Start from its origin when it began at 0 just now, else join it at
+  // the first sixteenth on its grid at or after now.
+  const enter = (a, now) => {
+    const t0 = a.tick0 || 0;
+    if (a.fromStart && t0 === 0 && now - a.origin <= CATCHUP_S) {
+      out.start(a.origin, a.tempo);
+    } else {
+      const k = Math.max(0, Math.ceil((now - a.origin) / tickS(a.tempo) - 1e-9));
+      const s = Math.ceil((t0 + k) / SPP_TICKS) * SPP_TICKS;
+      out.locate(s);
+      if (out) out.resume(gridAt(a, s), a.tempo, s);
+    }
+    run = { ...a };
+  };
 
   const mode = {
     setOutput(next) {
@@ -110,24 +149,18 @@ export function createClockOutMode({ clock, ctxNow, stamp, anchor, say = () => {
       if (!out) return;
       const a = anchor();
       const now = ctxNow();
-      if (!a || !(a.tempo > 0) || !Number.isFinite(a.origin)) {
+      if (!valid(a)) {
         if (out.running()) out.stop();
         run = null;
-      } else if (!run || Math.abs(a.origin - run.origin) > ORIGIN_EPS_S) {
-        if (a.fromStart) {
-          out.start(a.origin, a.tempo);
-        } else {
-          const dt = tickS(a.tempo);
-          const k = Math.max(0, Math.ceil((now - a.origin) / dt - 1e-9));
-          out.resume(a.origin + k * dt, a.tempo);
-        }
-        run = { origin: a.origin, tempo: a.tempo };
-      } else if (a.tempo !== run.tempo) {
-        out.tempo(now, a.tempo);
-        run = { origin: run.origin, tempo: a.tempo };
+      } else if (!run || !sameRun(a, run)) {
+        if (out.running()) out.stop();
+        if (out) enter(a, now);
+      } else if (!sameGrid(a, run)) {
+        out.stop();
+        if (out) enter({ ...a, fromStart: false }, now);
       }
       if (out && out.running()) out.pass(now + CLOCK_OUT_LOOKAHEAD_S);
-      if (out) wake();
+      if (out) wake(out.running() ? CLOCK_OUT_TICK_MS : CLOCK_OUT_IDLE_MS);
     },
     dispose() {
       mode.setOutput(null);

@@ -671,22 +671,31 @@ Split from MIDI output with oscilla-43 on 2026-11-15: this issue needs no SysEx,
    ("Hodiny a transport na výstup"); "Žádný" is chosen on every load and never stored, and with it
    nothing is sent. Choosing another output first stops the old one; an output that leaves, or
    whose send throws, is no longer followed (said once).
-2. **Realtime only.** Start (`FA`), Continue (`FB`), Stop (`FC`) and Timing Clock (`F8`, 24 per
-   quarter note, transport.js `CLOCK_PPQ`): plain MIDI, covered by the `{ sysex: false }` access
-   OSCILLA already asks for. MMC is SysEx (`F0 7F … F7`) and waits for V511; no Song Position
-   Pointer is sent, so a receiver told Continue plays on from its own position.
-3. **It follows the transport, not its buttons.** `midi/clock-out-mode.js` reads the transport in
-   view from its anchor (the Studio's `transport.clockAnchor()`; the Sequencer's first pass and
-   tempo): the context time of position 0, the tempo, and whether the run began at position 0.
-   Whatever starts or stops it (PLAY, a controller's Start, Return to start), the output follows:
-   a new run from position 0 is Start at its origin with its ticks from the first (a late wake
-   sends the missed ones at once, so a receiver's count stays the transport's), a run from
-   elsewhere is Continue with the first tick on the beat grid; no anchor is Stop; a tempo change
-   re-anchors at the next unsent tick. An armed run of the keys alone is not the timeline playing
-   (K104) and sends nothing.
+2. **No SysEx.** Start (`FA`), Continue (`FB`), Stop (`FC`), Timing Clock (`F8`, 24 per quarter
+   note, transport.js `CLOCK_PPQ`) and Song Position Pointer (`F2`, in sixteenths): plain MIDI,
+   covered by the `{ sysex: false }` access OSCILLA already asks for. MMC is SysEx (`F0 7F … F7`)
+   and waits for V511.
+3. **It follows the transport's grid, not its buttons.** `midi/clock-out-mode.js` reads the
+   transport in view as a grid: the context time of a song tick, the tempo, the run, and whether
+   it began at position 0 (the Studio's `transport.clockAnchor()`, whose grid is the whole run at
+   the document's tempo; the Sequencer's current tempo segment, `sequencer/transport-handle.js`,
+   since each pass plays the tempo it was compiled with). Whatever starts, moves or stops it
+   (PLAY, a controller's Start, Return to start, a tempo edit), the output follows:
+   - a run from position 0 found within `CATCHUP_S` (0.25 s) of its start: Start at its origin
+     and its ticks from the first, the few a late wake missed sent at once;
+   - any other run (found later, begun elsewhere, or met again when the view returns to it):
+     the output joins it with Song Position Pointer for the first sixteenth on the grid after
+     now, then Continue there, never a replay of the ticks since its start (review C3-572 P1);
+   - a new run while one is sent: Stop first, then as above;
+   - the grid moving within a run (a tempo change): Stop, Song Position Pointer and Continue on
+     the new grid, so the receiver's beats stay on the transport's (re-anchoring the count would
+     leave them a fraction of a beat off for the rest of the run, C3-572 P2);
+   - no anchor: Stop, once.
+   An armed run of the keys alone is not the timeline playing (K104) and sends nothing.
 4. **On the audio clock.** Each tick is computed in context time (`clock-out.js`) and sent with
    its own timestamp (`send(data, timestamp)`) on wakes of the engine's one transport clock every
-   25 ms with 100 ms of lookahead, so the main thread's lateness moves no tick. Context time maps to
+   25 ms while a run is sent (100 ms while an output waits for one) with 100 ms of lookahead, so
+   the main thread's lateness moves no tick. A send that throws ends every send to that port. Context time maps to
    performance time through the clock owner's offset reading (`audio/clock.js` `clockOffsetS`),
    slewed by at most 0.02 ms per reading (`steadyStamp`): readings scatter by a fraction of a
    millisecond in Chromium and WebKit and by several milliseconds in Firefox, whose output

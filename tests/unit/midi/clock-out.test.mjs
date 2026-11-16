@@ -104,3 +104,20 @@ test('a tempo change ahead of the sent ticks keeps the old tempo until it, with 
   near(ticks[47].at, 1500 + 23 * tickS(60) * 1000, 'tick 47 at the new tempo');
 });
 
+
+test('Song Position Pointer only while stopped, in sixteenths; resume counts from a song tick', async () => {
+  const { createClockOut: make, SONG_POSITION, SPP_MAX } = await import('../../../src/js/midi/clock-out.js');
+  const sent = [];
+  const co = make({ send: (b, at) => sent.push({ b: Array.from(b), at }),
+    stamp: () => ({ contextTime: 0, performanceTime: 0 }) });
+  assert.equal(co.locate(7), false, 'not a sixteenth');
+  assert.equal(co.locate(6 * 200), true);
+  assert.deepEqual(sent[0].b, [SONG_POSITION, 200 & 0x7f, 200 >> 7]);
+  co.locate(6 * (SPP_MAX + 5));
+  assert.deepEqual(sent[1].b, [SONG_POSITION, 0x7f, 0x7f], 'clamped to 14 bits');
+  assert.equal(co.resume(1.0, 120, 1200), true);
+  assert.equal(co.locate(0), false, 'not while running');
+  co.pass(1.0 + 3 * (60 / (120 * 24)) + 1e-6);
+  assert.equal(sent.filter((e) => e.b[0] === 0xf8).length, 4, 'ticks from the resumed song tick');
+  assert.equal(co.resume(2.0, 120, 7.5), false, 'an integer song tick');
+});
