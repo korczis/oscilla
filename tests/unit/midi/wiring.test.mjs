@@ -18,6 +18,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import MIDI_DECL from '../../../src/js/ui/catalog/decl/midi.js';
 
 const root = new URL('../../../', import.meta.url);
 const read = (p) => readFileSync(new URL(p, root), 'utf8');
@@ -58,7 +59,9 @@ test('the shell offers Connect MIDI and a status line for the support state', ()
   assert.match(row[1], /class="osc-dialog-actions"/);
   assert.match(row[1], /data-osc="midi\.actions"/);
   assert.match(row[1], /x-show="midiCanConnect"/, 'the row is hidden where MIDI is not offered');
-  assert.equal(button[1].replace(/<[^>]*>/g, '').trim(), 'Connect MIDI');
+  // The button reads the catalogue's label of midi.connect (Czech since Q104: Připojit MIDI).
+  assert.equal(button[1].replace(/<[^>]*>/g, '').trim(),
+    MIDI_DECL.find((c) => c.id === 'midi.connect').label);
   const status = /<p\b[^>]*data-osc="midi\.status"[^>]*>/.exec(html);
   assert.ok(status, 'a status line data-osc="midi.status"');
   assert.match(status[0], /role="status"/);
@@ -166,6 +169,15 @@ test('the seam is tests/browser/lib/midi-stub.cjs, it names itself and the reads
     }
     for (const m of reads(/\binputs\.(\w+)/g)) {
       assert.ok(stub.PAGE_READS.inputs.includes(m), `inputs.${m} is compared by the suite`);
+    }
+    // V510: the outputs (connectedOutputs names each one `output`).
+    for (const m of reads(/\boutputs\.(\w+)/g)) {
+      assert.ok(stub.PAGE_READS.outputs.includes(m), `outputs.${m} is compared by the suite`);
+    }
+    const outReads = reads(/\boutput\.(\w+)/g);
+    assert.ok(outReads.includes('send'), 'support.js reads output.send');
+    for (const m of outReads) {
+      assert.ok(stub.PAGE_READS.output.includes(m), `output.${m} is compared by the suite`);
     }
   });
 

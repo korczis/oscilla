@@ -513,10 +513,23 @@ function phoneBars() {
   if (label.scrollWidth > label.clientWidth + 1 || lb.right > state.right + 0.5) {
     bad.push('status label clipped');
   }
-  const readout = boxes([...document.querySelectorAll('[data-osc="status.readout"] > *')]);
+  // The readout is one line high and wraps (U114, Q090): a field with no room goes whole onto
+  // the hidden second line, so it is judged only when it is on the visible line, and there it
+  // is whole (C3-574-1: a wrapped-away field past the state box read as clipped on CI fonts).
+  const ro = document.querySelector('[data-osc="status.readout"]').getBoundingClientRect();
+  const onLine = (p) => p.b.bottom > ro.top + 0.5 && p.b.top < ro.bottom - 0.5;
+  const items = [...document.querySelectorAll('[data-osc="status.readout"] > *')].filter(vis);
+  // the fields wrapped away, reported so a run shows where each went (not judged)
+  const wrapped = items.map((el) => ({ t: el.textContent.trim(), b: el.getBoundingClientRect() }))
+    .filter((p) => !onLine(p)).map((p) => ({ t: p.t, top: Math.round(p.b.top - ro.top),
+      over: Math.round((p.b.right - state.right) * 10) / 10 }));
+  const readout = boxes(items).filter(onLine);
   for (const p of readout) {
     if (p.b.left < lb.right - 0.5) bad.push(`${p.n} over the status label`);
     if (p.b.right > state.right + 1) bad.push(`${p.n} clipped by ${p.b.right - state.right} px`);
+    if (p.b.top < ro.top - 0.5 || p.b.bottom > ro.bottom + 0.5 || p.b.right > ro.right + 0.5) {
+      bad.push(`${p.n} cut by the readout`);
+    }
   }
   const doc = document.documentElement;
   if (doc.scrollWidth > doc.clientWidth) {
@@ -524,7 +537,7 @@ function phoneBars() {
   }
   if (header.scrollWidth > header.clientWidth + 1) bad.push('header scrolls horizontally');
   if (sb.scrollWidth > sb.clientWidth + 1) bad.push('status bar scrolls horizontally');
-  return { label: label.textContent.trim(), bad };
+  return { label: label.textContent.trim(), bad, wrapped };
 }
 
 // ------------------------------------------------------------------------------ checks
@@ -568,12 +581,13 @@ function defineChecks() {
       'referenceCapturing', 'setInputNow', 'showResult', 'responseView', 'deviceId',
       'ioDeviceId', 'refreshInputs', 'irView'];
     // OSCILLA.studio and its live transport (K169 review R1): the transport's one Inject hook,
-    // debugRefuseNextPlay, refuses outside TEST CONTEXT.
+    // debugRefuseNextPlay, refuses outside TEST CONTEXT. clockAnchor (V510) observes: the grid
+    // MIDI clock out follows, null while nothing plays.
     const STUDIO_KEYS = ['store', 'model', 'selection', 'runtime', 'transport', 'editor', 'dirty',
       'projectId', 'templateId', 'measurementRun', 'rendering', 'trace', 'library', 'counts'];
     const TRANSPORT_KEYS = ['start', 'stop', 'arm', 'disarm', 'live', 'armed', 'liveVoices',
       'heldNotes', 'locate', 'returnToStart', 'setLoop', 'sync', 'admit', 'escape', 'playhead',
-      'debugInfo', 'debugRefuseNextPlay', 'dispose', 'on', 'playing', 'step'];
+      'debugInfo', 'debugRefuseNextPlay', 'dispose', 'on', 'playing', 'step', 'clockAnchor'];
     const got = await page.evaluate(() => {
       const O = window.OSCILLA;
       const m = O.measure;
@@ -1345,7 +1359,8 @@ function defineChecks() {
     const midiConnected = await page.evaluate(() => !!(window.OSCILLA.app
       && window.OSCILLA.app.midiState === 'connected'));
     const notOffered = [...(midiOffered ? [] : ['midi.connect']),
-      ...(midiConnected ? [] : ['midi.monitor-clear'])];
+      ...(midiConnected ? [] : ['midi.monitor-clear', 'midi.response', 'midi.map',
+        'midi.map-bank', 'midi.clock-out'])];
     const neverVisible = list.filter((c) => !c.visible && !notOffered.includes(c.osc))
       .map((c) => c.osc);
     // Controls the audit must have met (they exist only in a state the audit sets up).
@@ -5017,6 +5032,7 @@ function defineChecks() {
       RUN.skip(browserName, 'phone-bars-with-microphone', 'no fake capture device in this browser');
     }
     const res = {};
+    const wrapped = {};
     for (const mic of mics) {
       if (mic) {
         await page.evaluate(() => window.OSCILLA.labs.mic.start());
@@ -5032,6 +5048,12 @@ function defineChecks() {
           const r = await page.evaluate(phoneBars);
           res[`${w}/${name}${mic ? '/mic' : ''}`] = { shown: st.shown, want: st.want,
             state: IS[name](st), bad: r.bad };
+          for (const x of r.wrapped) {
+            const k = `${x.t} (${w}${mic ? '/mic' : ''})`;
+            const was = wrapped[k];
+            wrapped[k] = { below: x.top, overMax: Math.max(x.over, was ? was.overMax : -Infinity),
+              cases: (was ? was.cases : 0) + 1 };
+          }
           await reset();
         }
       }
@@ -5051,7 +5073,7 @@ function defineChecks() {
     const merged = [...rows].filter(([, set]) => set.size !== Object.keys(states).length)
       .map(([row, set]) => `${row}: ${[...set].join(', ')}`);
     return { ok: !bad.length && !merged.length, cases: Object.keys(res).length, merged,
-      bad: Object.fromEntries(bad.slice(0, 6)) };
+      bad: Object.fromEntries(bad.slice(0, 6)), wrapped };
   });
 
   // About: the last primary nav item, keyboard-operable, a native full-width view whose links
@@ -5194,14 +5216,14 @@ function defineChecks() {
       && /noopener/.test(l.rel) && /noreferrer/.test(l.rel);
     const ok = res.nav.last === 'nav.about'
       && (res.tabbedTo === 'nav.about' || browserName === 'webkit')
-      && v.shown && v.current === 'nav.about' && v.title === 'OSCILLA · About' && v.h2 === 1
-      && v.heading === 'About OSCILLA' && !v.anchors.length && v.traceHidden && v.othersHidden
+      && v.shown && v.current === 'nav.about' && v.title === 'OSCILLA · O aplikaci' && v.h2 === 1
+      && v.heading === 'O aplikaci OSCILLA' && !v.anchors.length && v.traceHidden && v.othersHidden
       && external(v.source, 'https://github.com/korczis/oscilla')
       && external(v.majordomus, 'https://majordomus.dev/')
       && v.email && v.email.href === 'mailto:korczis@gmail.com'
       && res.reducedMotionS < 0.01
       && Object.values(res.widths).every((b) => !b.length)
-      && res.menuMode === 'about' && !/About/.test(res.baseTitle)
+      && res.menuMode === 'about' && !/O aplikaci/.test(res.baseTitle)
       && res.roadmapOk && res.workspacesOk && res.headlineOk;
     return { ok, ...res };
   });

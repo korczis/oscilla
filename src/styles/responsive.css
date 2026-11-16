@@ -147,8 +147,7 @@
   .osc-sb-actions-wrap { grid-column: 5; }
 
   .osc-sb-sub,
-  .osc-sb-div,
-  .osc-sb-extra {
+  .osc-sb-div {
     display: none;
   }
 
@@ -351,7 +350,7 @@
      it did not fit next to RELEASING at 320 px, nor the Czech "Sinus" next to PŘIPRAVENO at
      360 px (2.6 px over, #540). */
   [data-osc="status.waveform"],
-  [data-osc="status.readout"] > .osc-sb-dot:not(.osc-sb-extra) {
+  [data-osc="status.readout"] > :has(> [data-osc="status.waveform"]) {
     display: none;
   }
 }

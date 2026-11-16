@@ -112,3 +112,37 @@ test('every workflow and README run the Node major package.json engines names', 
   assert.equal(nodeFloor({ engines: { node: '>=24' } }), 24);
 });
 
+// R050 (the 2026-11-15 audit, criterion 2): no page copy in src/js types a step count; the
+// Synth's step strip says NEW_STEP_GRID.steps (src/js/studio/notes-grid.js), the one grid.
+/** Each file under src/js whose source types a number before "kroků" (a step count). */
+export function typedStepCounts(files, text = read) {
+  const out = [];
+  for (const f of files) {
+    const t = text(f);
+    // No \b after "kroků": a JS word boundary does not see a letter with a diacritic.
+    for (const m of t.matchAll(/(['"`][^'"`]*?)\b(\d+) kroků/g)) {
+      out.push(`${f}:${t.slice(0, m.index).split('\n').length} types ${m[2]} kroků`);
+    }
+  }
+  return out;
+}
+
+const srcJs = () => {
+  const walk = (dir) => readdirSync(path.join(ROOT, dir)).flatMap((n) => {
+    const rel = path.join(dir, n);
+    return statSync(path.join(ROOT, rel)).isDirectory() ? walk(rel) : n.endsWith('.js') ? [rel] : [];
+  });
+  return walk('src/js');
+};
+
+test('R050: no source under src/js types a step count; the step strip says the grid\'s', async () => {
+  assert.deepEqual(typedStepCounts(srcJs()), []);
+  const { STRIP_TEXT } = await import('../../src/js/synth/step-strip.js');
+  const { NEW_STEP_GRID } = await import('../../src/js/studio/notes-grid.js');
+  assert.match(STRIP_TEXT.created, new RegExp(`\\b${NEW_STEP_GRID.steps} kroků`));
+  assert.match(STRIP_TEXT.createdKeptLoop, new RegExp(`\\b${NEW_STEP_GRID.steps} kroků`));
+  // The scan finds a typed count, and leaves a count built from a constant alone.
+  const fake = { 'a.js': "const t = 'hraje 16 kroků';", 'b.js': 'const t = `${N.steps} kroků`;' };
+  assert.deepEqual(typedStepCounts(Object.keys(fake), (f) => fake[f]), ['a.js:1 types 16 kroků']);
+});
+

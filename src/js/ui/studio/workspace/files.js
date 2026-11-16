@@ -332,11 +332,11 @@ export function createWorkspaceFiles(ctx, svc, ops) {
       if (e && typeof e.preventDefault === 'function') e.preventDefault();
       const seq = typeof svc.currentSequence === 'function' ? svc.currentSequence() : null;
       if (!seq) {
-        this.notify('warning', 'Pattern not opened', 'The Sequencer is not available here.');
+        this.notify('warning', 'Pattern not opened', 'Sekvencer is not available here.');
         return { ok: false, reason: 'no-sequencer' };
       }
       const r = importSequence(seq, { sampleRate: studioSampleRate(),
-        title: 'Sequencer pattern' });
+        title: 'Vzor ze Sekvenceru' });
       if (!r.ok) {
         const why = (r.errors && r.errors[0] && r.errors[0].message) || 'invalid pattern';
         this.notify('warning', 'Pattern not opened', `${why}. Nothing was changed.`);
@@ -356,9 +356,9 @@ export function createWorkspaceFiles(ctx, svc, ops) {
       const n = r.model.timeline.clips.length;
       const issues = r.issues && r.issues.length ? ` ${r.issues.join(' ')}` : '';
       this.notify('info', 'Pattern opened in Studio', `${n} pattern clip${n === 1 ? '' : 's'} `
-        + `on one track, a copy of the Sequencer's pattern.${issues} Nothing plays until you `
+        + `on one track, a copy of the pattern in Sekvencer.${issues} Nothing plays until you `
         + 'press Play.');
-      ops.announce(`Opened the Sequencer pattern in Studio: ${n} pattern clip${
+      ops.announce(`Opened the pattern of Sekvencer in Studio: ${n} pattern clip${
         n === 1 ? '' : 's'}`);
       return { ok: true, clips: n };
     },

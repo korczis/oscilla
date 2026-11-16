@@ -136,8 +136,10 @@ test('C030: the workspaces of the two Plays are one list each, matched to the ma
 test('C030: a prompt names a control on its workspace, or the workspace that has it', () => {
   const panel = sourcePanel().modes;
   const sb = statusPlay();
-  const NAMES = /TRIGGER|HOLD TO PLAY/;
-  const OTHER = { playground: /in the Playground/, synthesis: /in Synthesis/ };
+  // the controls by their Czech labels (U114); the V1 names stay in the frozen data only
+  const NAMES = /Spustit|Podržet a hrát|TRIGGER|HOLD TO PLAY/;
+  const OTHER = { playground: /in the Playground|v Playgroundu/,
+    synthesis: /in Synthesis|v Syntéze/ };
   // a preset loaded in each workspace that lists presets (the panel of each Load button)
   const loaders = new Set();
   for (const m of HTML.matchAll(/loadPresetFromView\(/g)) {
@@ -209,12 +211,12 @@ test('C030: the suspended notice and the idle scope read the hint of the workspa
   const inst = read('src/js/core/instrument.js');
   assert.match(inst, new RegExp("const hint = statusPlayHint\\(this\\.workspace, 'suspended'\\);"
     + "\\s*this\\.notify\\('warning', statusPlayTitle\\(this\\.workspace, 'suspended'\\)"
-    + "\\s*\\|\\| 'Audio is suspended', hint\\s*\\|\\| 'The browser"));
+    + "\\s*\\|\\| 'Zvuk je pozastaven', hint\\s*\\|\\| 'Prohlížeč zatím nepovolil"));
   // the scope the analysis tabs show (ui/p5-views.js), drawn and described (R2-C030-1)
   assert.match(read('src/js/ui/p5-views.js'),
-    /const press = st\.idleHint \|\| 'živý průběh: podržte Hold to Play';/);
+    /const press = st\.idleHint \|\| 'živý průběh: podržte tlačítko Podržet a hrát';/);
   assert.match(read('src/js/ui/workbench.js'),
-    /statusPlayHint\(this\.workspace, 'scope'\)[^|]*\|\| 'Živý průběh analyzátoru výstupu ukáže Hold to Play/);
+    /statusPlayHint\(this\.workspace, 'scope'\)[^|]*\|\| 'Živý průběh analyzátoru výstupu ukáže tlačítko Podržet a hrát/);
   assert.match(read('src/js/main.js'),
     /bridge\.setIdleHint\(statusPlayHint\(cmp\.workspace, 'idle'\)\)/);
 });

@@ -14,6 +14,7 @@ import {
   studioBackTarget, studioTemplateHref, studioTemplateText, workspacePhrase,
 } from '../../src/js/ui/cross-links.js';
 import { WORKSPACES } from '../../src/js/ui/app.js';
+import { workspaceAccusative } from '../../src/js/ui/shell.js';
 import { routeOfHash } from '../../src/js/ui/navigation.js';
 import { decodeStudioLink } from '../../src/js/core/url-state-studio.js';
 import { getTemplate } from '../../src/js/studio/templates/index.js';
@@ -68,7 +69,7 @@ test('each Learn tool names a topic and a workspace, and Learn renders the link 
     assert.ok(WORKSPACES.includes(ws), `${topic}: ${ws} is a workspace`);
     const tool = learnToolOf(topic);
     assert.equal(routeOfHash(tool.href).workspace, ws, `${topic}: ${tool.href} opens ${ws}`);
-    assert.match(tool.text, /^Open [A-Z]/);
+    assert.equal(tool.text, `Otevřít ${workspaceAccusative(ws)}`, 'Czech, as the nav names it');
   }
   assert.equal(learnToolOf('frequency'), null, 'a topic without a tool gets no link');
   assert.equal(learnToolOf('__proto__'), null);
@@ -125,18 +126,22 @@ test('the Studio Back returns where the Studio was opened from (P8, one-way link
   for (const none of [undefined, null, '', 'studio', 'bogus', '__proto__']) {
     assert.equal(studioBackTarget(none), 'playground', String(none));
   }
-  assert.equal(workspacePhrase('sequencer'), 'the Sequencer');
-  assert.equal(workspacePhrase('playground'), 'the Playground');
-  assert.equal(workspacePhrase('filter'), 'Filter Lab');
+  // "Zpět na Sekvencer": the label as the object of a Czech sentence (U106); a feminine one in
+  // -a declines, a kept name stays as it is (c3, Q090 point 2: no lang inside a sentence).
+  assert.equal(workspacePhrase('sequencer'), 'Sekvencer');
+  assert.equal(workspacePhrase('playground'), 'Playground');
+  assert.equal(workspacePhrase('filter'), 'Filtry');
+  assert.equal(workspacePhrase('synthesis'), 'Syntézu');
+  assert.equal(workspacePhrase('learn'), 'Výuku');
   const tag = tagOf('studio.back');
   assert.ok(tag.includes(':aria-label="studioBackText()"') && tag.includes(':title="studioBackText()"'));
 });
 
 test('the Filter Lab ⤢ button says where it goes and goes there (B1)', () => {
   assert.deepEqual(filterLabToggle('playground'),
-    { to: 'filter', label: 'Open the Filter Lab page', icon: '#i-expand' });
+    { to: 'filter', label: 'Otevřít stránku Filtry', icon: '#i-expand' });
   assert.deepEqual(filterLabToggle('filter'),
-    { to: 'playground', label: 'Back to the Playground', icon: '#i-left' });
+    { to: 'playground', label: 'Zpět na Playground', icon: '#i-left' });
   assert.match(PAGE, /<symbol id="i-left"/);
   const tag = tagOf('filter.fullscreen');
   assert.ok(tag.includes(':aria-label="filterLabToggle().label"'), 'the name follows the target');
@@ -145,14 +150,14 @@ test('the Filter Lab ⤢ button says where it goes and goes there (B1)', () => {
 
 test('the header and Measure name what their links and buttons do (B2, B6, B7, B8)', () => {
   // The skip link's label names the workspace shown (H004 B7, ui/app.js syncSkipLink).
-  assert.match(PAGE, /<a class="osc-skip" href="#osc-main">Skip to main content: Playground<\/a>/);
+  assert.match(PAGE, /<a class="osc-skip" href="#osc-main">Přeskočit na hlavní obsah: Playground<\/a>/);
   // The logo keeps the product's name (positioning-consistency) and says where it goes (H004 B6).
-  assert.match(PAGE, /<a href="#m=playground" x-bind="homeLink\(\)" data-osc="header\.brand" data-osc-link="jump" title="Open the Playground"\s+aria-label="OSCILLA · Interactive Sound &amp; Frequency Lab"/);
-  assert.ok(tagOf('header.help').includes('aria-label="Keyboard shortcuts"'));
+  assert.match(PAGE, /<a href="#m=playground" x-bind="homeLink\(\)" data-osc="header\.brand" data-osc-link="jump" title="Open the Playground"\s+lang="en" aria-label="OSCILLA · Interactive Sound &amp; Frequency Lab"/);
+  assert.ok(tagOf('header.help').includes('aria-label="Klávesové zkratky"'));
   const toExp = tagOf('measure.toExperiments');
   assert.ok(toExp.includes(`@click="setWorkspace('experiments', { focusHeading: true })"`),
     'focus lands on the Experiments heading');
-  assert.match(PAGE, /data-osc="measure\.toExperiments"[^>]*>Open Experiments<\/button>/);
+  assert.match(PAGE, /data-osc="measure\.toExperiments"[^>]*>Otevřít Experimenty<\/button>/);
 });
 
 test('the empty states lead to the next step (B12, P1)', () => {
@@ -241,38 +246,39 @@ test('A1: a preset loaded in Presets says what plays it there and links to its t
     const { presetLoadedNotice } = await import('../../src/js/core/preset-notice.js');
     const { createInstrument } = await import('../../src/js/core/instrument.js');
     for (const [programmed, source, href, words] of [
-      [true, 'single', '#m=playground', /^Press Space to play it here, or TRIGGER in the Pl/],
-      [false, 'single', '#m=playground', /^Hold Space .*HOLD TO PLAY in the Playground/],
-      [false, 'sweep', '#m=playground', /^Hold Space .*HOLD TO PLAY in the Playground/],
-      [true, 'dual', '#m=synthesis', /^Press Space .*TRIGGER in Synthesis/],
+      [true, 'single', '#m=playground', /^Stiskněte mezerník .*tlačítko Spustit v Playgroundu/],
+      [false, 'single', '#m=playground', /^Podržte mezerník .*tlačítko Podržet a hrát v Playgroundu/],
+      [false, 'sweep', '#m=playground', /^Podržte mezerník .*tlačítko Podržet a hrát v Playgroundu/],
+      [true, 'dual', '#m=synthesis', /^Stiskněte mezerník .*tlačítko Spustit v Syntéze/],
     ]) {
       const n = presetLoadedNotice('presets', programmed, source);
       assert.match(n.message, words);
       assert.equal(n.action.href, href);
       assert.equal(routeOfHash(n.action.href).workspace, href.slice(3));
-      assert.match(n.action.text, /^Open (the Playground|Synthesis)$/);
+      assert.match(n.action.text, /^Otevřít (Playground|Syntézu)$/);
     }
     // Under a coarse pointer (a phone: no Space key) the notice offers the tap: the link to
     // the workspace whose own control starts the sound, worded to match; no Space.
     for (const [programmed, source, href, words] of [
-      [true, 'single', '#m=playground', 'Open the Playground to play it with TRIGGER.'],
-      [false, 'single', '#m=playground', 'Open the Playground to play it with HOLD TO PLAY.'],
-      [true, 'dual', '#m=synthesis', 'Open Synthesis to play it with TRIGGER.'],
+      [true, 'single', '#m=playground', 'Otevřete Playground a zahrajte ho tlačítkem Spustit.'],
+      [false, 'single', '#m=playground',
+        'Otevřete Playground a zahrajte ho tlačítkem Podržet a hrát.'],
+      [true, 'dual', '#m=synthesis', 'Otevřete Syntézu a zahrajte ho tlačítkem Spustit.'],
     ]) {
       const n = presetLoadedNotice('presets', programmed, source, true);
       assert.equal(n.message, words);
-      assert.doesNotMatch(n.message, /Space/);
+      assert.doesNotMatch(n.message, /Space|mezerník/);
       assert.equal(n.action.href, href);
       assert.equal(presetLoadedNotice('presets', programmed, source, false).action.href, href);
     }
     assert.deepEqual(presetLoadedNotice('playground', true, 'single', true),
       presetLoadedNotice('playground', true, 'single', false), 'the V1 text stands on a phone');
-    // Where the transport is on screen, the V1 text stands and nothing is linked.
+    // Where the transport is on screen, the sentence names its controls (U114) and links nothing.
     for (const mode of ['playground', 'dual', 'sweep']) {
       assert.deepEqual(presetLoadedNotice(mode, true, 'single'),
-        { message: 'Press TRIGGER (or Space) to play it.', action: null });
+        { message: 'Stiskněte Spustit (nebo mezerník) a zazní.', action: null });
       assert.deepEqual(presetLoadedNotice(mode, false, 'single'),
-        { message: 'Press and hold HOLD TO PLAY.', action: null });
+        { message: 'Stiskněte a držte Podržet a hrát.', action: null });
     }
     // Through the instrument: Load in Presets carries the link; nowhere does it say TRIGGER
     // without the workspace that has it.
@@ -285,8 +291,9 @@ test('A1: a preset loaded in Presets says what plays it there and links to its t
       app.applyPreset(p);
       const loaded = app.alerts.find((x) => x.title.startsWith('Loaded'));
       if (!loaded) continue; // partly applied: a warning, no "Loaded"
-      assert.doesNotMatch(loaded.message, /^Press TRIGGER/, `${p.id}: ${loaded.message}`);
-      assert.match(loaded.message, /Space/, p.id);
+      assert.doesNotMatch(loaded.message, /^(Press TRIGGER|Stiskněte Spustit \(nebo)/,
+        `${p.id}: ${loaded.message}`);
+      assert.match(loaded.message, /mezerník/, p.id);
       assert.ok(loaded.action && /^#m=(playground|synthesis)$/.test(loaded.action.href), p.id);
     }
     // The instrument asks the host for a coarse pointer: on a phone the notice names no Space.
@@ -297,6 +304,6 @@ test('A1: a preset loaded in Presets says what plays it there and links to its t
     phone.applyPreset(BUILTIN_PRESETS.find((x) => x.id === 'ref-440'));
     const said = phone.alerts.find((x) => x.title.startsWith('Loaded'));
     assert.ok(said, 'Load on a phone announces the preset');
-    assert.match(said.message, /^Open the Playground to play it with /);
+    assert.match(said.message, /^Otevřete Playground a zahrajte ho tlačítkem /);
     assert.equal(said.action.href, '#m=playground');
   });

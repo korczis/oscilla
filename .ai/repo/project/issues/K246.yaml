@@ -27,4 +27,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-12'
-updated_at: '2026-11-12'
+updated_at: 2026-11-15T16:57:26Z
+started_at: 2026-11-15T16:55:31Z
+started_event: sha256:eb7bd2ef90acebe9cf23d3b7b266864ddae7ef718c5ed4a4dbf60fbd355c3b76
+verified_at: 2026-11-15T16:56:17Z
+verified_event: sha256:f276122b9691a5ef1f6fb28ded6aea0c3262f96efd0bcc0bcbad8371946b41bb
+completed_at: 2026-11-15T16:57:26Z
+completed_event: sha256:a7891148db26dd9e11cb5c7bf7b092c7ecec93df164088cd92a141bd0d44a5d4
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "node --test tests/unit/synth-insert-notice.test.mjs; npm run test:synth"
+    result: "landed in train T16, PR 539 (main da54bdc8, release v3.37.0); re-checked on main 474ce9c3 on 2026-11-15 by oscilla-ff: tests/unit/synth-insert-notice.test.mjs passes 11/0 (one Pro info alert per insert keyed by the panel's Keys node, closed stays closed across undo and redo, said once in the live region, the status line not repeating it); tests/browser/synth.cjs s-notice drives Close (a 44 px touch target on the phone) in the gate browsers; review verdict .ai/repo/reviews/539.yaml (merge, re-judged at 87de84c3, C3-539-3 closed, C3-539-2 filed as U107); K247 extended the same sentence to keys outside the Synth (555.yaml)"
+    artifact: ".ai/repo/reviews/539.yaml"
+    commit: 474ce9c351e979bac15bcfd77f9a8c6ca638f16b
+    recorded_at: 2026-11-15T16:57:10Z

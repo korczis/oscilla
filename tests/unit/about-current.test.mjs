@@ -255,7 +255,7 @@ test('mutation: a missing, renamed, unexplained or foreign workspace entry is na
   assert.deepEqual(rows((l) => l.filter((w) => w.id !== 'filter')),
     ['workspace filter of the navigation is missing from About\'s workspace list']);
   assert.deepEqual(rows((l) => { l[at(l, 'filter')].label = 'Filters'; return l; }),
-    ['workspace filter is named "Filters", the navigation says "Filter Lab"']);
+    ['workspace filter is named "Filters", the navigation says "Filtry"']);
   assert.deepEqual(rows((l) => { l[at(l, 'filter')].summary = 'Filters.'; return l; }),
     ['workspace filter does not say what it is for: "Filters."']);
   assert.deepEqual(rows((l) => [...l, { id: 'mixer', label: 'Mixer',

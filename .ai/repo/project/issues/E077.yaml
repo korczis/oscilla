@@ -1,0 +1,24 @@
+id: E077
+milestone: M046
+serves:
+  - "engineering-integrity#browser-suites-harnessed"
+title: "v3-ui's definitions check on CI's webkit: the loopback measurement does not end within 45 s"
+slug: v3-ui-definitions-webkit-loopback-wait
+priority: p2
+profile: implementation
+objective: "Pin and fix why, on CI's linux webkit only, v3-ui.cjs's definitions check intermittently times out in H.waitState (RUN_MS 45 000 ms) waiting for a digital loopback measurement started from an experiment definition's Run to reach COMPLETE, INVALID, ERROR or ABORTED."
+why: "Required webkit leg 1 of train T25 (#574, head 5db8fbec) went red on it twice in run 43864218899: attempt 1 on webkit/http (51689 ms) and attempt 2 on webkit/file (51762 ms), with the same tree green at eee8f6be (it differs by the review record only). oscilla-c3's scan found 0 reds of it in about 38 webkit legs since 2026-11-12. oscilla-c3's Mac webkit A/B (full v3-ui, 2 alternated rounds) was green on head and on main fb508a50 alike (37/37 file and http each), and v3-ui's webkit CI duration (about 158 s or 189 s) is the same on every branch; the measurement path is unchanged by T25. Classified by oscilla-c3 as a linux-webkit CI flake, not T25's."
+current_state: "Open, cause not pinned. Filed 2026-11-16 by oscilla-0b on oscilla-c3's request from its classification of #574's webkit leg 1."
+scope:
+  - "tests/browser/v3-ui.cjs"
+depends_on: []
+acceptance_criteria:
+  - "The cause is pinned from a linux webkit failure log (the measurement state machine's transitions, the capture diagnostics and the audio clock at the timeout), stated in this issue's current_state."
+  - "v3-ui.cjs's definitions passes 20 alternated linux-webkit rounds in a row, with main failing at least once in the same window (or the fix is a product change with a test that fails on main)."
+  - "A reviewer's verdict."
+validation:
+  - "node tests/browser/v3-ui.cjs --browsers webkit"
+evidence_required:
+  - "verified"
+created_at: '2026-11-16'
+updated_at: '2026-11-16'

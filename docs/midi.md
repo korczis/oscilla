@@ -12,9 +12,9 @@ computer and on-screen keyboard"), and every key the page answers goes through o
 
 ## Where it is
 
-Settings (the gear in the status bar, or Settings… in the menu) has a **MIDI input** section: a
-status line that states the support state, and the button **Connect MIDI**, which works by
-pointer and by keyboard.
+Settings (Nastavení: the gear in the status bar, or the menu) has a **MIDI input** section
+(Vstup MIDI): a status line that states the support state, and the button **Connect MIDI**
+(labelled „Připojit MIDI“, which the Czech copy quotes), which works by pointer and by keyboard.
 
 - Loading the page never asks for MIDI access and shows no prompt. At load the page reads only
   `window.isSecureContext`, `typeof navigator.requestMIDIAccess` and one
@@ -29,7 +29,8 @@ pointer and by keyboard.
 - The permission belongs to the origin, not to OSCILLA. On GitHub Pages that origin
   (`korczis.github.io`) is shared by every Pages site of the account, so a grant or a denial
   made on another of them applies here too. The copy names the origin's host; on `file://` it
-  says "this page", because which origin a browser keys a file's permission to was not measured.
+  says "tuto stránku", because which origin a browser keys a file's permission to was not
+  measured.
 - Nothing about MIDI is stored and nothing leaves the page: no device name is persisted and the
   MIDI path makes no network call.
 
@@ -37,27 +38,27 @@ pointer and by keyboard.
 
 The page holds one state at a time. The context is checked first; once Connect MIDI has been
 chosen, the latest request (and the access it gave) decides; only before the first Connect MIDI
-does the permission query decide. `{site}` is the host over http(s) and "this page" on
+does the permission query decide. `{site}` is the host over http(s) and "tuto stránku" on
 `file://`; `{names}` the connected inputs' names joined by ", "; `{name}` the input whose
 disconnection left none connected; `{error}` the name of the browser's error. An empty device
-name reads "unnamed input". The copy is `MIDI_COPY` in `src/js/midi/support.js`, and
+name reads "nepojmenovaný vstup". The copy is `MIDI_COPY` in `src/js/midi/support.js`, and
 `tests/unit/midi/support.test.mjs` holds it to the table of ADR 0058.
 
 | State | When | Copy |
 |---|---|---|
-| `insecure` | the page is not in a secure context (Connect MIDI not offered) | MIDI is unavailable: this page is not in a secure context. Open it over https. |
-| `unsupported` | secure, but the browser has no `navigator.requestMIDIAccess` (Connect MIDI not offered) | MIDI is unavailable: this browser offers no Web MIDI here. |
-| `pending` | Connect MIDI was chosen and the browser has not answered | Waiting for the browser's answer about MIDI access. The rest of OSCILLA keeps working. |
-| `blocked` | the request was refused with `SecurityError` | MIDI is blocked for {site}: the browser or the site's settings do not let this page use MIDI. Some browsers allow it only after a site permission add-on is installed. |
-| `denied` | the request was refused with `NotAllowedError`, or before Connect MIDI the permission reads `denied` | MIDI access is not allowed for {site}. Allow MIDI in the browser's site settings, then choose Connect MIDI again. |
-| `failed` | the request failed with any other error | MIDI could not start on this computer (the browser reported {error}). |
-| `revoked` | access was given, then the permission was withdrawn; the page stops listening | MIDI access was withdrawn for {site}. Choose Connect MIDI to ask again. |
-| `connected` | access was given and at least one input is connected | MIDI is on: {names}. |
-| `disconnected` | access was given, an input was connected and the last one went away | MIDI input disconnected: {name}. No MIDI input is connected. |
-| `no-devices` | access was given and no input has been connected | MIDI is on. No MIDI input is connected; plug one in and it appears here. |
-| `unknown` | before Connect MIDI, the browser cannot answer the permission query | MIDI is off. The browser does not say whether MIDI is allowed for {site}; Connect MIDI asks it. |
-| `needs-permission` | before Connect MIDI, the permission reads `prompt` | MIDI is off. Connect MIDI asks the browser for access to MIDI devices for {site}. |
-| `allowed` | before Connect MIDI, the permission reads `granted` | MIDI is allowed for {site}. Choose Connect MIDI to start listening. |
+| `insecure` | the page is not in a secure context (Connect MIDI not offered) | MIDI není k dispozici: tato stránka neběží v zabezpečeném kontextu. Otevřete ji přes https. |
+| `unsupported` | secure, but the browser has no `navigator.requestMIDIAccess` (Connect MIDI not offered) | MIDI není k dispozici: tento prohlížeč tu Web MIDI nenabízí. |
+| `pending` | Connect MIDI was chosen and the browser has not answered | Čeká se na odpověď prohlížeče o přístupu k MIDI. Zbytek aplikace OSCILLA funguje dál. |
+| `blocked` | the request was refused with `SecurityError` | MIDI je pro {site} blokované: prohlížeč nebo nastavení webu této stránce MIDI nedovolí. Některé prohlížeče ho povolí až po instalaci doplňku s oprávněním pro web. |
+| `denied` | the request was refused with `NotAllowedError`, or before Connect MIDI the permission reads `denied` | Přístup k MIDI není pro {site} povolený. Povolte MIDI v nastavení webu v prohlížeči a pak znovu zvolte „Připojit MIDI“. |
+| `failed` | the request failed with any other error | MIDI se na tomto počítači nepodařilo spustit (prohlížeč ohlásil {error}). |
+| `revoked` | access was given, then the permission was withdrawn; the page stops listening | Přístup k MIDI byl pro {site} odebrán. Zvolte „Připojit MIDI“ a požádejte o něj znovu. |
+| `connected` | access was given and at least one input is connected | MIDI je zapnuté: {names}. |
+| `disconnected` | access was given, an input was connected and the last one went away | Vstup MIDI odpojen: {name}. Není připojený žádný vstup MIDI. |
+| `no-devices` | access was given and no input has been connected | MIDI je zapnuté. Není připojený žádný vstup MIDI; připojte ho a objeví se tady. |
+| `unknown` | before Connect MIDI, the browser cannot answer the permission query | MIDI je vypnuté. Prohlížeč neříká, zda je MIDI pro {site} povolené; „Připojit MIDI“ se ho zeptá. |
+| `needs-permission` | before Connect MIDI, the permission reads `prompt` | MIDI je vypnuté. „Připojit MIDI“ požádá prohlížeč o přístup k zařízením MIDI pro {site}. |
+| `allowed` | before Connect MIDI, the permission reads `granted` | MIDI je pro {site} povolené. Zvolte „Připojit MIDI“ a OSCILLA začne poslouchat. |
 
 ## What the gate builds do, measured
 
@@ -297,5 +298,36 @@ Continue the Studio refuses (a measurement owns the output: the playhead stays w
 the monitor row says only what each message did (`… → Studio: přehrát od začátku`). Record, Fast forward and the other
 DAW buttons act on nothing. The clock's tempo is read over the last whole beat on the messages'
 own timestamps and clears half a second after the clock stops; the transport never follows it by
-itself (ADR 0058, its V508 note). OSCILLA sends no MIDI.
+itself (ADR 0058, its V508 note). OSCILLA sends MIDI only on an output you choose (below).
+
+## Clock and transport out (V510)
+
+In the MIDI section, **Hodiny a transport na výstup** picks one connected output; **Žádný** is
+chosen on every load, and with it nothing is sent. The chosen output follows the transport in view
+(the Sequencer's own in the Sequencer, the Studio's everywhere else), whatever starts or stops it:
+
+| The transport | The output receives |
+|---|---|
+| starts from position 0 (seen within 0.25 s) | Start (`FA`) at its first beat, then Timing Clock (`F8`, 24 per quarter note) at its tempo |
+| plays already (the output chosen later, the view back on it) or starts elsewhere | Song Position Pointer (`F2`) for the next sixteenth, Continue (`FB`) there, then the clock |
+| starts again or jumps while sent | Stop (`FC`) first, then as above |
+| changes tempo while playing | Stop, Song Position Pointer and Continue on the new beat grid |
+| stops | Stop (`FC`) |
+
+These messages need no SysEx and come under the same `{ sysex: false }` permission as the
+input; MMC is SysEx (V511). A tempo change moves the device to the new grid rather than bending
+its count, so its beats stay on OSCILLA's. Every message is stamped, and what is stamped earlier
+reaches the device first: Stop comes after the last tick already sent ahead, and the new run no
+earlier than it. Song Position Pointer counts at most 16383 sixteenths (about 34 minutes at
+120 BPM); a device joining a run later than that is told the last position it can express, so its
+bar count is wrong (its beats stay on the grid). Each tick is computed on the audio clock and sent ahead with its own
+timestamp (`src/js/midi/clock-out.js`, `clock-out-mode.js`), so a busy page moves no tick; the
+mapping from the audio clock to the page's clock is slewed by at most 0.02 ms per reading, since
+the readings scatter (by several milliseconds in Firefox). An output that leaves, or stops taking
+messages, is no longer followed, and the MIDI section says so once. ADR 0058, its V510 note.
+
+**Measured.** In the browser gate, on the test stub's output: Start, then clock one tick of the
+tempo apart within 0.05 ms, then Stop, in the Studio and the Sequencer, in Chromium, Firefox and
+WebKit (`tests/browser/midi.cjs` `midi-seam-clock-out`). On hardware, the clock's jitter at the
+owner's BeatStep Pro following it (`scripts/midi/listen.swift`) is **not measured yet**.
 

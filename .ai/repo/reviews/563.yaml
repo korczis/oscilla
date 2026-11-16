@@ -1,0 +1,59 @@
+# Review verdict for pull request #563 (fix/r050-step-strip-count): R050 criterion 2, the step
+# counts the Synth's step strip and the Step Modulator's help state come from their source.
+# Member commits: c9d8b8f9 fix(synth): R050 step counts come from their source, and a scan refuses
+# a typed one; 6d86f86c chore(plan): leave R050's record to the reconcile PR (#562). Built by
+# oscilla-ff. Judged at 6d86f86c on base origin/main 474ce9c3, 2026-11-15, in the reviewer's own
+# detached worktree ~/dev/oscilla-wt/review-526.
+#
+# Reviewer: rev-seat-2 (session oscilla-c3, claude-code c0f0687c), a separate top-level session.
+# It built none of this change.
+#
+# The digest: origin/main's (474ce9c3) scripts/review-verdict.mjs --content --list at 6d86f86c:
+# 1e2e544f9501c369... over 2 guarded paths (src/js/studio/nodes/modulation.js,
+# src/js/synth/step-strip.js).
+#
+# How it was judged:
+# - The text is unchanged: the reviewer's k563-text.mjs imports step-strip.js's STRIP_TEXT and the
+#   stepVoltageSequencer help from origin/main's src/ and from the head's and prints them as JSON;
+#   the two outputs are byte-identical ("16 kroků po šestnáctinách", "Krok 1 až 16", "Délka 8 nebo
+#   16 kroků"). NEW_STEP_GRID (studio/notes-grid.js), SVS_MAX_STEPS and SVS_LENGTHS (the same
+#   module, declared above the node) were already in scope; nothing new is imported.
+# - The scan (counts-from-source.test.mjs typedStepCounts): a number before "kroků" inside a
+#   quoted or template string, over every .js under src/js. Leaving out a \b after "ů" is right: a
+#   JS \b treats "ů" as a non-word character, so "kroků\b" would need a word character after it. On
+#   the base it finds step-strip.js's two sentences and modulation.js's "Délka 8 nebo 16 kroků"
+#   (3, as the builder says; CI's fail-first job judges it on the merge base); the fixture proves
+#   a typed count is named and a built one is not. Its reach is the one form "N kroků": "až 16",
+#   "16 kroky" or "16 krocích" would pass it. That is the audit's gap and no more.
+# - No browser suite reads these strings (grep of tests/browser for the sentences, STRIP_TEXT and
+#   the help); tests/unit/synth-step-strip.test.mjs and counts-from-source.test.mjs do, and pass.
+#
+# Finding (P3, open): C3-563-1. A derived count followed by a fixed "kroků" is correct Czech only
+# for 0 and for 5 or more: if NEW_STEP_GRID.steps or an SVS length became 2, 3 or 4 the sentence
+# would read "4 kroků" (it should read "4 kroky"), and nothing would catch it. The counts are 8 and
+# 16 today, so nothing reads wrong now. A later pass would choose the form with
+# Intl.PluralRules('cs') (one/few/many) where a count is built into a sentence.
+#
+# Measured by the reviewer (Node 22.20.0, OSC_LOAD_MAX=80): at 6d86f86c GITHUB_BASE_REF=main npm
+# test exit 1, 5830 tests, 5828 pass, 1 fail: "every published release from v3.4.0 on ... has a
+# record (rule project.release-flow-complete)", the missing v3.38.0 record. The same test fails
+# on origin/main 474ce9c3 (5827 pass, 1 fail, the same test), and T23 (#558) carries that record
+# (c4a41d76), so it is main's, not this change's. build:check exit 0 (dist matches src).
+#
+# THE CONDITION of this verdict: it binds once the reviewer has read the six "Browser leg N
+# (browser)" logs of this pull request's run and found each leg's suite list equal to
+# shards.cjs --plan at this head, "run-suites: all K suites passed" and no FAIL line (a red
+# matching E075's Firefox envelope signature is classified under E075, as on #558). No release
+# commit is in this pull request, so there is no release receipt to check. Auto-merge is armed only
+# after the reviewer reports "legs OK"; otherwise a superseding verdict. In oscilla-43's order it
+# lands after T23 (#558), updated to main then; an update that only merges main and leaves the two
+# guarded files' diff unchanged keeps this digest.
+#
+# Verdict: merge, under the condition above. One finding, P3, open.
+schema: review-verdict/v1
+pr: 563
+verdict: merge
+reviewer: oscilla-c3 rev-seat-2 (claude-code c0f0687c, a separate top-level session; built none of 6d86f86c)
+content: 1e2e544f9501c369494434c225916629a1ae11191db1f2e9ccad3189d16a696f
+findings:
+  - { id: C3-563-1, severity: P3, status: open, title: "a derived step count before a fixed \"kroků\" reads wrong Czech for 2-4 (\"4 kroků\"); choose the plural form (Intl.PluralRules('cs')) when a count is built into a sentence" }

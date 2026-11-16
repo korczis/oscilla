@@ -8,6 +8,9 @@
 // plays notes, active() is null and the keys play the Playground voice as before (midi/notes.js
 // falls back when route() gives no sink). midi/ui.js routes the Studio workspace to it.
 //
+// V503: noteOn(note, velocity, { at }) and noteOff(note, { at }) take a context time `at` (the
+// call-and-response answer, planned on the audio clock); without it a note plays now.
+//
 //   createStudioSink({ get, setupAudio, ensureAudio, say, registry }) -> { noteOn, noteOff,
 //     allOff, leave(), active() -> this sink | null, heldNotes() -> [{ note, node }] }   get()
 //     -> { handle, transport }, as the Synth's; heldNotes is a test and debug read of the held
@@ -36,7 +39,7 @@ export function createStudioSink({ get, setupAudio = () => {}, ensureAudio = () 
     return { t: transport, m: handle ? handle.getModel() : null };
   };
 
-  function noteOn(note, velocity) {
+  function noteOn(note, velocity, { at } = {}) {
     const { t, m } = parts();
     if (!t || !m) return { ok: false, reason: 'no-audio' };
     const n = target(m);
@@ -57,9 +60,9 @@ export function createStudioSink({ get, setupAudio = () => {}, ensureAudio = () 
     // The same note pressed again after a re-route (98's R6): release it on the node it went
     // to first, so that node's note never hangs when the map moves on.
     const was = held.get(note);
-    if (was && was !== n.id) t.live(was, { kind: 'off', note });
+    if (was && was !== n.id) t.live(was, { kind: 'off', note, at });
     held.set(note, n.id);
-    const r = t.live(n.id, { kind: 'on', note, velocity });
+    const r = t.live(n.id, { kind: 'on', note, velocity, at });
     if (r && r.ok === false && /range$/.test(r.code || '')) say(r.reason, true); // K060
     if (r && r.owned) say(r.owned.reason); // K103: the timeline owns that gate while it plays
     return r;
@@ -69,7 +72,8 @@ export function createStudioSink({ get, setupAudio = () => {}, ensureAudio = () 
     const { t, m } = parts();
     const id = held.has(note) ? held.get(note) : (t && m && (target(m) || {}).id);
     held.delete(note);
-    return t && id ? t.live(id, { kind: 'off', note, forced: forcedOff(info) }).ok : false;
+    return t && id ? t.live(id, { kind: 'off', note, forced: forcedOff(info),
+      at: info && info.at }).ok : false;
   }
 
   function allOff() {

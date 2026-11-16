@@ -5,22 +5,22 @@
     {
       "id": "M011",
       "title": "Release engineering, provenance and product graph",
-      "done": 26,
+      "done": 27,
       "required": 53,
       "phase": "now"
     },
     {
       "id": "M045",
       "title": "MIDI jam companion: first usable version",
-      "done": 3,
-      "required": 9,
+      "done": 6,
+      "required": 12,
       "phase": "now"
     },
     {
       "id": "M046",
       "title": "Engineering integrity: orchestration split, structural checks, measured costs",
-      "done": 34,
-      "required": 65,
+      "done": 39,
+      "required": 70,
       "phase": "now"
     },
     {
@@ -54,14 +54,14 @@
     {
       "id": "M054",
       "title": "The whole interface shows the current product",
-      "done": 18,
-      "required": 76,
+      "done": 20,
+      "required": 78,
       "phase": "now"
     },
     {
       "id": "M079",
       "title": "Coherence fixes that wait on no open plan: live Studio edits and honest restores",
-      "done": 1,
+      "done": 2,
       "required": 5,
       "phase": "now"
     },
@@ -82,7 +82,7 @@
     {
       "id": "M061",
       "title": "Interconnection: live analysis views, sequence exchange, workspace bridges and one keyboard",
-      "done": 5,
+      "done": 6,
       "required": 8,
       "phase": "now"
     },
@@ -96,7 +96,7 @@
     {
       "id": "M064",
       "title": "Instrument wave 1a: the integration map, the knob and the semi-modular Synth panel with patch cables",
-      "done": 10,
+      "done": 15,
       "required": 47,
       "phase": "now"
     },
@@ -117,7 +117,7 @@
     {
       "id": "M067",
       "title": "Instrument wave 2: modulation everywhere, labs, probes, sequencer depth, follower and MEASURE",
-      "done": 2,
+      "done": 3,
       "required": 25,
       "phase": "now"
     },
@@ -152,7 +152,7 @@
     {
       "id": "M073",
       "title": "Measurement truth in the interface",
-      "done": 11,
+      "done": 13,
       "required": 43,
       "phase": "now"
     },
@@ -229,7 +229,7 @@
     {
       "id": "M090",
       "title": "One instrument, one coherent state",
-      "done": 29,
+      "done": 34,
       "required": 66,
       "phase": "now"
     },

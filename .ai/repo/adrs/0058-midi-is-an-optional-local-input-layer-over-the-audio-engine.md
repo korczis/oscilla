@@ -232,7 +232,7 @@ calls and calls through. In each gate build it loads the page and asserts zero c
 is `https://korczis.github.io`, which ADR 0052 records as shared by every Pages site of the
 account (22 on 2026-10-07). A grant made there is a grant to all of them, and a denial made on
 another of them reads as `denied` here. The copy below names the origin's host as `{site}`
-(`location.host`). On `file://` the copy says "this page", because which origin a browser keys
+(`location.host`). On `file://` the copy says "tuto stránku", because which origin a browser keys
 a file's permission to was not measured, so the copy claims no reach.
 
 **The support-state table.** The page holds one state at a time. What happened most recently
@@ -252,27 +252,29 @@ Connect MIDI again starts a new request, and the state follows that request. Wit
 `PermissionStatus` (row 11), a revocation is not detected, and the state stays what the access
 reports.
 
-`{site}` is `location.host` on http(s) and "this page" on `file://`. `{names}` is the `name`
+`{site}` is `location.host` on http(s) and "tuto stránku" on `file://`. `{names}` is the `name`
 values of the connected inputs, joined by ", ". `{name}` is the `name` of the port in the
-`statechange` that left no input connected. An empty name reads "unnamed input" in both.
+`statechange` that left no input connected. An empty name reads "nepojmenovaný vstup" in both.
 `{error}` is the rejection's `name`. "Gate builds without the seam" is the measured darwin arm64
-record above. "Seam only" means V501 can produce the state only through the stub.
+record above. "Seam only" means V501 can produce the state only through the stub. The copy is
+Czech since plan issue Q104 (`project.czech-prose`); the control this record calls Connect MIDI
+reads „Připojit MIDI“ on the page, and the copy quotes it by that name.
 
 | # | State | Cause (how the page detects it) | Exact copy | Gate builds without the seam |
 |---|---|---|---|---|
-| 1 | `insecure` | `window.isSecureContext` is false. This is checked first, so a missing API in an insecure page is not called unsupported | "MIDI is unavailable: this page is not in a secure context. Open it over https." | Not from the gate's origins: `file://` and 127.0.0.1 are secure in all three. Chromium, Firefox and WebKit when served over plain http on a LAN address (a server condition, not the seam) |
-| 2 | `unsupported` | Secure context, and `typeof navigator.requestMIDIAccess` is not `"function"`. The test is on the method, not on `MIDIAccess`, which Firefox exposes on `file://` without the method | "MIDI is unavailable: this browser offers no Web MIDI here." | WebKit, every origin; Firefox on `file://` |
-| 3 | `pending` | Connect MIDI was chosen, and the latest request has not settled | "Waiting for the browser's answer about MIDI access. The rest of OSCILLA keeps working." | Firefox on 127.0.0.1, with or without the policy, for the 3.0 to 12.9 s before the request rejects (row 4). A check asserts it by a condition poll against a named deadline, never by a fixed wait (`project.bounded-test-timing`). In Chromium the request settles within 15 ms without a grant (up to 711 ms with one), too short to assert |
-| 4 | `blocked` | The latest request rejected with `SecurityError`. This covers a permissions-policy block and a browser that allows MIDI only through a site permission add-on; the page does not tell them apart | "MIDI is blocked for {site}: the browser or the site's settings do not let this page use MIDI. Some browsers allow it only after a site permission add-on is installed." | Firefox on 127.0.0.1, with or without the policy ("WebMIDI requires a site permission add-on to activate"). Chromium only on 127.0.0.1 served with the policy (a server condition, not the seam), which before Connect MIDI is row 5 |
-| 5 | `denied` | The latest request rejected with `NotAllowedError`. Or, before any Connect MIDI, the query reads `denied` | "MIDI access is not allowed for {site}. Allow MIDI in the browser's site settings, then choose Connect MIDI again." | After Connect MIDI: Chromium, `file://` and 127.0.0.1 (the request rejects; the query still reads `prompt` and no longer chooses the state). Before Connect MIDI: Chromium on 127.0.0.1 served with the policy only |
-| 6 | `failed` | The latest request rejected with `NotSupportedError` or any other name (for one, no platform MIDI backend) | "MIDI could not start on this computer (the browser reported {error})." | Not on darwin arm64, where Chromium resolves. `ubuntu-latest` not measured (V501); otherwise seam only |
-| 7 | `revoked` | The latest request resolved, and since then the kept `PermissionStatus` changed to anything but `granted`. The page stops listening and drops the access | "MIDI access was withdrawn for {site}. Choose Connect MIDI to ask again." | Chromium, `file://` and 127.0.0.1: grant `midi` and `midi-sysex`, choose Connect MIDI, then clear the grant (`change` fires, `granted` to `prompt`; the access fires nothing) |
-| 8 | `connected` | The latest request resolved, not revoked, and at least one input has `state` `connected` | "MIDI is on: {names}." | Seam only |
-| 9 | `disconnected` | The latest request resolved, not revoked, no input is connected, and an input was connected earlier under this access (a `statechange` took the last one away) | "MIDI input disconnected: {name}. No MIDI input is connected." | Seam only |
-| 10 | `no-devices` | The latest request resolved, not revoked, no input is connected, and none was connected under this access | "MIDI is on. No MIDI input is connected; plug one in and it appears here." | Chromium, `file://` and 127.0.0.1, with the grant `midi` and `midi-sysex` (`midi` alone still rejects, row 5) |
-| 11 | `unknown` | Before any Connect MIDI: `navigator.permissions.query` is missing, or `query({ name: 'midi' })` throws or rejects | "MIDI is off. The browser does not say whether MIDI is allowed for {site}; Connect MIDI asks it." | Seam only (WebKit's query rejects, but WebKit has no API and stops at row 2) |
-| 12 | `needs-permission` | Before any Connect MIDI: the query reads `prompt` | "MIDI is off. Connect MIDI asks the browser for access to MIDI devices for {site}." | Chromium, `file://` and 127.0.0.1; Firefox on 127.0.0.1, with or without the policy |
-| 13 | `allowed` | Before any Connect MIDI: the query reads `granted` | "MIDI is allowed for {site}. Choose Connect MIDI to start listening." | Chromium, `file://` and 127.0.0.1, with the grant `midi` (alone, or with `midi-sysex`) |
+| 1 | `insecure` | `window.isSecureContext` is false. This is checked first, so a missing API in an insecure page is not called unsupported | "MIDI není k dispozici: tato stránka neběží v zabezpečeném kontextu. Otevřete ji přes https." | Not from the gate's origins: `file://` and 127.0.0.1 are secure in all three. Chromium, Firefox and WebKit when served over plain http on a LAN address (a server condition, not the seam) |
+| 2 | `unsupported` | Secure context, and `typeof navigator.requestMIDIAccess` is not `"function"`. The test is on the method, not on `MIDIAccess`, which Firefox exposes on `file://` without the method | "MIDI není k dispozici: tento prohlížeč tu Web MIDI nenabízí." | WebKit, every origin; Firefox on `file://` |
+| 3 | `pending` | Connect MIDI was chosen, and the latest request has not settled | "Čeká se na odpověď prohlížeče o přístupu k MIDI. Zbytek aplikace OSCILLA funguje dál." | Firefox on 127.0.0.1, with or without the policy, for the 3.0 to 12.9 s before the request rejects (row 4). A check asserts it by a condition poll against a named deadline, never by a fixed wait (`project.bounded-test-timing`). In Chromium the request settles within 15 ms without a grant (up to 711 ms with one), too short to assert |
+| 4 | `blocked` | The latest request rejected with `SecurityError`. This covers a permissions-policy block and a browser that allows MIDI only through a site permission add-on; the page does not tell them apart | "MIDI je pro {site} blokované: prohlížeč nebo nastavení webu této stránce MIDI nedovolí. Některé prohlížeče ho povolí až po instalaci doplňku s oprávněním pro web." | Firefox on 127.0.0.1, with or without the policy ("WebMIDI requires a site permission add-on to activate"). Chromium only on 127.0.0.1 served with the policy (a server condition, not the seam), which before Connect MIDI is row 5 |
+| 5 | `denied` | The latest request rejected with `NotAllowedError`. Or, before any Connect MIDI, the query reads `denied` | "Přístup k MIDI není pro {site} povolený. Povolte MIDI v nastavení webu v prohlížeči a pak znovu zvolte „Připojit MIDI“." | After Connect MIDI: Chromium, `file://` and 127.0.0.1 (the request rejects; the query still reads `prompt` and no longer chooses the state). Before Connect MIDI: Chromium on 127.0.0.1 served with the policy only |
+| 6 | `failed` | The latest request rejected with `NotSupportedError` or any other name (for one, no platform MIDI backend) | "MIDI se na tomto počítači nepodařilo spustit (prohlížeč ohlásil {error})." | Not on darwin arm64, where Chromium resolves. `ubuntu-latest` not measured (V501); otherwise seam only |
+| 7 | `revoked` | The latest request resolved, and since then the kept `PermissionStatus` changed to anything but `granted`. The page stops listening and drops the access | "Přístup k MIDI byl pro {site} odebrán. Zvolte „Připojit MIDI“ a požádejte o něj znovu." | Chromium, `file://` and 127.0.0.1: grant `midi` and `midi-sysex`, choose Connect MIDI, then clear the grant (`change` fires, `granted` to `prompt`; the access fires nothing) |
+| 8 | `connected` | The latest request resolved, not revoked, and at least one input has `state` `connected` | "MIDI je zapnuté: {names}." | Seam only |
+| 9 | `disconnected` | The latest request resolved, not revoked, no input is connected, and an input was connected earlier under this access (a `statechange` took the last one away) | "Vstup MIDI odpojen: {name}. Není připojený žádný vstup MIDI." | Seam only |
+| 10 | `no-devices` | The latest request resolved, not revoked, no input is connected, and none was connected under this access | "MIDI je zapnuté. Není připojený žádný vstup MIDI; připojte ho a objeví se tady." | Chromium, `file://` and 127.0.0.1, with the grant `midi` and `midi-sysex` (`midi` alone still rejects, row 5) |
+| 11 | `unknown` | Before any Connect MIDI: `navigator.permissions.query` is missing, or `query({ name: 'midi' })` throws or rejects | "MIDI je vypnuté. Prohlížeč neříká, zda je MIDI pro {site} povolené; „Připojit MIDI“ se ho zeptá." | Seam only (WebKit's query rejects, but WebKit has no API and stops at row 2) |
+| 12 | `needs-permission` | Before any Connect MIDI: the query reads `prompt` | "MIDI je vypnuté. „Připojit MIDI“ požádá prohlížeč o přístup k zařízením MIDI pro {site}." | Chromium, `file://` and 127.0.0.1; Firefox on 127.0.0.1, with or without the policy |
+| 13 | `allowed` | Before any Connect MIDI: the query reads `granted` | "MIDI je pro {site} povolené. Zvolte „Připojit MIDI“ a OSCILLA začne poslouchat." | Chromium, `file://` and 127.0.0.1, with the grant `midi` (alone, or with `midi-sysex`) |
 
 When one of several inputs disconnects and others stay connected, the state stays `connected`
 with the remaining names. When a device is plugged in after `no-devices` or `disconnected`, the
@@ -598,3 +600,114 @@ status stays `proposed`.**
    clock's own time) is a decision of its own, not taken here.
 3. **No output.** OSCILLA still sends no MIDI (no MMC answer, no clock out, no display or LEDs);
    that is V510's question.
+
+**Note of 2026-11-15 (issue V503), deciding decision 3's response mode; the status stays
+`proposed`.** The owner's orders in session cae276ab-2d90-45d2-babb-a1f8023668d2 (Claude Code),
+verbatim: "dotahni veskere issues souvisejici s midi, napoj na ui, otestuj, vyzkousej, over, ze
+funguje" and "pokracuj s implementaci dalsich nedokoncenych veci - trains/prs/issuessession-contexts".
+Proposed by oscilla-ff and agreed under Q090 by oscilla-c3 (rev-seat-2, claude-code c0f0687c),
+with its amendments A1-A7, on 2026-11-15; oscilla-43 added the two acceptance asks marked (43).
+
+1. **Call and response, not drone plus answer.** A drone meets the session safety limit (the V502
+   note leaves the drone undecided) and never ends by itself; call and response is bounded by
+   construction. It is the one response mode of the first version.
+2. **The phrase.** The play port's Note Ons and Note Offs (DAW and editor ports never, V507) on
+   the events' own timeline (`event.timeStamp`). The phrase ends at its last Note Off with no key
+   held; it is answered once PHRASE_GAP_MS (600 ms) passed since then. The end is decided by a
+   pure check (`midi/response.js` `createPhrase().ended(now)`) polled by the mode's own
+   bookkeeping tick, which runs only while the mode is on and a phrase is open (A2): it decides
+   and schedules no sound, so no timer is in the event path (project.audio-engine-discipline),
+   and a unit test fails if the check uses one (43).
+3. **The answer**, a pure function of the phrase (`answer`): the phrase answered at the fifth
+   (+7 semitones, the classical answer at the dominant), the same onsets, lengths and order,
+   velocity max(1, round(v × 0.8)). Bounded: the phrase's first 16 notes (RESPONSE_MAX_NOTES),
+   within 8 s of its start (RESPONSE_MAX_MS: later onsets dropped, lengths cut), no note above
+   MIDI 127 or at or above the running context's `safeMaximum` (dropped, never moved).
+4. **No feedback (A1).** An answer's notes carry the source `answer` and the phrase recorder takes
+   only `player` events, so an answer is never heard as the next call, never sent to a MIDI
+   output and never recorded as the player's input.
+5. **The same path as the player's notes (A5; 43).** Answer notes go through `notes.js`'s owner
+   table and the one instrument the keys play (K247): one polyphony pool shared with the held keys
+   (NOTE_POLYPHONY), the session safety limit as for a key, refused while a measurement,
+   reference, the Studio or the sequencer owns the output, and cut when the player plays again
+   (the player always wins, one owner of that rule).
+6. **The clock (A3, A4).** The answer starts at the phrase end + PHRASE_GAP_MS on the performance
+   timeline, mapped to context time by the clock owner `audio/clock.js` from one
+   `getOutputTimestamp()` reading per answer (offset contextTime − performanceTime / 1000, no
+   latency added again; `ctx.currentTime` and the performance offset where it is missing). A start
+   already past begins at now + START_OFFSET_S (20 ms) and keeps the later notes' relative onsets.
+   The budget: mapping error 0 on a fake clock; lateness at most START_OFFSET_S plus one
+   bookkeeping tick.
+7. **No inference (A6).** `midi/response.js` imports only `core/music.js` and references no timer,
+   randomness, wall clock, `fetch`, `XMLHttpRequest`, `WebSocket`, `Worker` or `import()`; a unit
+   test reads its source.
+8. **Who is the player, what takes over, what inserts (oscilla-c3's review questions).** In the
+   first version the player is a MIDI play port only: the computer keys and the on-screen keys
+   (a phone's touch keyboard among them) still play the instrument but are not heard as a phrase,
+   since the mode is part of the MIDI section. An output owner taking over mid-answer (Measure,
+   Studio PLAY, the sequencer starting) goes through `midiAllOff`, which cuts the answer: nothing
+   more is planned and what sounds is released, so nothing hangs; only the answer's own first
+   note arming the instrument does not cut it. Settled under Q090 by oscilla-c3: (i) an answer
+   never brings the Synth panel in (`centralSink` gives it no instrument where a key would have
+   to insert the panel, the Studio part's `keysPanelMissing`): a Zpět in the phrase's gap is the
+   user removing the panel, and an answer that put it back would undo the user's own undo; the
+   answer is refused instead and says why. (iii) A note of any other player starts, the computer
+   keys, the on-screen or touch keys and the pad included, cuts a playing answer (the note
+   layers' `noted` hook, `response-mode.js` `interrupt`): they share the one instrument and its
+   polyphony, and the player always wins.
+9. **The switch (A7).** One control in the MIDI section, "Otázka a odpověď", declared in the UI
+   catalogue with its `data-osc` hook, trace and control-census row; off on every load and never
+   persisted in the first version, so V503 changes no URL or storage contract.
+
+### 2026-11-16: the transport answers on a chosen output, MIDI clock and transport out (V510)
+
+**Note of 2026-11-16 (issue V510), amending the V508 note's decision 3 ("no output") for MIDI
+realtime messages only; the status stays `proposed`.** The owner's orders of 2026-11-15 in session
+cae276ab-2d90-45d2-babb-a1f8023668d2 (Claude Code), verbatim in part: "napoj cely midi stack" and
+"dotahni veskere issues souvisejici s midi, napoj na ui, otestuj, vyzkousej, over, ze funguje".
+Split from MIDI output with oscilla-43 on 2026-11-15: this issue needs no SysEx, so no new consent.
+
+1. **One chosen output, none by default.** The MIDI section lists the access's connected outputs
+   ("Hodiny a transport na výstup"); "Žádný" is chosen on every load and never stored, and with it
+   nothing is sent. Choosing another output first stops the old one; an output that leaves, or
+   whose send throws, is no longer followed (said once).
+2. **No SysEx.** Start (`FA`), Continue (`FB`), Stop (`FC`), Timing Clock (`F8`, 24 per quarter
+   note, transport.js `CLOCK_PPQ`) and Song Position Pointer (`F2`, in sixteenths): plain MIDI,
+   covered by the `{ sysex: false }` access OSCILLA already asks for. MMC is SysEx (`F0 7F … F7`)
+   and waits for V511.
+3. **It follows the transport's grid, not its buttons.** `midi/clock-out-mode.js` reads the
+   transport in view as a grid: the context time of a song tick, the tempo, the run, and whether
+   it began at position 0 (the Studio's `transport.clockAnchor()`, whose grid is the whole run at
+   the document's tempo; the Sequencer's current tempo segment, `sequencer/transport-handle.js`,
+   since each pass plays the tempo it was compiled with). Whatever starts, moves or stops it
+   (PLAY, a controller's Start, Return to start, a tempo edit), the output follows:
+   - a run from position 0 found within `CATCHUP_S` (0.25 s) of its start: Start at its origin
+     and its ticks from the first, the few a late wake missed sent at once;
+   - any other run (found later, begun elsewhere, or met again when the view returns to it):
+     the output joins it with Song Position Pointer for the first sixteenth on the grid after
+     now, then Continue there, never a replay of the ticks since its start (review C3-572 P1);
+   - a new run while one is sent: Stop first, then as above;
+   - the grid moving within a run (a tempo change): Stop, Song Position Pointer and Continue on
+     the new grid, so the receiver's beats stay on the transport's (re-anchoring the count would
+     leave them a fraction of a beat off for the rest of the run, C3-572 P2);
+   - no anchor: Stop, once.
+   In wire order, not only send order (review C3-572 P2): the browser delivers by stamp and the
+   ticks already queued reach up to the lookahead past now, so Stop is stamped at the first
+   unsent tick's time, Song Position Pointer with it, and the next run starts no earlier (Start
+   only when its origin is not before that time, else the join at the first sixteenth after it).
+   Song Position Pointer counts at most 16383 sixteenths (about 34 minutes at 120 BPM); beyond
+   that the position sent is the last expressible one, a wrong bar count on the grid's beats.
+   An armed run of the keys alone is not the timeline playing (K104) and sends nothing.
+4. **On the audio clock.** Each tick is computed in context time (`clock-out.js`) and sent with
+   its own timestamp (`send(data, timestamp)`) on wakes of the engine's one transport clock every
+   25 ms while a run is sent (100 ms while an output waits for one) with 100 ms of lookahead, so
+   the main thread's lateness moves no tick. A send that throws ends every send to that port. Context time maps to
+   performance time through the clock owner's offset reading (`audio/clock.js` `clockOffsetS`),
+   slewed by at most 0.02 ms per reading (`steadyStamp`): readings scatter by a fraction of a
+   millisecond in Chromium and WebKit and by several milliseconds in Firefox, whose output
+   timestamp moves in render steps, and that scatter would otherwise land on the ticks as jitter.
+5. **Measured, not assumed.** The browser gate checks the stamps on the stub's output (Start, then
+   clock one tick of the tempo apart within 0.05 ms, then Stop, in the Studio and the Sequencer, in
+   three engines). What the browser and the device make of those stamps, the clock's jitter on the
+   owner's BeatStep Pro following it, is measured with `scripts/midi/listen.swift` and recorded in
+   `docs/midi.md`; until then it is stated as not measured.

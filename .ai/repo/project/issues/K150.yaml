@@ -8,6 +8,7 @@ priority: p2
 profile: implementation
 objective: "Move the Synth patch bay's layout and drawing into src/js/ui/patch/patch-bay.js over a generic source ({ groups: [{ id, label, jacks }], nameOf }), keep synth/view/bay.js as the panel's adapter with the names ui.js and the tests use, and add ui/patch/studio-source.js: every node of a StudioModel (or the ones named) as a group of jacks from its registry ports, every document edge between them as a cable, and the jack states that follow. An analysis jack draws as a square, the Studio's PORT_VISUALS shape. The extraction is behaviour-neutral: the Synth bay's markup is byte-identical before and after for six widths and every jack state, so the visual gate shows no rise. The next issue draws a Studio rack with it (a back-panel view of every node, cables hanging across units)."
 why: "Owner direction of 2026-11-02, in Czech: \"make it modular / make it patchable / make it generic\", \"pstchbay musi byt rozsirenejsi\", \"vse se vsim propojene\" and \"patchbay ... viditelne, hezke, sexy, funkni\". The bay drew only the Synth panel's jacks; any other node could not be patched or seen on it. b0 (lane coordinator) asked for the extraction first and behaviour-neutral, then the Studio feed."
+current_state: "Update 2026-11-16 by oscilla-ff (session cae276ab-2d90-45d2-babb-a1f8023668d2) on main eb3f0438 (train T24, PR 567): gap (3) is closed by 1c71e28f (member PR 564: a node type the registry does not know is left out, with its edges) and gap (4) by .ai/repo/reviews/567.yaml, which names K150 as a member. Gap (2) is closed by scripts/plan-evidence/k150-bay-identity.mjs: the Synth bay's markup at d59d883b^ and d59d883b is byte-identical over six widths and seven cases each (42 of 42), and a one-attribute mutation of the moved bay makes all 42 differ. Done on eb3f0438. Earlier: Audit 2026-11-15 by oscilla-ff (session cae276ab-2d90-45d2-babb-a1f8023668d2) on main 474ce9c3, on the owner's order to finish unfinished work: landed but not done. Partial: tests/unit/patch-bay-generic.test.mjs (3/3) compares baySvg with patchSvg at one width (376), which is trivially equal; nothing compares against the pre-move markup at six widths and every jack state (2); \"an unknown node type is left out\" is in the code (studio-source.js:17) but no test asserts it (3); 404.yaml does not name K150."
 scope:
 - src/js/ui/patch/patch-bay.js
 - src/js/ui/patch/studio-source.js
@@ -30,4 +31,18 @@ validation:
 evidence_required:
 - verified
 created_at: '2026-11-02'
-updated_at: '2026-11-02'
+updated_at: 2026-11-16T02:23:33Z
+started_at: 2026-11-16T02:22:10Z
+started_event: sha256:f641f4469b3c9ad6899fc378cd924cf42fd2e8f465b66abe88aff495b604eee1
+verified_at: 2026-11-16T02:22:48Z
+verified_event: sha256:662591176dc423edc84b9c54781ca2b08ff3c371a0fb59f98d265f9a0e3e3899
+completed_at: 2026-11-16T02:23:33Z
+completed_event: sha256:c344802ae144bce613391450d86a063ca4dcbaaa630d380617e44709f4fc0964
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "node scripts/plan-evidence/k150-bay-identity.mjs d59d883b^ d59d883b; node --test tests/unit/patch-bay-generic.test.mjs; node tests/browser/synth.cjs"
+    result: "built in d59d883b (PR 404's K150 slice); its negative case for an unknown node type landed as 1c71e28f (member PR 564) in train T24, PR 567 (main merge commit eb3f043880c5457ed19f09f42aa6f1bdef607134), released as v3.39.0. Criteria re-checked on main eb3f043880c5457ed19f09f42aa6f1bdef607134: before, the bay took only a Synth panel (d59d883b^ bay.js bayLayout(panel), baySvg({ panel })); after, patchLayout and patchSvg take any source and the Synth bay's markup is byte-identical to before: scripts/plan-evidence/k150-bay-identity.mjs compares d59d883b^ with d59d883b over 6 widths (320, 360, 376, 390, 768, 1280) and 7 cases each (every jack free, normalled, patched, mixed, open; a pending connection with verdicts, compatible set, cables and a selected cable; the cables alone): 42 of 42 identical; a one-attribute mutation of the moved patch-bay.js makes 42 of 42 differ (the control). Against eb3f043880c5457ed19f09f42aa6f1bdef607134 all 42 differ by later intended changes (Czech labels), which the criterion, about the move, does not cover. A StudioModel source has one group per node with its registry ports and one cable per edge inside it, an edge leaving the chosen nodes is not drawn and an unknown node type is left out with its edges (patch-bay-generic.test 4/4); rollback is a revert, no stored record or schema changes. The deciding CI run 43772740109 green on the train head fc117462."
+    artifact: ".ai/repo/reviews/567.yaml"
+    commit: eb3f043880c5457ed19f09f42aa6f1bdef607134
+    recorded_at: 2026-11-16T02:23:18Z

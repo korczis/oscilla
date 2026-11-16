@@ -239,7 +239,7 @@ export function createScopeView({ getWindowMs }) {
       const name = (WAVEFORM_NAMES[shape] || shape).toLowerCase();
       const what = `vypočtená vlna ${name} ${formatFrequency(f)}`;
       // where the status bar's Play is the only one, the caption names it (C030, R2-C030-1)
-      const press = st.idleHint || 'živý průběh: podržte Hold to Play';
+      const press = st.idleHint || 'živý průběh: podržte tlačítko Podržet a hrát';
       const caption = [`${state} · ${what} v okně ${msLabel(windowMs)} · ${press}`,
         `${state} · ${what} v okně ${msLabel(windowMs)}`, `${state} · ${what}`, state];
       this.caption = caption[0]; // what the idle caption says in full (read by navigation.cjs)

@@ -32,7 +32,7 @@ pressure.
    importing a sequence file. With unsaved Studio changes nothing is replaced and the notice
    says so.
 6. The toolbar's **Back** button returns to the workspace Studio was opened from and names it
-   ("Back to the Sequencer"); when Studio is the first workspace the page opens, it is the
+   ("Zpět na Sekvencer"); when Studio is the first workspace the page opens, it is the
    Playground.
 
 Below 768 px the workspace shows one of **Graph**, **Timeline** and **Inspector** at a time
@@ -336,8 +336,8 @@ dialog, and it lists the keys of the workspace in view and the keys that work ev
 (ADR 0050).
 
 Space has one owner in each workspace, the same at every window width. In the workspaces that
-play, load or analyse the instrument's signal it is the instrument's Hold to Play, whether or
-not Hold or Trigger is on screen there. In Studio it is the Studio transport's. Elsewhere it
+play, load or analyse the instrument's signal it is the instrument's "Podržet a hrát" (Hold to
+Play), whether or not that button or "Spustit" (Trigger) is on screen there. In Studio it is the Studio transport's. Elsewhere it
 starts nothing. A focused text field, native button, link, slider or tab, or an open dialog,
 keeps Space instead. A focused timeline item (clip, marker, point, loop handle) is not such a
 control: Enter activates it, and Space plays or stops Studio there, as the timeline keys below
@@ -350,8 +350,8 @@ anywhere else in those workspaces Space is the instrument's.
 <!-- space:begin -->
 | Workspaces | Space |
 | --- | --- |
-| Playground, Analyzer, Filter Lab, Compare, Synthesis, Sequencer, Presets | Hold to play: sounds while held, stops on release (a programmed pattern: trigger once) |
-| Measure, Experiments, Learn, Synth, About | Nothing: Space starts no sound in this workspace |
+| Playground, Analyzátor, Filtry, Porovnání, Syntéza, Sekvencer, Předvolby | Hold to play: sounds while held, stops on release (a programmed pattern: trigger once) |
+| Měření, Experimenty, Výuka, Synth, O aplikaci | Nothing: Space starts no sound in this workspace |
 | Studio | Play / stop the Studio transport |
 <!-- space:end -->
 

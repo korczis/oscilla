@@ -1,0 +1,42 @@
+id: V510
+milestone: M045
+serves:
+  - "midi-jam-companion#midi-output-transport"
+title: "MIDI output without SysEx: the transport answers on a chosen output (MMC and MIDI clock out), measured on the owner's devices"
+slug: midi-output-transport
+priority: p1
+profile: implementation
+objective: "Lands as feat(midi). An output chosen in the MIDI section (the access's outputs, same plain midi permission, sysex: false) receives MIDI realtime Start, Continue and Stop and, while the transport plays, MIDI clock at 24 PPQ scheduled on the audio clock (the Sequencer's tempo in the Sequencer, the Studio's elsewhere, K247); MMC is sent only where its message is plain MIDI and not SysEx (it is SysEx: F0 7F ... F7, so it waits for V511, and this issue says so). No output is chosen by default; choosing none sends nothing. Its jitter against the audio clock is measured on the owner's BeatStep Pro following the clock (scripts/midi/listen.swift) and stated, not assumed."
+why: "The owner's order of 2026-11-15 in session cae276ab-2d90-45d2-babb-a1f8023668d2 (Claude Code), verbatim in part: \"pridej sekci midi nastroju\", \"mapping midi, features , protocol ...\", \"napoj cely midi stack\", \"midi instrumenting\", \"dotahni veskere issues souvisejici s midi, napoj na ui, otestuj, vyzkousej, over, ze funguje, ne roubovani, ale realne napoejni , ciste\". V508 makes a controller drive OSCILLA's transport; the reverse, OSCILLA driving a hardware sequencer's transport and tempo, needs only standard realtime messages under the permission OSCILLA already asks for."
+current_state: "Planned 2026-11-15 by oscilla-ff; split from MIDI output with oscilla-43 the same day: this issue needs no SysEx (no new consent), V511 carries the SysEx decision. ADR 0058's V508 note says OSCILLA sends no MIDI; this issue's ADR note amends it for realtime output only."
+scope:
+  - "src/js/midi"
+  - "src/index.html"
+  - "src/js/ui/catalog/decl/midi.js"
+  - "scripts/ui-catalog/trace/midi.mjs"
+  - "tests/unit/midi"
+  - "tests/unit/ui-catalog.test.mjs"
+  - "tests/browser/midi.cjs"
+  - "tests/README.md"
+  - "docs/midi.md"
+  - "docs/CLAIMS.yaml"
+  - ".ai/repo/adrs"
+  - "dist"
+  - "src/js/audio"
+  - "src/js/sequencer"
+  - "src/js/studio"
+depends_on:
+  - "V508"
+acceptance_criteria:
+  - "The MIDI section lists the access's outputs; none is chosen by default and choosing none sends nothing (tests/unit/midi)."
+  - "With an output chosen, Start/Continue/Stop are sent as the transport starts, resumes and stops, and MIDI clock at 24 PPQ is scheduled from the audio clock while it plays, at the tempo of the workspace's transport (unit tests on a fake output and a fake clock; tests/browser/midi.cjs on the stub's output)."
+  - "The clock's jitter on the owner's BeatStep Pro is measured with scripts/midi/listen.swift and recorded in docs/midi.md with the command and the numbers."
+  - "ADR 0058 records the V510 note; MMC is named as SysEx and left to V511."
+validation:
+  - "node --test tests/unit/midi/*.test.mjs"
+  - "node tests/browser/midi.cjs"
+  - "npm run verify"
+evidence_required:
+  - "verified"
+created_at: 2026-11-15
+updated_at: 2026-11-15
