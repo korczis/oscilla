@@ -21,13 +21,17 @@
 //   createClockOut({ send, stamp })
 //       start(atS, bpm)          FA at atS, then ticks from atS (song tick 0)
 //       resume(atS, bpm, k = 0)  FB at atS, then ticks from atS, the first being song tick k
-//       locate(k)                Song Position Pointer (F2) for song tick k, a multiple of 6
-//                                (the pointer counts sixteenths), sent now; only while stopped
+//       locate(k, atS)           Song Position Pointer (F2) for song tick k, a multiple of 6
+//                                (the pointer counts sixteenths), at atS (undefined: now); only
+//                                while stopped. It clamps at 16383 sixteenths (about 34 min at
+//                                120 BPM): a song position past that is not expressible
 //       tempo(atS, bpm)          the ticks before atS at the old tempo, then the new one
 //                                   from the first unsent tick
 //       pass(to)                 sends every unsent tick before context time `to` (the
 //                                   lookahead's end); returns how many
-//       stop()                   FC now; no tick after it
+//       stop()                   FC at the first unsent tick's time, after every tick already
+//                                queued (the browser delivers by stamp, so a Stop sent "now"
+//                                would arrive before them); returns that time, or false
 //       running()                true between start/resume and stop
 
 import { CLOCK_PPQ } from './transport.js';
@@ -86,10 +90,10 @@ export function createClockOut({ send, stamp }) {
   return {
     start: (atS, bpm) => begin(START, atS, bpm),
     resume: (atS, bpm, k = 0) => begin(CONTINUE, atS, bpm, k),
-    locate(k) {
+    locate(k, atS) {
       if (run || !Number.isInteger(k) || k < 0 || k % SPP_TICKS) return false;
       const p = Math.min(SPP_MAX, k / SPP_TICKS);
-      send([SONG_POSITION, p & 0x7f, (p >> 7) & 0x7f], undefined);
+      send([SONG_POSITION, p & 0x7f, (p >> 7) & 0x7f], isNum(atS) ? at(atS) : undefined);
       return true;
     },
 
@@ -115,9 +119,10 @@ export function createClockOut({ send, stamp }) {
     },
     stop() {
       if (!run) return false;
+      const endAt = run.k0At + (run.next - run.k0) * tickS(run.bpm);
       run = null;
-      send([STOP], undefined);
-      return true;
+      send([STOP], at(endAt));
+      return endAt;
     },
     running: () => run !== null,
   };

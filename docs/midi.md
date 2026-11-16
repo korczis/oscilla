@@ -316,7 +316,11 @@ chosen on every load, and with it nothing is sent. The chosen output follows the
 
 These messages need no SysEx and come under the same `{ sysex: false }` permission as the
 input; MMC is SysEx (V511). A tempo change moves the device to the new grid rather than bending
-its count, so its beats stay on OSCILLA's. Each tick is computed on the audio clock and sent ahead with its own
+its count, so its beats stay on OSCILLA's. Every message is stamped, and what is stamped earlier
+reaches the device first: Stop comes after the last tick already sent ahead, and the new run no
+earlier than it. Song Position Pointer counts at most 16383 sixteenths (about 34 minutes at
+120 BPM); a device joining a run later than that is told the last position it can express, so its
+bar count is wrong (its beats stay on the grid). Each tick is computed on the audio clock and sent ahead with its own
 timestamp (`src/js/midi/clock-out.js`, `clock-out-mode.js`), so a busy page moves no tick; the
 mapping from the audio clock to the page's clock is slewed by at most 0.02 ms per reading, since
 the readings scatter (by several milliseconds in Firefox). An output that leaves, or stops taking

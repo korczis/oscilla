@@ -59,8 +59,10 @@ test('Start, every tick exactly once over any split of passes, then Stop and not
   const ticks = sent.filter((s) => s.b === TICK);
   assert.equal(ticks.length, 48, 'two beats');
   ticks.forEach((t, k) => near(t.at, 2000 + k * tickS(120) * 1000, `tick ${k}`));
-  clock.stop();
-  assert.deepEqual(sent[sent.length - 1], { b: STOP, at: undefined });
+  const endAt = clock.stop();
+  assert.ok(Math.abs(endAt - (1 + 48 * tickS(120))) < 1e-9, 'the first unsent tick\'s time');
+  near(sent[sent.length - 1].at, 2000 + 48 * tickS(120) * 1000, 'Stop after every queued tick');
+  assert.equal(sent[sent.length - 1].b, STOP);
   assert.equal(clock.pass(3), 0, 'after Stop nothing');
   assert.equal(clock.stop(), false);
   assert.ok(sent.every((s) => [START, CONTINUE, STOP, TICK].includes(s.b)), 'realtime only');

@@ -30,8 +30,9 @@ function rig({ anchor = null } = {}) {
     fire() { const f = this.pending; this.pending = null; if (f) f(); } };
   const mode = createClockOutMode({ clock, ctxNow: () => env.now, stamp,
     anchor: () => env.anchor, say: (r) => env.said.push(r) });
+  // Each send notes the context time it was made at: a send stamped undefined goes on the wire then.
   const port = (name) => ({ name, log: [],
-    send(data, at) { this.log.push({ b: data[0], at, data: Array.from(data) }); } });
+    send(data, at) { this.log.push({ b: data[0], at, data: Array.from(data), sentAt: env.now }); } });
   return { env, clock, mode, port };
 }
 
@@ -74,12 +75,20 @@ test('a new origin is a new Start; a re-plan that keeps it is not', () => {
   env.anchor = { origin: 10.0505, tempo: 120, fromStart: true }; // within ORIGIN_EPS_S: the same run
   clock.fire();
   assert.equal(statuses(out).filter((b) => b === START).length, 1);
-  env.anchor = { origin: 10.25, tempo: 120, fromStart: true }; // returned to the start
+  // Returned to the start, playing after the ticks already queued (to 10.3): a Start.
+  env.anchor = { origin: 10.45, tempo: 120, fromStart: true };
   clock.fire();
   assert.equal(statuses(out).filter((b) => b === START).length, 2);
   const st = statuses(out).filter((b) => b !== TICK);
   assert.deepEqual(st, [START, STOP, START], 'Stop between the two runs (C3-572 P3)');
-  assert.ok(Math.abs(ctxOf(out.log.filter((e) => e.b === START)[1].at) - 10.25) < 1e-9);
+  assert.ok(Math.abs(ctxOf(out.log.filter((e) => e.b === START)[1].at) - 10.45) < 1e-9);
+  // Returned to the start sooner than the queued ticks end: joined at its first sixteenth.
+  env.now = 10.5;
+  clock.fire();
+  env.anchor = { origin: 10.55, tempo: 120, fromStart: true };
+  clock.fire();
+  assert.deepEqual(statuses(out).filter((b) => b !== TICK).slice(3),
+    [STOP, SONG_POSITION, CONTINUE]);
 });
 
 test('no anchor sends Stop once; another output stops the old one; none sends nothing', () => {
@@ -256,4 +265,64 @@ test('the mode wakes every 25 ms while a run is sent and every 100 ms while noth
   a = null;
   fn();
   assert.deepEqual(ms, [100, 25, 100]);
+});
+
+// The wire as a receiver sees it (review C3-572 P2): every message at its stamp (undefined: when
+// it was sent), in send order where stamps tie; Start and Continue run the count, Song Position
+// Pointer sets it while stopped, Stop halts it, and a beat is every 24th counted tick.
+const wire = (p) => p.log.map((e, i) => ({ ...e, i, t: e.at === undefined ? e.sentAt : ctxOf(e.at) }))
+  .sort((x, y) => x.t - y.t || x.i - y.i);
+const receiverBeats = (p) => {
+  let running = false;
+  let n = 0;
+  const beats = [];
+  for (const e of wire(p)) {
+    if (e.b === START) { running = true; n = 0; }
+    else if (e.b === CONTINUE) running = true;
+    else if (e.b === STOP) running = false;
+    else if (e.b === SONG_POSITION && !running) n = sppTick(e);
+    else if (e.b === TICK && running) { if (n % 24 === 0) beats.push(e.t); n += 1; }
+  }
+  return beats;
+};
+const drive = (env, clock, from, to) => {
+  for (let t = from; t < to - 1e-9; t += 0.025) { env.now = t; clock.fire(); }
+};
+const onGrid = (beats, origin, beatS, after) => {
+  const later = beats.filter((b) => b > after);
+  assert.ok(later.length >= 3, `${later.length} beats after ${after}`);
+  for (const b of later) {
+    const q = (b - origin) / beatS;
+    assert.ok(Math.abs(q - Math.round(q)) < 1e-6, `the receiver's beat at ${b.toFixed(4)} is on the grid`);
+  }
+};
+
+test('in wire order a tempo change keeps the receiver\'s beats on the new grid', () => {
+  const { env, clock, mode, port } = rig({ anchor: { origin: 0.05, tempo: 120, fromStart: true } });
+  env.now = 0.05;
+  const out = port('A');
+  mode.setOutput(out);
+  drive(env, clock, 0.075, 1.1);
+  env.anchor = { origin: 0.05, tempo: 100, fromStart: true };
+  drive(env, clock, 1.1, 3.4);
+  onGrid(receiverBeats(out), 0.05, 0.6, 1.2);
+  const w = wire(out).filter((e) => e.b !== TICK).map((e) => e.b);
+  assert.deepEqual(w, [START, STOP, SONG_POSITION, CONTINUE]);
+  // Every old-grid tick reaches the receiver before Stop: none lies between Stop and Continue.
+  const w2 = wire(out).map((e) => e.b);
+  const between = w2.slice(w2.indexOf(STOP), w2.indexOf(CONTINUE)).filter((x) => x === TICK);
+  assert.equal(between.length, 0, 'no tick between Stop and Continue on the wire');
+});
+
+test('in wire order a return to the start while playing starts the receiver on the beat', () => {
+  const { env, clock, mode, port } = rig({ anchor: { origin: 0.05, tempo: 120, fromStart: true } });
+  env.now = 0.05;
+  const out = port('A');
+  mode.setOutput(out);
+  drive(env, clock, 0.075, 1.1);
+  env.anchor = { origin: 1.12, tempo: 120, fromStart: true }; // Return to start: plays at 1.12
+  drive(env, clock, 1.1, 3.4);
+  const beats = receiverBeats(out);
+  // After the restart the receiver's beats lie on the new run's grid, whichever entry it took.
+  onGrid(beats, 1.12, 0.5, 1.2);
 });

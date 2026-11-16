@@ -691,6 +691,12 @@ Split from MIDI output with oscilla-43 on 2026-11-15: this issue needs no SysEx,
      the new grid, so the receiver's beats stay on the transport's (re-anchoring the count would
      leave them a fraction of a beat off for the rest of the run, C3-572 P2);
    - no anchor: Stop, once.
+   In wire order, not only send order (review C3-572 P2): the browser delivers by stamp and the
+   ticks already queued reach up to the lookahead past now, so Stop is stamped at the first
+   unsent tick's time, Song Position Pointer with it, and the next run starts no earlier (Start
+   only when its origin is not before that time, else the join at the first sixteenth after it).
+   Song Position Pointer counts at most 16383 sixteenths (about 34 minutes at 120 BPM); beyond
+   that the position sent is the last expressible one, a wrong bar count on the grid's beats.
    An armed run of the keys alone is not the timeline playing (K104) and sends nothing.
 4. **On the audio clock.** Each tick is computed in context time (`clock-out.js`) and sent with
    its own timestamp (`send(data, timestamp)`) on wakes of the engine's one transport clock every

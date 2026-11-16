@@ -15,6 +15,11 @@
 //     receiver's count stays the transport's). Otherwise the output joins it: Song Position
 //     Pointer (F2) for the first sixteenth on the grid at or after now, then Continue (FB) there
 //     and the ticks from it. A new run while one is sent stops the old one first (FC).
+//   - In wire order, not only send order: the browser delivers by stamp, and the ticks already
+//     queued reach up to the lookahead past now. So Stop is stamped at the first unsent tick's
+//     time (after them all), Song Position Pointer with it, and the new run starts no earlier:
+//     Start only when its origin is not before that time, else the join's first sixteenth at or
+//     after it (review C3-572 P2).
 //   - The grid moving within a run (a tempo change) relocates the output to the new grid: FC,
 //     SPP, FB at its first sixteenth after now, so the receiver's beats stay on the transport's
 //     (re-anchoring the count instead would leave them off the grid for the rest of the run). The
@@ -119,20 +124,23 @@ export function createClockOutMode({ clock, ctxNow, stamp, anchor, say = () => {
     });
   };
 
-  // Enter run `a` at `now`: Start from its origin when it began at 0 just now, else join it at
-  // the first sixteenth on its grid at or after now.
-  const enter = (a, now) => {
+  // Enter run `a` at `now`, no earlier than `after` (the Stop of the run before it, stamped
+  // after its queued ticks): Start from its origin when it began at 0 just now, else join it at
+  // the first sixteenth on its grid at or after both.
+  const enter = (a, now, after = -Infinity) => {
     const t0 = a.tick0 || 0;
-    if (a.fromStart && t0 === 0 && now - a.origin <= CATCHUP_S) {
+    if (a.fromStart && t0 === 0 && now - a.origin <= CATCHUP_S && a.origin >= after) {
       out.start(a.origin, a.tempo);
     } else {
-      const k = Math.max(0, Math.ceil((now - a.origin) / tickS(a.tempo) - 1e-9));
+      const from = Math.max(now, after);
+      const k = Math.max(0, Math.ceil((from - a.origin) / tickS(a.tempo) - 1e-9));
       const s = Math.ceil((t0 + k) / SPP_TICKS) * SPP_TICKS;
-      out.locate(s);
+      out.locate(s, Number.isFinite(after) ? after : undefined);
       if (out) out.resume(gridAt(a, s), a.tempo, s);
     }
     run = { ...a };
   };
+  const end = () => (out && out.running() ? out.stop() : -Infinity);
 
   const mode = {
     setOutput(next) {
@@ -153,11 +161,11 @@ export function createClockOutMode({ clock, ctxNow, stamp, anchor, say = () => {
         if (out.running()) out.stop();
         run = null;
       } else if (!run || !sameRun(a, run)) {
-        if (out.running()) out.stop();
-        if (out) enter(a, now);
+        const after = end();
+        if (out) enter(a, now, after);
       } else if (!sameGrid(a, run)) {
-        out.stop();
-        if (out) enter({ ...a, fromStart: false }, now);
+        const after = end();
+        if (out) enter({ ...a, fromStart: false }, now, after);
       }
       if (out && out.running()) out.pass(now + CLOCK_OUT_LOOKAHEAD_S);
       if (out) wake(out.running() ? CLOCK_OUT_TICK_MS : CLOCK_OUT_IDLE_MS);
