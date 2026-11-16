@@ -25,6 +25,7 @@ import { createMidiMonitor, describeMidi } from './monitor.js';
 import { createClockMeter, transportAction, transportTarget, CLOCK_GAP_MS } from './transport.js';
 import { createKeyboardUi } from './keyboard-ui.js';
 import { createResponseMode } from './response-mode.js';
+import { createClockOutMode, steadyStamp } from './clock-out-mode.js';
 import { ANSWER_SOURCE } from './response.js';
 import { clockOffsetS, transportClockOf } from '../audio/clock.js';
 import { NOTE_POLYPHONY } from '../audio/audio-engine.js';
@@ -68,6 +69,12 @@ export const CLOCK_SHOW_MS = 500;
 export const ACTION_TEXT = Object.freeze({ start: 'přehrát od začátku', continue: 'pokračovat',
   stop: 'zastavit', rewind: 'na začátek', loop: 'smyčka' });
 /** Whose transport a message moved, by name: the Sequencer's own, else the Studio's. */
+/** The MIDI section's clock-out sentences (V510). */
+export const CLOCK_OUT_TEXT = Object.freeze({
+  title: 'Hodiny MIDI',
+  sendFailed: 'Výstup MIDI přestal přijímat zprávy; hodiny a transport se na něj už neposílají.',
+});
+
 const transportName = (target) => (target === transportTarget('sequencer') ? 'Sekvencer'
   : 'Studio');
 const perf = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
@@ -99,12 +106,16 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
   let monitor = null;
   let arming = 0; // > 0 while a note of the keys or MIDI is being taken by the instrument (K247)
   let response = null; // call and response (V503), on the one instrument
+  let clockOut = null; // clock and transport out (V510), on a chosen output
+  let outPorts = new Map(); // output id -> MIDIOutput of the open access (V510)
   const maps = createDeviceMaps({ devices: DEVICES.devices }); // V509
   const part = {
     midiState: null,
     midiText: '',
     midiCanConnect: false,
     midiInputs: [],   // inputRow per connected input (V507)
+    midiOutputs: [],  // { id, name } per connected output (V510); the ports stay outside
+    midiClockOut: '', // the output that follows the transport (V510), '' none; never stored
     midiLog: [],      // the monitor's rows, newest first (V507)
     midiClockBpm: null, // the tempo of an incoming MIDI clock, or null (V508)
     midiResponse: false, // call and response is on (V503); off on every load, never stored
@@ -160,6 +171,26 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
               ? RESPONSE_TEXT.noInstrument : MIDI_REFUSED[reason] || reason));
           } });
       }
+      // Clock and transport out (V510): the chosen output follows the transport in view, the
+      // Sequencer's own there and the Studio's elsewhere, from its anchor on the audio clock.
+      if (engine) {
+        clockOut = createClockOutMode({ clock: transportClockOf(engine),
+          ctxNow: () => (engine.ctx ? engine.ctx.currentTime : 0),
+          stamp: steadyStamp(() => (engine.ctx ? clockOffsetS(engine.ctx, now()) : null)),
+          anchor: () => {
+            if (transportTarget(cmp.workspace) === 'sequencer') {
+              return sequencerTransport && typeof sequencerTransport.anchor === 'function'
+                ? sequencerTransport.anchor() : null;
+            }
+            return typeof cmp.studioClockAnchor === 'function' ? cmp.studioClockAnchor() : null;
+          },
+          say: () => {
+            cmp.midiClockOut = '';
+            if (typeof cmp.notify === 'function') {
+              cmp.notify('warning', CLOCK_OUT_TEXT.title, CLOCK_OUT_TEXT.sendFailed);
+            }
+          } });
+      }
       // Every note off, and nothing lit: the forced stops of ADR 0062 and V502.
       const silence = () => {
         if (response) response.cut();
@@ -200,6 +231,10 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
           cmp.midiText = s.text;
           cmp.midiCanConnect = s.canConnect;
           cmp.midiInputs = (s.inputs || []).map(inputRow);
+          outPorts = new Map((s.outputs || []).map((o) => [o.id, o.port]));
+          cmp.midiOutputs = (s.outputs || []).map((o) => ({ id: o.id, name: o.name }));
+          // An output that left is no longer followed (nothing is sent to a closed port).
+          if (cmp.midiClockOut && !outPorts.has(cmp.midiClockOut)) cmp.midiClockOutSet('');
         },
         onMessage(data, port, stamp) {
           if (!ids.has(port)) { inputs += 1; ids.set(port, inputs); }
@@ -316,6 +351,16 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
         if (!this.studioPlay()) return null;
       }
       return { target };
+    },
+
+    /**
+     * V510: the output `id` follows the transport (MIDI Start, Continue, Stop and clock at 24
+     * PPQ); '' follows none, and nothing is sent.
+     */
+    midiClockOutSet(id) {
+      const port = id ? outPorts.get(id) || null : null;
+      this.midiClockOut = port ? id : '';
+      if (clockOut) clockOut.setOutput(port);
     },
 
     /** Empty the MIDI monitor (V507). */

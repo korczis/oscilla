@@ -178,7 +178,10 @@ export function jackReason(model, panel, jack, from = null) {
   if (m && node && m.node === 'random' && port === 'rate'
     && model.graph.edges.some((e) => e.to.node === node.id && e.to.port === 'trigger'
       && !(e.props && e.props.muted))) {
-    return `${m.label} Rate nemá účinek, dokud je zapojený Clock (normálně brána klávesnice): `
+    // The parameter's own label (studio/nodes/modulation.js rate()), never retyped here.
+    const rate = NODE_REGISTRY.param('random', 'rate');
+    return `${m.label} ${rate ? rate.label : port} nemá účinek, dokud je zapojený Clock `
+      + '(normálně brána klávesnice): '
       + 'každá brána posune hodnotu. Nejdřív odpojte Clock.';
   }
   // K238: a gain stage that rests closed (the VCA: gain 0) adds its cables to 0, and a cable into
