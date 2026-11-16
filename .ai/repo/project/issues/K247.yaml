@@ -36,4 +36,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-15
-updated_at: 2026-11-15
+updated_at: 2026-11-16T02:08:55Z
+started_at: 2026-11-16T02:07:24Z
+started_event: sha256:30b1d4378a2baa5e64e062c154cef8a62a3b7cbcbf3f555652aaf1f78131fefd
+verified_at: 2026-11-16T02:07:52Z
+verified_event: sha256:b42a2c777cac00de356ac3fe43ceea26ffbe4f1eacd8acce541c84665274bf3c
+completed_at: 2026-11-16T02:08:55Z
+completed_event: sha256:1df8d10b535e37ca233129e9428941efe721f78e15bd3c963b35cf0c0529f69c
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "node --test tests/unit/midi/*.test.mjs tests/unit/keys-routes.test.mjs tests/unit/leave-policy.test.mjs tests/unit/keyboard*.test.mjs; node tests/browser/midi.cjs"
+    result: "built in train T22, PR 555 (main 474ce9c3, member PR 553); its last criterion, the browser check keys-everywhere-central (87826c4d, member PR 560 through PR 561), landed in train T24, PR 567 (main merge commit eb3f043880c5457ed19f09f42aa6f1bdef607134), released as v3.39.0. Criteria re-checked on main eb3f043880c5457ed19f09f42aa6f1bdef607134: KEYBOARD_VIEWS is WORKSPACE_IDS (midi/keyboard.js:38) and keys-routes.test; centralSink gives keysInstrument (notes and keys unit tests); keys-everywhere-central in tests/browser/midi.cjs (in every workspace an armed key arms the Studio transport and sounds through it, no engine voice, the dock or its handle shown); LEAVE_POLICY (leave-policy.test); ADR 0058's K247 note (line 558) and docs/midi.md, whose engine voice is only the page-without-the-Synth fallback. Unit: 159/0 on eb3f043880c5457ed19f09f42aa6f1bdef607134; the deciding CI run 43772740109 green on the train head fc117462 (unit, the browser legs in chromium, firefox and webkit, fail-first, review-verdict, visual)."
+    artifact: ".ai/repo/reviews/567.yaml"
+    commit: eb3f043880c5457ed19f09f42aa6f1bdef607134
+    recorded_at: 2026-11-16T02:08:42Z
