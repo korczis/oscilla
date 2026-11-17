@@ -995,7 +995,7 @@ function defineChecks() {
       const m = window.OSCILLA.measure;
       const step = document.querySelector('[data-osc="measure.step"][data-step="measure"] '
         + '.osc-m-step-detail');
-      return m.state === 'ABORTED' && step && /Stopped; nothing was kept/.test(step.textContent)
+      return m.state === 'ABORTED' && step && /Zastaveno; nic se neuchovalo/.test(step.textContent)
         ? { state: m.state, step: step.textContent.trim(), result: !!m.result } : null;
     }), { ms: STEP_MS, what: 'leaving MEASURE ends the run and its step says nothing was kept' });
     must(!r.result, 'nothing of the stopped run is kept as a result', r);

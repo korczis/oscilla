@@ -133,9 +133,10 @@ test('C1: a reading typed before any input is known is refused and says why', as
   cmp.measureSetLevelManual(true);
   Object.assign(cmp.meas.levelForm, { referenceHz: '1000', referenceDb: '94',
     observedDb: '-30' });
-  assert.match(cmp.measureLevelManualNote, /Run the setup check first/);
+  assert.match(cmp.measureLevelManualNote, /Nejdřív spusťte kontrolu nastavení/);
   assert.equal(cmp.measureSaveLevelCalibration(), false);
-  assert.match(cmp.meas.levelForm.error, /Run the setup check first: a level calibration is valid/);
+  assert.match(cmp.meas.levelForm.error,
+    /Nejdřív spusťte kontrolu nastavení: kalibrace úrovně platí jen/);
   assert.equal(seam.levelCalibration, null, 'nothing stored');
   assert.equal(cmp.meas.cal.level, null);
   assert.equal(cmp.measureCalIndicator, 'UNCALIBRATED');
@@ -147,7 +148,7 @@ test('C1: a reading typed before any input is known is refused and says why', as
   assert.equal(isBoundLevelCalibration(cal), true);
   assert.equal(cal.input.sampleRate, 48000);
   assert.equal(cmp.measureCalIndicator, 'CALIBRATED');
-  assert.match(cmp.measureLevelStateText, /entered by hand, bound to the input checked when it/);
+  assert.match(cmp.measureLevelStateText, /zadaná ručně, vázaná na vstup zkontrolovaný při uložení/);
   // The scenario of the finding: another microphone is plugged in and checked.
   seam.setInputNow(OTHER);
   assert.equal(cmp.measureCalIndicator, 'UNCALIBRATED');

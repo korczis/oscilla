@@ -640,7 +640,7 @@ function defineChecks() {
       idleClean: idle.listeners === 0 && !idle.armed && !idleIndicator,
       completeArmed: done.listeners === 1 && done.armed && done.lost.length === 1
         && /^measure: A completed measurement that is not saved$/.test(done.lost[0]),
-      indicator: indicator && /Not saved yet/.test(hint),
+      indicator: indicator && /Zatím neuloženo/.test(hint),
       unsavedAsks: unsavedReload.dialog === 'beforeunload' && unsavedReload.stayed,
       savedDisarmed: saved.listeners === 0 && !saved.armed && !savedIndicator,
       calibrationArmed: calibrated === true && withCal.listeners === 1
@@ -996,7 +996,7 @@ function defineChecks() {
     return { ...H.verdict({
       savedClean: !saved.armed && saved.listeners === 0,
       typedArmed: typed.armed && typed.listeners === 1 && has(typed, /^measure: A name or notes/)
-        && badge === 'unsaved name or notes',
+        && badge === 'neuložený název nebo poznámky',
       updatedClean: !updated.armed && updated.listeners === 0,
       failedStaysArmed: failedUpdate.armed && has(failedUpdate, /^measure: A name or notes/)
         && failedUpdate.alerts.includes('Experiment name and notes not updated'),

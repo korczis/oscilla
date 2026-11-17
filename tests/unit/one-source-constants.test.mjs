@@ -297,7 +297,7 @@ test('the derived copy is byte-identical to the text it replaced', async () => {
     + 'browser input processing; it is not the response of the speaker alone.');
   const f2 = flow.expertFields({ sampleRate: 48000 }).groups.flatMap((g) => g.fields)
     .find((f) => f.id === 'f2');
-  assert.equal(f2.help, 'Limited to 0.95 × Nyquist of the device rate.');
+  assert.equal(f2.help, 'Omezeno na 0.95 × Nyquist vzorkovací frekvence zařízení.');
 });
 
 test('the Filter Lab labels the rate it models, and Learn says which display assumes what', async () => {

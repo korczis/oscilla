@@ -8,7 +8,7 @@ import { parseCalibrationText, MAX_IMPORT_BYTES } from '../../calibration/parse.
 import { coverage as profileCoverage } from '../../calibration/interpolate.js';
 import { PROFILE_CONVENTIONS } from '../../calibration/profile.js';
 import {
-  createLevelCalibration, LEVEL_LIMITS, inputBinding, isBoundLevelCalibration, UNBOUND_TEXT,
+  createLevelCalibration, LEVEL_LIMITS, inputBinding, isBoundLevelCalibration,
 } from '../../calibration/level.js';
 import { measureReferenceLevel, REFERENCE_CAPTURE_S } from '../../calibration/reference.js';
 import { formatHz } from '../../charts/axes.js';
@@ -108,9 +108,9 @@ export function createCalibration(ctx, svc, ops) {
     if (ctx.me && ctx.me.state === S.READY) ctx.me.reset();
     ops.refresh();
     ops.rebuildAll();
-    cmp.notify('success', 'Frequency profile loaded', `"${r.profile.name}", `
-      + `${r.profile.points.length} points; applied only inside ${cmp.meas.cal.profile
-        .coverageText} (no extrapolation). Sign: ${cmp.meas.cal.profile.conventionText}. `
+    cmp.notify('success', 'Frekvenční profil načten', `„${r.profile.name}“, `
+      + `bodů: ${r.profile.points.length}; použit jen v rozsahu ${cmp.meas.cal.profile
+        .coverageText} (bez extrapolace). Znaménko: ${cmp.meas.cal.profile.conventionText}. `
       + `${r.preview ? r.preview.text : ''}`);
     return true;
   }
@@ -186,11 +186,12 @@ export function measureCalibrationPart(ctx, svc, ops) {
       try {
         const f = exportProfileFile(ctx.profile, format);
         downloadBlob(new Blob([f.text], { type: f.type }), f.fileName);
-        this.notify('success', 'Frequency profile exported', `${f.fileName}: ${ctx.profile.points
-          .length} points, sign convention ${ctx.profile.convention}; it imports back unchanged.`);
+        this.notify('success', 'Frekvenční profil exportován', `${f.fileName}: bodů ${ctx.profile
+          .points.length}, konvence znaménka ${ctx.profile.convention}; zpět se naimportuje beze `
+          + 'změny.');
         return f.text;
       } catch (err) {
-        this.notify('error', 'Profile not exported', err.message || String(err));
+        this.notify('error', 'Profil nebyl exportován', err.message || String(err));
         return null;
       }
     },
@@ -328,16 +329,17 @@ export function measureCalibrationPart(ctx, svc, ops) {
     /** The stored level calibration in words: how it was obtained and what it is bound to. */
     get measureLevelStateText() {
       const l = this.meas.cal.level;
-      if (!l) return 'none: levels are relative (dBFS-like)';
+      if (!l) return 'žádná: úrovně jsou relativní (obdoba dBFS)';
       // Review F5 of #139: without a device id the binding is the rate and processing flags only.
-      const far = l.deviceKnown ? '' : ' as far as the browser reports it (no device id: sample '
-        + 'rate and processing only)';
+      const far = l.deviceKnown ? '' : ' podle toho, co prohlížeč sdělí (bez id zařízení: jen '
+        + 'vzorkovací frekvence a zpracování)';
       const how = l.method === 'captured'
-        ? `captured, bound to the input it was captured with${far}`
-        : `entered by hand, ${l.bound ? `bound to the input checked when it was stored${far}`
-          : UNBOUND_TEXT}`;
-      return `${l.testContext ? 'TEST CONTEXT ' : ''}reference reading stored (${how}; offset ${l.offsetDb >= 0 ? '+' : '−'}${
-        Math.abs(l.offsetDb).toFixed(1)} dB at ${l.referenceHz} Hz)`;
+        ? `zachycená, vázaná na vstup, se kterým byla zachycena${far}`
+        : `zadaná ručně, ${l.bound ? `vázaná na vstup zkontrolovaný při uložení${far}`
+          : 'nevázaná na žádný vstup'}`;
+      return `${l.testContext ? 'TESTOVACÍ KONTEXT: ' : ''}referenční hodnota uložena (${how}; `
+        + `posun ${l.offsetDb >= 0 ? '+' : '−'}${Math.abs(l.offsetDb).toFixed(1)} dB na `
+        + `${l.referenceHz} Hz)`;
     },
   };
 }

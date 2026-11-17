@@ -359,9 +359,9 @@ test('the product states the policy where a run is saved, in About and in the RE
   const hint = html.match(/data-osc="measure\.retention"[^>]*>([\s\S]*?)<\/p>/);
   assert.ok(hint, 'the MEASURE Experiment panel carries the retention hint');
   const text = hint[1].replace(/\s+/g, ' ');
-  assert.match(text, /discarded/);
-  assert.match(text, /never stored or exported/);
-  assert.match(text, /impulse response/);
+  assert.match(text, /se zahodí/);
+  assert.match(text, /nikdy se neukládá ani neexportuje/);
+  assert.match(text, /impulsní odezva/);
   const about = html.match(/data-osc="about\.privacy"[\s\S]*?<\/li>/);
   assert.ok(about, 'About states it');
   assert.match(about[0].replace(/\s+/g, ' '), /recording is discarded/);

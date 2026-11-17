@@ -972,17 +972,17 @@
         <section class="osc-panel osc-m-flow" id="osc-measure-flow" aria-labelledby="osc-m-flow-title">
           <div class="osc-panel-header osc-m-head">
             <h3 class="osc-panel-title" id="osc-m-flow-title"
-              x-text="meas.expert ? 'Measurement · expert' : 'Guided measurement'">Guided measurement</h3>
+              x-text="meas.expert ? 'Měření · expert' : 'Řízené měření'">Řízené měření</h3>
             <span class="osc-m-preset" x-text="calibrationShown(CHARACTERIZE_PLAYBACK_CHAIN.label)"></span>
             <span class="osc-spacer"></span>
             <span class="osc-m-ind" data-osc="measure.freqIndicator"
               :class="{ 'is-on': measureFreqCoverage.on }" :title="calibrationShown(measureFreqCoverage.title)">
-              <span class="osc-m-ind-k">Frequency</span>
+              <span class="osc-m-ind-k">Frekvence</span>
               <span x-text="calibrationShown(measureFreqIndicator)">NEKALIBROVÁNO</span></span>
             <span class="osc-m-ind" data-osc="measure.levelIndicator"
               :class="{ 'is-on': measureCalIndicator === 'CALIBRATED' }"
               :title="calibrationShown(meas.cal.levelVoid, meas.cal.levelVoidDifferences) || calibrationShown(meas.cal.levelPending) || ''">
-              <span class="osc-m-ind-k">Level</span>
+              <span class="osc-m-ind-k">Úroveň</span>
               <span x-text="calibrationShown(measureCalIndicator)">NEKALIBROVÁNO</span></span>
             <button type="button" class="osc-toggle osc-m-expert" role="switch" aria-checked="false"
               data-osc="measure.expert" :aria-checked="String(meas.expert)" :disabled="meas.busy"
@@ -996,7 +996,7 @@
             <p><strong x-show="!meas.testContext">TESTOVACÍ KONTEXT.</strong>
               <span x-text="meas.testContext || 'Digitální smyčka přes známý syntetický systém: bez mikrofonu a bez akustické cesty. Výsledky testují software, ne fyzickou sestavu.'"></span></p>
           </div>
-          <ol class="osc-m-steps" aria-label="Measurement steps">
+          <ol class="osc-m-steps" aria-label="Kroky měření">
             <template x-for="s in meas.flow.steps" :key="s.id">
               <li class="osc-m-step" :class="'is-' + s.status" data-osc="measure.step"
                 :data-step="s.id" :data-shown="s.shown ? 'phone' : null" :aria-current="s.status === 'current' ? 'step' : false">
@@ -1006,7 +1006,7 @@
                 </span>
                 <span class="osc-m-step-text">
                   <span class="osc-m-step-label" x-text="s.label"></span>
-                  <span class="osc-sr-only" x-text="', ' + ({ done: 'done', warn: 'done with warnings', blocked: 'blocked', current: 'current step', todo: 'not started' }[s.status] || s.status) + ': '"></span>
+                  <span class="osc-sr-only" x-text="', ' + ({ done: 'hotovo', warn: 'hotovo s varováním', blocked: 'blokováno', current: 'aktuální krok', todo: 'nezahájeno' }[s.status] || s.status) + ': '"></span>
                   <span class="osc-m-step-detail" x-text="calibrationShown(s.detail)"></span>
                 </span>
               </li>
@@ -1016,7 +1016,7 @@
             <button type="button" class="osc-btn osc-btn-primary osc-m-primary" id="osc-measure-primary"
               data-osc="measure.primary" :disabled="!meas.flow.primaryAction.enabled"
               :title="meas.flow.primaryAction.reason || ''" @click="measureRunPrimary()"
-              x-text="meas.flow.primaryAction.label">Check setup</button>
+              x-text="meas.flow.primaryAction.label">Zkontrolovat nastavení</button>
             <template x-for="a in meas.flow.secondaryActions.filter((x) => x.id !== 'expert')" :key="a.id">
               <button type="button" class="osc-btn osc-btn-secondary" data-osc="measure.secondary"
                 :data-action="a.id" @click="measureRunSecondary(a.id)" x-text="a.label"></button>
@@ -1024,9 +1024,9 @@
             <button type="button" class="osc-btn osc-btn-secondary osc-m-stop" id="osc-measure-stop"
               data-osc="measure.stop" :disabled="!meas.active" aria-keyshortcuts="Escape"
               @click="measureStop()">
-              <svg aria-hidden="true"><use href="#i-stop"/></svg><span>Stop</span>
+              <svg aria-hidden="true"><use href="#i-stop"/></svg><span>Zastavit</span>
             </button>
-            <div class="osc-m-progress" role="progressbar" aria-label="Measurement progress"
+            <div class="osc-m-progress" role="progressbar" aria-label="Průběh měření"
               aria-valuemin="0" aria-valuemax="100" :aria-valuenow="meas.progressPct ?? 0"
               x-show="meas.progressPct !== null" style="display: none">
               <div class="osc-meter"><div class="osc-meter-fill" :style="'--osc-meter-value: ' + (meas.progressPct ?? 0) + '%'"></div></div>
@@ -1039,14 +1039,14 @@
 
         <!-- ---------- Stimulus ---------- -->
         <section class="osc-panel osc-m-stimulus" id="osc-measure-stimulus" aria-labelledby="osc-m-stim-title">
-          <div class="osc-panel-header"><h3 class="osc-panel-title" id="osc-m-stim-title">Stimulus</h3></div>
+          <div class="osc-panel-header"><h3 class="osc-panel-title" id="osc-m-stim-title">Stimul</h3></div>
           <p class="osc-m-big osc-num" data-osc="measure.stimulusText" x-text="meas.stimulusText"></p>
           <dl class="osc-m-rows">
-            <div class="osc-metric"><dt>Runs</dt><dd class="osc-num" x-text="meas.values.repeats + (meas.values.aggregation === 'median' ? ' (median)' : ' (power mean)')"></dd></div>
-            <div class="osc-metric"><dt>Noise check</dt><dd class="osc-num" x-text="meas.values.noiseCheckS > 0 ? meas.values.noiseCheckS + ' s before the sweep' : 'skipped (SNR NOT MEASURED)'"></dd></div>
+            <div class="osc-metric"><dt>Běhy</dt><dd class="osc-num" x-text="meas.values.repeats + (meas.values.aggregation === 'median' ? ' (medián)' : ' (výkonový průměr)')"></dd></div>
+            <div class="osc-metric"><dt>Kontrola šumu</dt><dd class="osc-num" x-text="meas.values.noiseCheckS > 0 ? meas.values.noiseCheckS + ' s před sweepem' : 'vynecháno (SNR nezměřeno)'"></dd></div>
           </dl>
           <div class="osc-m-field">
-            <span class="osc-label" id="osc-m-level-label">Output level (digital)</span>
+            <span class="osc-label" id="osc-m-level-label">Výstupní úroveň (digitální)</span>
             <div class="osc-seg osc-m-level" role="radiogroup" aria-labelledby="osc-m-level-label">
               <template x-for="c in OUTPUT_LEVEL_CHOICES" :key="c.id">
                 <button type="button" class="osc-seg-btn" role="radio" data-osc="measure.level"
@@ -1058,7 +1058,7 @@
             </div>
             <p class="osc-m-hint" x-text="(OUTPUT_LEVEL_CHOICES.find((c) => c.id === measureLevelId) || {}).detail || ''"></p>
           </div>
-          <ul class="osc-m-notes" aria-label="Safety notes">
+          <ul class="osc-m-notes" aria-label="Bezpečnostní poznámky">
             <template x-for="n in meas.safety" :key="n.id">
               <li class="osc-m-note" :class="'is-' + n.severity">
                 <svg aria-hidden="true"><use :href="n.severity === 'warn' ? '#q-warn' : '#q-info'"/></svg>
@@ -1071,12 +1071,12 @@
         <!-- ---------- Live input ---------- -->
         <section class="osc-panel osc-m-input" id="osc-measure-input" aria-labelledby="osc-m-input-title">
           <div class="osc-panel-header">
-            <h3 class="osc-panel-title" id="osc-m-input-title">Live input</h3>
+            <h3 class="osc-panel-title" id="osc-m-input-title">Živý vstup</h3>
             <span class="osc-spacer"></span>
-            <span class="osc-m-chip" x-text="meas.loopback ? 'TEST CONTEXT loopback' : 'Microphone'"></span>
+            <span class="osc-m-chip" x-text="meas.loopback ? 'TESTOVACÍ KONTEXT, smyčka' : 'Mikrofon'"></span>
           </div>
           <div class="osc-m-field osc-m-inputsel">
-            <label class="osc-label" for="osc-m-input-device">Input device</label>
+            <label class="osc-label" for="osc-m-input-device">Vstupní zařízení</label>
             <div class="osc-select"><select id="osc-m-input-device" data-osc="measure.inputDevice"
               aria-describedby="osc-m-input-status" :disabled="!meas.input.options.length || meas.busy"
               @change="measureSelectInput($event.target.value)">
@@ -1093,11 +1093,11 @@
             <template x-for="r in meas.inputRows" :key="r.id">
               <div class="osc-metric"><dt x-text="r.label"></dt><dd class="osc-num" x-text="r.text"></dd></div>
             </template>
-            <div class="osc-metric"><dt>Frequency profile</dt><dd x-text="meas.cal.profile && meas.cal.useFrequency ? meas.cal.profile.name : calibrationShown('none (UNCALIBRATED)')"></dd></div>
-            <div class="osc-metric"><dt>Levels</dt><dd x-text="calibrationShown(measureLevelsText)"></dd></div>
+            <div class="osc-metric"><dt>Frekvenční profil</dt><dd x-text="meas.cal.profile && meas.cal.useFrequency ? meas.cal.profile.name : calibrationShown('none (UNCALIBRATED)')"></dd></div>
+            <div class="osc-metric"><dt>Úrovně</dt><dd x-text="calibrationShown(measureLevelsText)"></dd></div>
           </dl>
-          <p class="osc-m-hint" x-show="!meas.inputRows.length || meas.inputRows[0].text === 'UNKNOWN'">Run the setup check to read the input device, its sample rate and the processing the browser applies.</p>
-          <p class="osc-m-hint">The microphone opens only for the setup check, the measurement and the live RTA, and is released when they end. Audio stays in this page.</p>
+          <p class="osc-m-hint" x-show="!meas.inputRows.length || meas.inputRows[0].text === 'UNKNOWN'">Spusťte kontrolu nastavení: přečte vstupní zařízení, jeho vzorkovací frekvenci a zpracování, které prohlížeč použije.</p>
+          <p class="osc-m-hint">Mikrofon se otevírá jen pro kontrolu nastavení, měření a živé RTA a po jejich skončení se uvolní. Zvuk zůstává v této stránce.</p>
         </section>
 
         <!-- ---------- Quality: live checks, then the assessment with its reasons ---------- -->
@@ -1305,12 +1305,12 @@
         <!-- ---------- Measurement setup: recipe fields (progressive disclosure), calibration ---------- -->
         <section class="osc-panel osc-m-setup" id="osc-measure-setup" aria-labelledby="osc-m-setup-title">
           <div class="osc-panel-header">
-            <h3 class="osc-panel-title" id="osc-m-setup-title">Measurement setup</h3>
+            <h3 class="osc-panel-title" id="osc-m-setup-title">Nastavení měření</h3>
             <span class="osc-spacer"></span>
             <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm osc-m-setup-toggle"
               data-osc="measure.setupToggle" aria-controls="osc-m-setup-body"
               :aria-expanded="String(meas.setupOpen)" aria-expanded="false"
-              :aria-label="meas.setupOpen ? 'Hide measurement setup' : 'Show measurement setup'"
+              :aria-label="meas.setupOpen ? 'Skrýt nastavení měření' : 'Zobrazit nastavení měření'"
               @click="meas.setupOpen = !meas.setupOpen">
               <svg aria-hidden="true"><use :href="meas.setupOpen ? '#i-up' : '#i-down'"/></svg>
             </button>
@@ -1318,11 +1318,11 @@
           <div class="osc-m-setup-body" id="osc-m-setup-body" :class="{ 'is-open': meas.setupOpen }">
             <div class="osc-m-btnrow osc-m-recipelink">
               <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="measure.recipeLink" data-osc-link="jump"
-                aria-describedby="osc-m-recipelink-note" @click="measureCopyRecipeLink()">Copy recipe link</button>
-              <span class="osc-m-hint" id="osc-m-recipelink-note">Recipe only (sweep, level, runs, timing): no result, calibration or input device. Opening it never starts a measurement.</span>
+                aria-describedby="osc-m-recipelink-note" @click="measureCopyRecipeLink()">Kopírovat odkaz na recept</button>
+              <span class="osc-m-hint" id="osc-m-recipelink-note">Jen recept (sweep, úroveň, běhy, časování): bez výsledku, kalibrace i vstupního zařízení. Otevření odkazu měření nikdy nespustí.</span>
             </div>
             <p class="osc-pp-error" role="status" data-osc="measure.recipeLinkErrors" x-show="meas.recipeLinkErrors.length"
-              x-text="'Recipe link not applied: ' + meas.recipeLinkErrors.join('; ')" style="display: none"></p>
+              x-text="'Odkaz na recept nebyl použit: ' + meas.recipeLinkErrors.join('; ')" style="display: none"></p>
             <template x-for="g in measureExpertGroups" :key="g.id">
               <fieldset class="osc-m-group">
                 <legend x-text="g.label"></legend>
@@ -1359,46 +1359,46 @@
             </template>
 
             <fieldset class="osc-m-group osc-m-cal" aria-describedby="osc-m-cal-note">
-              <legend>Calibration</legend>
-              <p class="osc-m-calrow"><span class="osc-label">Microphone frequency profile</span>
+              <legend>Kalibrace</legend>
+              <p class="osc-m-calrow"><span class="osc-label">Frekvenční profil mikrofonu</span>
                 <strong data-osc="measure.calName" x-text="meas.cal.profile ? meas.cal.profile.name : calibrationShown('none (UNCALIBRATED)')"></strong>
-                <span class="osc-m-hint" x-show="meas.cal.profile" x-text="meas.cal.profile ? meas.cal.profile.points + ' points, applied only inside ' + meas.cal.profile.coverageText : ''"></span></p>
+                <span class="osc-m-hint" x-show="meas.cal.profile" x-text="meas.cal.profile ? meas.cal.profile.points + ' bodů, použit jen v rozsahu ' + meas.cal.profile.coverageText : ''"></span></p>
               <p class="osc-m-hint" data-osc="measure.calConvention" x-show="meas.cal.profile"
-                x-text="meas.cal.profile ? 'Sign: ' + meas.cal.profile.conventionText + '. ' + (meas.cal.profile.preview || '') : ''"></p>
+                x-text="meas.cal.profile ? 'Znaménko: ' + meas.cal.profile.conventionText + '. ' + (meas.cal.profile.preview || '') : ''"></p>
               <div class="osc-m-btnrow">
                 <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="measure.calImport"
-                  :disabled="meas.busy" @click="measureImportCalibrationClick()">Import profile (CSV / JSON)…</button>
+                  :disabled="meas.busy" @click="measureImportCalibrationClick()">Importovat profil (CSV / JSON)…</button>
                 <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="measure.calExportCsv"
-                  x-show="meas.cal.profile" @click="measureExportCalibration('csv')">Export CSV</button>
+                  x-show="meas.cal.profile" @click="measureExportCalibration('csv')">Exportovat CSV</button>
                 <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="measure.calExportJson"
-                  x-show="meas.cal.profile" @click="measureExportCalibration('json')">Export JSON</button>
+                  x-show="meas.cal.profile" @click="measureExportCalibration('json')">Exportovat JSON</button>
                 <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="measure.calRemove"
-                  x-show="meas.cal.profile" :disabled="meas.busy" @click="measureClearCalibration()">Remove profile</button>
+                  x-show="meas.cal.profile" :disabled="meas.busy" @click="measureClearCalibration()">Odebrat profil</button>
                 <button type="button" class="osc-toggle" role="switch" aria-checked="true" data-osc="measure.calUse"
                   :aria-checked="String(meas.cal.useFrequency)" :disabled="meas.busy || !meas.cal.profile"
                   @click="measureToggleCalibration('useFrequency')">
-                  <span>Frequency correction</span><span class="osc-toggle-track" aria-hidden="true"></span></button>
+                  <span>Frekvenční korekce</span><span class="osc-toggle-track" aria-hidden="true"></span></button>
               </div>
-              <p class="osc-m-calrow"><span class="osc-label">Absolute level</span>
+              <p class="osc-m-calrow"><span class="osc-label">Absolutní úroveň</span>
                 <strong data-osc="measure.levelState" x-text="measureLevelStateText"></strong></p>
               <p class="osc-pp-error" role="status" data-osc="measure.levelVoid" x-show="meas.cal.level && (meas.cal.levelVoid || meas.cal.levelPending)"
                 x-text="calibrationShown(meas.cal.levelVoid, meas.cal.levelVoidDifferences) || calibrationShown(meas.cal.levelPending) || ''"></p>
               <div class="osc-m-btnrow">
                 <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="measure.levelCal"
-                  :disabled="meas.busy" @click="measureOpenLevelCalibration()">Level calibration…</button>
+                  :disabled="meas.busy" @click="measureOpenLevelCalibration()">Kalibrace úrovně…</button>
                 <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="measure.levelRemove"
-                  x-show="meas.cal.level" :disabled="meas.busy" @click="measureClearLevelCalibration()">Remove</button>
+                  x-show="meas.cal.level" :disabled="meas.busy" @click="measureClearLevelCalibration()">Odebrat</button>
                 <button type="button" class="osc-toggle" role="switch" aria-checked="false" data-osc="measure.levelUse"
                   :aria-checked="String(meas.cal.useLevel)" :disabled="meas.busy || !meas.cal.level"
                   @click="measureToggleCalibration('useLevel')">
-                  <span>Use level calibration</span><span class="osc-toggle-track" aria-hidden="true"></span></button>
+                  <span>Použít kalibraci úrovně</span><span class="osc-toggle-track" aria-hidden="true"></span></button>
               </div>
               <ul class="osc-m-notes osc-m-notes--plain" x-show="meas.cal.errors.length || meas.cal.warnings.length">
                 <template x-for="(t, i) in meas.cal.errors.concat(meas.cal.warnings)" :key="i"><li x-text="t"></li></template>
               </ul>
-              <p class="osc-m-hint" id="osc-m-cal-note">A frequency profile corrects only between its first and last frequency; outside it the response stays uncalibrated. The raw result is always kept. A frequency profile alone never gives absolute levels.</p>
+              <p class="osc-m-hint" id="osc-m-cal-note">Frekvenční profil koriguje jen mezi svou první a poslední frekvencí; mimo ně zůstává odezva nekalibrovaná. Surový výsledek se vždy uchová. Samotný frekvenční profil nikdy nedává absolutní úrovně.</p>
             </fieldset>
-            <ul class="osc-m-notes osc-m-notes--plain" aria-label="Room and repeat notes">
+            <ul class="osc-m-notes osc-m-notes--plain" aria-label="Poznámky k místnosti a opakování">
               <template x-for="n in ROOM_NOTES" :key="n.id"><li x-text="n.text"></li></template>
             </ul>
           </div>
@@ -1409,42 +1409,42 @@
           <div class="osc-panel-header"><h3 class="osc-panel-title" id="osc-m-exp-title">Experiment</h3>
             <span class="osc-m-unsaved" data-osc="measure.unsaved"
               x-show="measureUnsaved || measureMetadataPending" style="display: none"
-              x-text="measureUnsaved ? 'unsaved result' : 'unsaved name or notes'">unsaved result</span></div>
+              x-text="measureUnsaved ? 'neuložený výsledek' : 'neuložený název nebo poznámky'">neuložený výsledek</span></div>
           <div class="osc-m-form">
-            <label class="osc-label" for="osc-m-name">Name</label>
+            <label class="osc-label" for="osc-m-name">Název</label>
             <input class="osc-number osc-m-text" id="osc-m-name" type="text" maxlength="200" autocomplete="off"
-              data-osc="measure.name" x-model="meas.name" placeholder="e.g. Laptop speakers, desk">
-            <label class="osc-label" for="osc-m-notes">Location and distance notes</label>
+              data-osc="measure.name" x-model="meas.name" placeholder="např. reproduktory notebooku, stůl">
+            <label class="osc-label" for="osc-m-notes">Poznámky k místu a vzdálenosti</label>
             <textarea class="osc-number osc-m-text osc-m-textarea" id="osc-m-notes" rows="2" maxlength="10000"
               data-osc="measure.notes" x-model="meas.notes"
-              placeholder="Room, microphone distance and angle, loudspeaker"></textarea>
+              placeholder="Místnost, vzdálenost a úhel mikrofonu, reproduktor"></textarea>
           </div>
           <div class="osc-m-btnrow">
             <button type="button" class="osc-btn osc-btn-primary" id="osc-measure-save" data-osc="measure.save"
               aria-describedby="osc-measure-save-why" :title="measureSaveReason || null"
               :disabled="meas.state !== 'COMPLETE' || meas.saving" @click="measureSave()"
-              x-text="meas.saved ? 'Update name and notes' : 'Save experiment'">Save experiment</button>
+              x-text="meas.saved ? 'Aktualizovat název a poznámky' : 'Uložit experiment'">Uložit experiment</button>
             <span class="osc-sr-only" id="osc-measure-save-why" x-text="measureSaveReason"></span>
             <button type="button" class="osc-btn osc-btn-secondary" data-osc="measure.repeat"
-              :disabled="meas.state !== 'COMPLETE'" @click="measureRepeat()">Repeat (new experiment)</button>
+              :disabled="meas.state !== 'COMPLETE'" @click="measureRepeat()">Opakovat (nový experiment)</button>
             <button type="button" class="osc-btn osc-btn-secondary" data-osc="measure.toExperiments" data-osc-link="jump"
               @click="setWorkspace('experiments', { focusHeading: true })">Otevřít Experimenty</button>
             <a href="#m=studio&amp;st=measurement-sweep" data-osc="measure.toStudio" data-osc-link="open-in">Open Measurement Sweep in Studio</a>
           </div>
           <div class="osc-m-defnote" data-osc="measure.definition" x-show="meas.definition" style="display: none">
-            <p class="osc-m-hint"><strong>Definition:</strong> <span x-text="meas.definition ? meas.definition.text : ''"></span><span
-              x-text="meas.definition && meas.definition.conditions ? '. Declared conditions: ' + meas.definition.conditions : ''"></span></p>
+            <p class="osc-m-hint"><strong>Definice:</strong> <span x-text="meas.definition ? meas.definition.text : ''"></span><span
+              x-text="meas.definition && meas.definition.conditions ? '. Deklarované podmínky: ' + meas.definition.conditions : ''"></span></p>
             <div class="osc-warning osc-x-warn" role="note" data-osc="measure.definitionDiffers" x-show="meas.definition && meas.definition.differs" style="display: none">
-              <svg aria-hidden="true"><use href="#q-warn"/></svg><p>The setup differs from this definition: the next experiment is not recorded as from it.</p>
+              <svg aria-hidden="true"><use href="#q-warn"/></svg><p>Nastavení se od této definice liší: další experiment se nezaznamená jako z ní.</p>
             </div>
             <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="measure.clearDefinition"
-              @click="measureClearDefinition()">Stop using this definition</button>
+              @click="measureClearDefinition()">Přestat používat tuto definici</button>
           </div>
           <p class="osc-m-hint" role="status" data-osc="measure.evidenceNotes" x-show="measureEvidenceNotes.length"
             x-text="measureEvidenceNotes.join(' ')" style="display: none"></p>
           <p class="osc-m-hint" data-osc="measure.savedText"
-            x-text="meas.saved ? 'Saved as an experiment' + (exps.persistent ? ' in this browser.' : ' in memory for this page view.') : (measureUnsaved ? 'Not saved yet: reloading or closing the page loses this result. ' : '') + 'Saved experiments stay in this browser only (no cloud).'"></p>
-          <p class="osc-m-hint" data-osc="measure.retention">The recording is analysed in this page and discarded when the analysis ends: it is never stored or exported. A saved experiment keeps derived results. One of them, the impulse response, is computed from the recording, so other sound the microphone picked up during the sweep, and above all just after it, can be recovered from it, also from an exported file.</p>
+            x-text="meas.saved ? 'Uloženo jako experiment' + (exps.persistent ? ' v tomto prohlížeči.' : ' v paměti pro toto zobrazení stránky.') : (measureUnsaved ? 'Zatím neuloženo: obnovení nebo zavření stránky tento výsledek ztratí. ' : '') + 'Uložené experimenty zůstávají jen v tomto prohlížeči (bez cloudu).'"></p>
+          <p class="osc-m-hint" data-osc="measure.retention">Nahrávka se analyzuje v této stránce a po skončení analýzy se zahodí: nikdy se neukládá ani neexportuje. Uložený experiment uchová odvozené výsledky. Jeden z nich, impulsní odezva, se počítá z nahrávky, takže jiný zvuk, který mikrofon zachytil během sweepu a hlavně těsně po něm, se z ní dá zpětně získat, i z exportovaného souboru.</p>
           <p class="osc-m-hint" x-show="exps.storeNote" x-text="exps.storeNote"></p>
         </section>
       </div>

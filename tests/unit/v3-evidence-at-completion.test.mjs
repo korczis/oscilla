@@ -207,22 +207,22 @@ test('the workspace states what differs from the evidence, and what a save keeps
   const toB = me.evidenceChanges(ev, { calibration: { frequency: { id: PROFILE_B.id,
     name: 'Mic B' }, level: null }, notes: 'desk' });
   assert.equal(toB.length, 1);
-  assert.match(toB[0], /^Calibration changed after this measurement; the saved record keeps /);
-  assert.match(toB[0], /"Mic A"/);
+  assert.match(toB[0], /^Kalibrace se po tomto měření změnila; uložený záznam si ponechá /);
+  assert.match(toB[0], /„Mic A“/);
   const lvl = me.evidenceChanges(me.measuredEvidence(UNCAL, { notes: '' }),
     { calibration: { frequency: null, level: LEVEL }, notes: '' });
-  assert.match(lvl[0], /no frequency profile, levels relative/);
+  assert.match(lvl[0], /bez frekvenčního profilu, úrovně relativní/);
   assert.doesNotMatch(lvl.join(' '), /SPL/);
   const notes = me.evidenceChanges(ev, { calibration: same, notes: 'floor' });
-  assert.match(notes[0], /saved as an annotation/);
+  assert.match(notes[0], /se uloží jako anotace/);
   // After the Save the text never claims an unsaved edit is saved (review F1).
   const pending = me.evidenceChanges(ev, { calibration: same, notes: 'floor',
     saved: { annotation: null } });
-  assert.match(pending[0], /^These notes are not stored yet/);
-  assert.doesNotMatch(pending[0], /are saved as an annotation/);
+  assert.match(pending[0], /^Tyto poznámky zatím nejsou uložené/);
+  assert.doesNotMatch(pending[0], /se uloží jako anotace/);
   const stored = me.evidenceChanges(ev, { calibration: same, notes: 'floor',
     saved: { annotation: 'floor' } });
-  assert.match(stored[0], /are stored as its annotation/);
+  assert.match(stored[0], /jsou uložené jako jeho anotace/);
 });
 
 test('validate: a contradicted calibration claim is a finding; strict validation refuses it',

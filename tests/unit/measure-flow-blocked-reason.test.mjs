@@ -47,7 +47,7 @@ test('an accepted sweep still reads as its description', () => {
     preflight: { ready: true, sampleRate: 48000, blockers: [], warnings: [] } });
   const st = flow.steps.find((s) => s.id === 'stimulus');
   assert.notEqual(st.status, 'blocked');
-  assert.match(st.detail, /^20 Hz → 20 kHz log sweep, 10 s, LOW output, 3 runs$/);
+  assert.match(st.detail, /^20 Hz → 20 kHz log sweep, 10 s, výstup NÍZKÁ, běhy: 3$/);
 });
 
 // Review of #331, R6: the report is about the recipe it checked. Once the user corrects the
@@ -61,8 +61,8 @@ test('a corrected recipe no longer shows the refusal of the sweep it replaced', 
   assert.notEqual(st.status, 'blocked', 'the corrected sweep is not the refused one');
   assert.notEqual(st.status, 'done', 'nor was it checked');
   assert.doesNotMatch(st.detail, /f1 must be/, 'the old reason is gone');
-  assert.match(st.detail, /^30 Hz → 20 kHz log sweep.*\(changed since the setup check\)$/);
-  assert.equal(flow.primaryAction.label, 'Check setup again');
+  assert.match(st.detail, /^30 Hz → 20 kHz log sweep.*\(změněno od kontroly nastavení\)$/);
+  assert.equal(flow.primaryAction.label, 'Znovu zkontrolovat nastavení');
   assert.equal(flow.primaryAction.reason, null, 'the action names no stale reason either');
   // the same report, still for the setup as it is, keeps its refusal
   const same = measureFlow({ state: S.INVALID, preflight: report, recipe: recipe({ f1: -1 }) });

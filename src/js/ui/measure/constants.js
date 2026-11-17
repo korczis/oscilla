@@ -72,11 +72,11 @@ export const NORMALIZATIONS = Object.freeze({
 export const LIVE_RTA_FIELDS = Object.freeze({
   rtaMode: 'rtaMode', averaging: 'rtaAveraging', fftSize: 'rtaFftSize', window: 'rtaWindow',
 });
-export const LIVE_FIELD_HELP = 'Live RTA (RTA tab); not part of the measurement recipe.';
+export const LIVE_FIELD_HELP = 'Živé RTA (záložka RTA); není součástí receptu měření.';
 /** Why a level calibration cannot be stored before an input is known (ledger C1). */
-export const LEVEL_NEEDS_INPUT = 'Run the setup check first: a level calibration is valid only '
-  + 'for the input it was taken with, and no input has been checked yet, so a reading typed now '
-  + 'could not be bound to one.';
+export const LEVEL_NEEDS_INPUT = 'Nejdřív spusťte kontrolu nastavení: kalibrace úrovně platí jen '
+  + 'pro vstup, se kterým vznikla, a zatím nebyl zkontrolován žádný vstup, takže hodnotu zadanou '
+  + 'teď by nebylo k čemu vázat.';
 
 /** What a level reading typed by hand in TEST CONTEXT says of itself (ledger W7c). */
 export const MANUAL_TEST_CONTEXT_LABEL = 'TEST CONTEXT: reading typed by hand while the page '

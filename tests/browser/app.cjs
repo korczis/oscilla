@@ -710,10 +710,10 @@ function defineChecks() {
     const res = {
       offered: !before.loopback && !before.disabled && before.value === ''
         && before.options.at(-1) === TC_LABEL && before.banner === null
-        && before.chip === 'Microphone',
+        && before.chip === 'Mikrofon',
       entered: entered.loopback && entered.selected === TC_LABEL && !entered.disabled
         && /^TESTOVACÍ KONTEXT\./.test(entered.banner || '')
-        && entered.chip === 'TEST CONTEXT loopback'
+        && entered.chip === 'TESTOVACÍ KONTEXT, smyčka'
         && /no input device is used\. Choose an input to leave TEST CONTEXT/
           .test(entered.status)
         && /^TEST CONTEXT: digital loopback, no microphone/.test(entered.polite),
@@ -721,7 +721,7 @@ function defineChecks() {
         && checked.inputNow && stored === true && calibrated.level
         && calibrated.indicator === 'CALIBRATED',
       left: !left.loopback && left.value === '' && left.banner === null
-        && left.chip === 'Microphone' && !left.disabled,
+        && left.chip === 'Mikrofon' && !left.disabled,
       cleared: left.state === 'IDLE' && !left.inputNow && left.indicator === 'UNCALIBRATED'
         && /Cleared: the input check\. Run the /.test(left.polite)
         && left.toasts.some((t) => /^Left TEST CONTEXT: Cleared/.test(t)),
@@ -766,7 +766,7 @@ function defineChecks() {
       && /^Measurement invalid/.test(invalid.assertive);
     res.invalidCleared = leftInvalid.result === null && leftInvalid.rta === null
       && leftInvalid.noiseStep !== 'done' && leftInvalid.state === 'IDLE'
-      && leftInvalid.assertive === '' && leftInvalid.chip === 'Microphone'
+      && leftInvalid.assertive === '' && leftInvalid.chip === 'Mikrofon'
       && /Cleared: the invalid TEST CONTEXT result/.test(leftInvalid.polite)
       && leftInvalid.toasts.some((t) => /the invalid TEST CONTEXT result/.test(t));
     await setGain(gainWas);
@@ -856,11 +856,11 @@ function defineChecks() {
       return { ...tried, ...await now() };
     };
     const inPage = (fn, arg) => p.evaluate(fn, arg);
-    const NEEDS_INPUT = /^Run the setup check first: a level calibration is valid only for the/;
+    const NEEDS_INPUT = /^Nejdřív spusťte kontrolu nastavení: kalibrace úrovně platí jen pro/;
     /** Nothing to bind to: no input, the typed reading refused with the reason, no CALIBRATED. */
     const refused = (r) => r.input === null && r.saved === false && NEEDS_INPUT.test(r.error)
       && NEEDS_INPUT.test(r.note) && !r.stored && r.indicator === 'UNCALIBRATED'
-      && r.levels === 'relative (dBFS-like)';
+      && r.levels === 'relativní (obdoba dBFS)';
     const indicatorText = () => p.evaluate(() => document
       .querySelector('[data-osc="measure.levelIndicator"]').textContent.replace(/\s+/g, ' ')
       .trim());
@@ -913,7 +913,7 @@ function defineChecks() {
       res.outside = await now();
       res.outsideText = await until(async () => {
         const t = await indicatorText();
-        return t === 'Level NEKALIBROVÁNO' ? t : null;
+        return t === 'Úroveň NEKALIBROVÁNO' ? t : null;
       }, { ms: 5000, what: 'the level indicator reads NEKALIBROVÁNO outside TEST CONTEXT' })
         .catch(() => indicatorText());
       // The reason as shown: in Czech over the English data (U114 b), its state first.
@@ -933,18 +933,18 @@ function defineChecks() {
           && refused(res.afterShow),
         inContext: res.inContext.set === true && res.typedInContext.saved === true
           && res.typedInContext.indicator === 'CALIBRATED' && res.typedInContext.testContext
-          && /level CALIBRATED$/.test(res.typedInContext.step),
+          && /úroveň CALIBRATED$/.test(res.typedInContext.step),
         labelled: /^TEST CONTEXT: .* calibrator on the capsule$/
           .test(res.typedInContext.conditions || '')
-          && /^TEST CONTEXT reference reading stored/.test(res.typedInContext.state),
+          && /^TESTOVACÍ KONTEXT: referenční hodnota uložena/.test(res.typedInContext.state),
         outside: res.left === true && !res.outside.testContext && res.outside.input === null
           && res.outside.indicator === 'UNCALIBRATED' && !res.outside.pending
           && /^UNCALIBRATED: the level calibration was made in TEST CONTEXT/
             .test(res.outside.void || '')
-          && res.outsideText === 'Level NEKALIBROVÁNO'
+          && res.outsideText === 'Úroveň NEKALIBROVÁNO'
           && /^NEKALIBROVÁNO: kalibrace úrovně vznikla v TESTOVACÍM KONTEXTU/
             .test(res.outsideReason || '')
-          && /level relative \(dBFS-like\)$/.test(res.outside.step),
+          && /úroveň relativní \(obdoba dBFS\)$/.test(res.outside.step),
       };
       // With a fake microphone: the checked microphone is the one input a reading binds to,
       // and that calibration does not apply in TEST CONTEXT.
@@ -983,14 +983,14 @@ function defineChecks() {
           && res.micCheck.input === 'known';
         v.micCalibrated = res.micTyped.saved === true && res.micTyped.indicator === 'CALIBRATED'
           && res.micTyped.conditions === 'on the microphone'
-          && /^reference reading stored/.test(res.micTyped.state);
+          && /^referenční hodnota uložena/.test(res.micTyped.state);
         v.micCalNotInLoopback = res.intoLoopback === true && res.micCalInLoopback.testContext
           && res.micCalInLoopback.indicator === 'UNCALIBRATED'
           && /^UNCALIBRATED: the level calibration was taken with a microphone/
             .test(res.micCalInLoopback.void || '');
         v.micCalPendingAgain = res.backOnMic === true && res.micCalUnchecked.input === null
           && res.micCalUnchecked.indicator === 'PENDING INPUT CHECK'
-          && /level pending input check$/.test(res.micCalUnchecked.step);
+          && /úroveň čeká na kontrolu vstupu$/.test(res.micCalUnchecked.step);
         v.thirdSequence = res.sameBinding.left === true && res.sameBinding.loopback === true
           && res.sameBinding.set === true && res.typedSameBinding.saved === true
           && res.typedSameBinding.indicator === 'CALIBRATED' && res.backForCheck === true
@@ -999,7 +999,7 @@ function defineChecks() {
           && res.afterRealCheck.indicator === 'UNCALIBRATED'
           && /^UNCALIBRATED: the level calibration was made in TEST CONTEXT/
             .test(res.afterRealCheck.void || '')
-          && /level relative \(dBFS-like\)$/.test(res.afterRealCheck.step);
+          && /úroveň relativní \(obdoba dBFS\)$/.test(res.afterRealCheck.step);
         v.testResultNeverTakesMicCal = res.shownChecked === true
           && res.afterShownChecked.title === 'TEST CONTEXT result'
           && res.afterShownChecked.input === 'known'
@@ -1009,7 +1009,7 @@ function defineChecks() {
           && res.afterShownPending.title === 'TEST CONTEXT result'
           && res.afterShownPending.input === null
           && res.afterShownPending.indicator === 'PENDING INPUT CHECK'
-          && /level pending input check$/.test(res.afterShownPending.step)
+          && /úroveň čeká na kontrolu vstupu$/.test(res.afterShownPending.step)
           && relative(res.afterShownPending.rta) && relative(res.afterShownPending.response);
       } else {
         res.microphone = 'not run: no fake microphone on this browser and origin';

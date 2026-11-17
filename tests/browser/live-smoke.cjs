@@ -362,7 +362,7 @@ async function runOne(name) {
     await page.waitForFunction(() => document.querySelector('#osc-app').dataset.mode === 'measure',
       null, { timeout: 5000 });
     const muiOk = (v) => v.view && v.current === 'nav.measure' && v.steps === 7
-      && v.primary === 'Check setup' && v.primaryEnabled && v.stopDisabled && v.indicators
+      && v.primary === 'Zkontrolovat nastavení' && v.primaryEnabled && v.stopDisabled && v.indicators
       && v.tabs.length >= 3 && v.input && v.state === 'IDLE';
     const mui = await until(() => page.evaluate(() => {
       const q = (s) => document.querySelector(s);

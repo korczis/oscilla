@@ -194,12 +194,12 @@ export function measureUnsavedPart(ctx, svc, ops) {
     },
     /** Why "Save experiment" is disabled, or '' when it is enabled. */
     get measureSaveReason() {
-      if (this.meas.saving) return 'Saving…';
+      if (this.meas.saving) return 'Ukládá se…';
       if (this.meas.saved) {
-        return 'This measurement is saved; Update name and notes stores a new name or notes as '
-          + 'metadata (the experiment is unchanged).';
+        return 'Toto měření je uložené; Aktualizovat název a poznámky uloží nový název nebo '
+          + 'poznámky jako metadata (experiment se nemění).';
       }
-      if (this.meas.state !== S.COMPLETE) return 'Available once a measurement is COMPLETE.';
+      if (this.meas.state !== S.COMPLETE) return 'K dispozici, až bude měření dokončené.';
       return '';
     },
   };

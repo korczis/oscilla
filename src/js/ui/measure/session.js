@@ -380,10 +380,10 @@ export function measureDerivedPart(ctx, svc, ops) {
     },
     /** The "Levels" row of the setup summary, in words. */
     get measureLevelsText() {
-      if (!(this.meas.cal.level && this.meas.cal.useLevel)) return 'relative (dBFS-like)';
+      if (!(this.meas.cal.level && this.meas.cal.useLevel)) return 'relativní (obdoba dBFS)';
       const ind = this.measureCalIndicator;
       if (ind === 'CALIBRATED') return LEVEL_OFFSET_APPLIED_TEXT;
-      if (ind === LEVEL_PENDING_INDICATOR) return 'relative until the input is checked';
+      if (ind === LEVEL_PENDING_INDICATOR) return 'relativní, dokud se vstup nezkontroluje';
       return LEVEL_NOT_VALID_TEXT;
     },
     /**

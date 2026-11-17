@@ -94,22 +94,22 @@ export function evidenceChanges(evidence, { calibration = null, notes = '', save
   const out = [];
   if (calibrationKey(evidence.calibration) !== calibrationKey(calibration)) {
     const f = evidence.calibration.frequency;
-    out.push('Calibration changed after this measurement; the saved record keeps the '
-      + `calibration it was measured with (${f ? `frequency profile "${f.name || f.id}"`
-        : 'no frequency profile'}, ${evidence.calibration.level ? 'level calibrated'
-        : 'levels relative'}).`);
+    out.push('Kalibrace se po tomto měření změnila; uložený záznam si ponechá kalibraci, se '
+      + `kterou se měřilo (${f ? `frekvenční profil „${f.name || f.id}“`
+        : 'bez frekvenčního profilu'}, ${evidence.calibration.level ? 'úroveň kalibrovaná'
+        : 'úrovně relativní'}).`);
   }
   const later = trimmed(notes);
   if (later && later !== (evidence.notes || '')) {
     if (!saved) {
-      out.push('Notes edited after this measurement started are saved as an annotation; the '
-        + 'record keeps the notes it started with.');
+      out.push('Poznámky upravené po začátku tohoto měření se uloží jako anotace; záznam si '
+        + 'ponechá poznámky, se kterými začal.');
     } else if (later === (saved.annotation || '')) {
-      out.push('Notes edited after this measurement started are stored as its annotation; the '
-        + 'record keeps the notes it started with.');
+      out.push('Poznámky upravené po začátku tohoto měření jsou uložené jako jeho anotace; '
+        + 'záznam si ponechá poznámky, se kterými začal.');
     } else {
-      out.push('These notes are not stored yet: "Update name and notes" saves them as an '
-        + 'annotation of the saved run; its record keeps the notes it started with.');
+      out.push('Tyto poznámky zatím nejsou uložené: „Aktualizovat název a poznámky“ je uloží '
+        + 'jako anotaci uloženého běhu; jeho záznam si ponechá poznámky, se kterými začal.');
     }
   }
   return out;

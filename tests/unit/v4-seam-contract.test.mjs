@@ -110,7 +110,7 @@ function assertNothingToBindTo(cmp, seam, where) {
   assert.equal(cmp.meas.levelForm.error, LEVEL_NEEDS_INPUT);
   assert.equal(seam.levelCalibration, null, `${where}: nothing stored`);
   assert.equal(cmp.measureCalIndicator, 'UNCALIBRATED', where);
-  assert.equal(cmp.measureLevelsText, 'relative (dBFS-like)', where);
+  assert.equal(cmp.measureLevelsText, 'relativní (obdoba dBFS)', where);
 }
 
 test('W7f route A: an input named in TEST CONTEXT is not a checked input after useMicrophone()',
@@ -184,7 +184,7 @@ test('W7c: a level calibration typed by hand in TEST CONTEXT is labelled as one'
   assert.match(cal.conditions, / calibrator on the capsule$/);
   assert.equal(cmp.meas.cal.level.conditions, cal.conditions);
   assert.equal(cmp.meas.cal.level.testContext, true);
-  assert.match(cmp.measureLevelStateText, /^TEST CONTEXT reference reading stored \(entered by /);
+  assert.match(cmp.measureLevelStateText, /^TESTOVACÍ KONTEXT: referenční hodnota uložena \(zadaná /);
   // Without conditions of the user's own the label stands alone.
   cmp.measureClearLevelCalibration();
   cmp.meas.levelForm.conditions = '';
@@ -215,7 +215,7 @@ test('P1 of #169: a level calibration whose input is not checked is in no displa
   assert.equal(seam.showResult({ ...a.result, input: null }), true);
   assert.equal(seam.inputNow, null);
   assert.equal(cmp.measureCalIndicator, 'PENDING INPUT CHECK');
-  assert.equal(cmp.measureLevelsText, 'relative until the input is checked');
+  assert.equal(cmp.measureLevelsText, 'relativní, dokud se vstup nezkontroluje');
   assertRelative(cmp.meas.rta, 'noise-check RTA, input not checked');
   assertRelative(cmp.meas.response, 'response, input not checked');
   // Checked again, the same calibration is displayed.
@@ -228,20 +228,20 @@ test('P1 of #169: a level calibration whose input is not checked is in no displa
 
 test('P2 of #169: the Calibration step says CALIBRATED only for a checked input', () => {
   const { cmp, seam } = makeUi({ loopback: true });
-  assert.match(calStep(cmp), /level relative \(dBFS-like\)$/);
+  assert.match(calStep(cmp), /úroveň relativní \(obdoba dBFS\)$/);
   seam.setInputNow(MIC_A);
   typeReading(cmp);
   assert.equal(cmp.measureSaveLevelCalibration(), true);
   assert.equal(cmp.measureCalIndicator, 'CALIBRATED');
-  assert.match(calStep(cmp), /level CALIBRATED$/);
+  assert.match(calStep(cmp), /úroveň CALIBRATED$/);
   seam.setInputNow(null);
   assert.equal(cmp.measureCalIndicator, 'PENDING INPUT CHECK');
-  assert.match(calStep(cmp), /level pending input check$/);
+  assert.match(calStep(cmp), /úroveň čeká na kontrolu vstupu$/);
   assert.doesNotMatch(calStep(cmp), /CALIBRATED$/);
   // Made in the other context: never "level CALIBRATED" either.
   seam.useMicrophone();
   assert.equal(cmp.measureCalIndicator, 'UNCALIBRATED');
-  assert.match(calStep(cmp), /level relative \(dBFS-like\)$/);
+  assert.match(calStep(cmp), /úroveň relativní \(obdoba dBFS\)$/);
 });
 
 test('P2 of #169: leaving a context drops the result and the noise-check snapshot shown in it',
@@ -339,11 +339,11 @@ test('drive: setValues refuses keys outside the recipe and out-of-range values, 
   };
   refused({ bogus: 1 }, /bogus/);
   refused({ rtaMode: 'octave' }, /rtaMode/); // a setup value, but not a recipe field
-  refused({ duration: 0.5 }, /Sweep duration|duration/i);
-  refused({ repeats: 2, duration: 0.5 }, /must be/); // never partly applied
-  refused({ repeats: 2.5 }, /whole number/);
-  refused({ level: 'loud' }, /must be one of/);
-  refused({ f1: 5000, f2: 100 }, /below the end frequency/);
+  refused({ duration: 0.5 }, /Délka sweepu: musí být/);
+  refused({ repeats: 2, duration: 0.5 }, /musí být/); // never partly applied
+  refused({ repeats: 2.5 }, /celé číslo/);
+  refused({ level: 'loud' }, /musí být jedna z hodnot/);
+  refused({ f1: 5000, f2: 100 }, /musí být pod koncovou/);
   refused(null, /./);
   assert.deepEqual(notes, [], 'no toast');
   assert.deepEqual(cmp.meas.recipeLinkErrors || [], [], 'not a recipe link');

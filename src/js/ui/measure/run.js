@@ -285,9 +285,9 @@ export function measureRecipeLinkPart(ctx, svc, ops) {
         copied = false;
       }
       if (copied) {
-        this.notify('success', 'Recipe link copied', 'The link loads this measurement recipe '
-          + '(sweep, level, runs, timing); it carries no result, calibration or input device and '
-          + 'never starts a measurement.');
+        this.notify('success', 'Odkaz na recept zkopírován', 'Odkaz načte tento recept měření '
+          + '(sweep, úroveň, běhy, časování); nenese výsledek, kalibraci ani vstupní zařízení a '
+          + 'měření nikdy nespustí.');
       } else this.openModal('osc-dlg-recipe-link');
       return url;
     },
@@ -308,24 +308,24 @@ export function measureRecipeLinkPart(ctx, svc, ops) {
       const r = decodeRecipeLink(param, { defaults: recipeValues(FIELD_DEFAULTS) });
       if (!r.ok) {
         this.meas.recipeLinkErrors = r.errors.slice(0, 5);
-        this.notify('warning', 'Recipe link not applied', `${r.errors.slice(0, 3).join('; ')}. `
-          + 'The measurement setup is unchanged.');
+        this.notify('warning', 'Odkaz na recept nebyl použit', `${r.errors.slice(0, 3)
+          .join('; ')}. Nastavení měření se nezměnilo.`);
         return false;
       }
       // Refused while a measurement runs; otherwise applied as an edit (a READY check resets).
       const applied = ops.applyRecipeValues(this, r.values);
       if (!applied.ok) {
         this.meas.recipeLinkErrors = applied.errors;
-        this.notify('warning', 'Recipe link not applied', 'A measurement is running; stop it and '
-          + 'open the link again.');
+        this.notify('warning', 'Odkaz na recept nebyl použit', 'Běží měření; zastavte ho a '
+          + 'otevřete odkaz znovu.');
         ctx.lastRecipeParam = null;
         return false;
       }
       this.meas.recipeLinkErrors = [];
       ctx.repeatOf = null;
-      this.notify('info', 'Measurement recipe loaded from the link', `${this.meas.stimulusText}, `
-        + `${this.meas.values.repeats} run(s). Nothing runs until you press Check setup or Start `
-        + 'measurement.');
+      this.notify('info', 'Recept měření načten z odkazu', `${this.meas.stimulusText}, `
+        + `běhy: ${this.meas.values.repeats}. Nic se nespustí, dokud nestisknete Zkontrolovat `
+        + 'nastavení nebo Spustit měření.');
       return true;
     },
   };
