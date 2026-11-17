@@ -1,0 +1,79 @@
+# Review verdict for pull request #593 (fix/czech-pass-7): Czech pass 7a (U115), the Measure
+# guided flow shown in Czech over English data. Built by oscilla-0b on main 5c697d2d: c25d0ed4
+# fix(ui), b7e36ab5 test(visual) MEASURE references re-accepted. Judged at b7e36ab5 on base
+# origin/main 5c697d2d (main is now 9af695a3; the digest is the same against it), 2026-11-17,
+# in the reviewer's own detached worktree ~/dev/oscilla-wt/review-526.
+#
+# Reviewer: rev-seat-2 (session oscilla-c3, claude-code c0f0687c), a separate top-level session
+# acting as rev-seat (Q108 A). It built none of this: oscilla-0b built every commit.
+#
+# The digest: origin/main's scripts/review-verdict.mjs --content --list at b7e36ab5:
+# 71a8e48a3db1... over 8 guarded paths (src/js/measurement/views/measure-flow.js,
+# ui/measure/calibration.js, constants.js, run.js, saving.js, session.js, views.js,
+# tests/browser/live-smoke.cjs).
+#
+# How it was judged:
+# - Data stays English: output-level ids, machine states, stored records and exports are
+#   unchanged; the shown output levels (NÍZKÁ / STŘEDNÍ / VYSOKÁ) come from
+#   OUTPUT_LEVEL_CHOICES by id (levelName, used only in the shown stimulus step detail). On the
+#   run path (run.js, session.js, measure-experiment.js, measurement/) only shown strings change.
+# - no-fake-science (0b asked for it explicitly): every disclaimer keeps its meaning in Czech,
+#   none softened. The output-level detail ("digitální špička ... před hlavní hlasitostí;
+#   akustická úroveň je neznámá"), the safety notes (stop label "Zastavit" matches the note
+#   that names it), NOISE_CHECK_HELP, the calibration panel note, the levelCalibration help, the
+#   microphone and privacy notes. No new claim (SPL, certified, treatment) appears.
+# - Unit assertions are translated one to one; live-smoke (post-deploy) now expects the Czech
+#   primary label 'Zkontrolovat nastavení'.
+#
+# Measured by the reviewer (Node 22.20.0, majordomus 1.0.1 first on PATH, ci.yml's pin):
+# - build:check exit 0; GITHUB_BASE_REF=main npm test exit 0 (5916 tests, 5915 pass, 0 fail,
+#   1 skipped).
+# - Browser, OSC_BROWSERS=chromium,firefox,webkit, run-suites over the eight suites that read
+#   Measure text: v3-measure ALL PASS (145), first-screen ALL PASS (645), app 66/66 in each of
+#   the 6 legs, navigation 25/25 in each of the 6, journeys ALL PASS, link-integrity ALL PASS
+#   (126), cross-links ALL PASS (108); v3-ui 38/38 in 5 legs and 37/38 on firefox/http: the
+#   definitions check, "page.waitForFunction: Timeout 45000ms exceeded" at 56877 ms (load about
+#   21-24 on 18 cores), run-suites exit 1, "1 of 8 suites failed".
+#   That is E077's signature (H.waitState polls window.OSCILLA.measure.state, the English
+#   machine state this PR does not change); CI's webkit/file leg 1 at b7e36ab5 failed the same
+#   check at 51710 ms (job 134025926857), all other legs and visual green. The reviewer's A/B
+#   of definitions alone, alternated head and main 9af695a3, firefox and webkit, file and http:
+#   4 rounds, head 16/16 legs pass; main 15/16, round 1 firefox/http failed definitions with
+#   the same "Timeout 45000ms exceeded" at 56975 ms (load 13.7). A main-side failure in the same
+#   window: E077, not this PR (the A/B script's own exit lines read the grep, so the legs were
+#   judged from their PASS / FAIL lines).
+# - live-smoke against a local http server of this dist: 18/18 in chromium, firefox and
+#   webkit, exit 0.
+# - The reviewer's own probe of the Measure header and action row at 320, 375, 390, 1280, 1536
+#   and 1920 px in the 3 engines, as shown and with the longest primary labels ('Měřit (nejdřív
+#   proběhne kontrola nastavení)', 'Znovu zkontrolovat nastavení') and 'ČEKÁ NA KONTROLU
+#   VSTUPU' forced: no overlap, covered element (elementFromPoint) or horizontal page scroll;
+#   one overflow, P3 note 3.
+# Not run by the reviewer: the visual gate (MEASURE references re-accepted by 0b); the CI legs
+# and the linux visual job run it.
+#
+# P3 notes, open, none blocks:
+# 1. lowFrequency safety note "nezvyšujte úroveň, dokud je neuslyšíte" follows the English
+#    ("do not turn the level up until they become audible"); its literal reading is safe but
+#    awkward. Clearer: "nezvyšujte úroveň jen proto, abyste je uslyšeli".
+# 2. NOISE_CHECK_HELP and the noise step say "neposouzené / SNR nezměřeno" while the quality
+#    bar still shows the English NOT ASSESSED / NOT MEASURED until pass 7b.
+# 3. Firefox at 320 px, expert mode: the primary label 'Měřit (nejdřív proběhne kontrola
+#    nastavení)' overflows its button by 6 px (scrollWidth 284 > clientWidth 278, nowrap,
+#    overflow visible); it stays inside the button's border with almost no right padding.
+#    chromium and webkit fit.
+#
+# THE CONDITION of this verdict: it binds once the reviewer has read the six "Browser leg N
+# (browser)" logs of this pull request's run at this verdict's commit and found each leg's
+# suite list equal to shards.cjs --plan at this head, "run-suites: all K suites passed" and no
+# FAIL line (a v3-ui definitions timeout is judged as E077 against main before any rerun), and
+# the linux visual job passes with the re-accepted MEASURE references. Auto-merge is armed only
+# after the reviewer reports "legs OK"; otherwise a superseding verdict.
+#
+# Verdict: merge, under the condition above. No findings above P3.
+schema: review-verdict/v1
+pr: 593
+verdict: merge
+reviewer: oscilla-c3 rev-seat-2 (claude-code c0f0687c, a separate top-level session; built none of b7e36ab5)
+content: 71a8e48a3db196c608fe78e8e0efb66a37240871059d71a9820f17716f2a0671
+findings: []
