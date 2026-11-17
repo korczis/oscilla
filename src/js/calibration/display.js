@@ -108,6 +108,10 @@ function storedReasonShown(text) {
   return differencesReasonShown(parts.map((p) => (p.shown ? { shownText: p.shown } : p)));
 }
 
+// One alternation, longest phrase first and not inside a word, so 'CALIBRATED (frequency)'
+// never matches inside 'UNCALIBRATED (frequency)' (C3-590-1: "UNKALIBROVÁNO" reads as calibrated).
+const PHRASE = new RegExp(`(?<![A-Za-z])(?:${Object.keys(CALIBRATION_PHRASES)
+  .sort((a, b) => b.length - a.length).map(escape).join('|')})`, 'g');
 const WORD = new RegExp(`\\b(${Object.keys(CALIBRATION_WORDS).join('|')})\\b`, 'g');
 
 /**
@@ -126,9 +130,6 @@ export function calibrationShown(text, differences = null) {
   }
   const stored = storedReasonShown(text);
   if (stored) return stored;
-  let out = text;
-  for (const [data, shown] of Object.entries(CALIBRATION_PHRASES)) {
-    if (out.includes(data)) out = out.split(data).join(shown);
-  }
-  return out.replace(WORD, (w) => CALIBRATION_WORDS[w]);
+  return text.replace(PHRASE, (p) => CALIBRATION_PHRASES[p])
+    .replace(WORD, (w) => CALIBRATION_WORDS[w]);
 }

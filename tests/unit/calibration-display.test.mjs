@@ -128,6 +128,28 @@ test('every shown state, badge and title has no English calibration word', () =>
   assert.equal(calibrationShown(null), null);
 });
 
+test('C3-590-1: an embedded badge never garbles, in either order, and no state reads half-Czech', () => {
+  const cases = {
+    'UNCALIBRATED (frequency) · partial': 'NEKALIBROVÁNO (frekvence) · partial',
+    'badge UNCALIBRATED (frequency); CALIBRATED (frequency)':
+      'badge NEKALIBROVÁNO (frekvence); KALIBROVÁNO (frekvence)',
+    'badge CALIBRATED (frequency); UNCALIBRATED (frequency)':
+      'badge KALIBROVÁNO (frekvence); NEKALIBROVÁNO (frekvence)',
+    'x none (UNCALIBRATED), CALIBRATED': 'x žádný (NEKALIBROVÁNO), KALIBROVÁNO',
+  };
+  for (const [t, want] of Object.entries(cases)) assert.equal(calibrationShown(t), want, t);
+  const all = [...Object.keys(CALIBRATION_PHRASES), ...Object.keys(CALIBRATION_WORDS)];
+  for (const a of all) {
+    for (const b of all) {
+      for (const t of [`${a} ${b}`, `${a}; ${b} · partial`, `(${a})`]) {
+        const shown = calibrationShown(t);
+        assert.doesNotMatch(shown.replace(/NEKALIBROVÁNO/g, ''), /[A-Z]KALIBROVÁNO/, `${t} -> ${shown}`);
+        assert.doesNotMatch(shown, ENGLISH, `${t} -> ${shown}`);
+      }
+    }
+  }
+});
+
 test('the data stays English: level.js, the views and the preset id are unchanged', () => {
   assert.equal(levelLabel(null).indicator, 'UNCALIBRATED');
   assert.equal(levelLabel(LEVEL).indicator, 'CALIBRATED');
