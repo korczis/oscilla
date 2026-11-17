@@ -3455,8 +3455,14 @@ function defineChecks(fixtures) {
           && window.OSCILLA.app.exps.detail.id === id, res.savedId), Boolean, 5000);
         res.saved = await walk('osc-view-experiments');
       }
-      res.olderId = await page.evaluate((json) => window.OSCILLA.app.experimentsImportText(json),
-        fixtures.older.json);
+      // The older record; older-claim may have imported it already (a second import is refused).
+      res.olderId = await page.evaluate(async ([json, hash]) => {
+        const id = await window.OSCILLA.app.experimentsImportText(json);
+        if (id) return id;
+        const row = (await window.OSCILLA.experiments.store().list())
+          .find((x) => x.resultHash === hash);
+        return row ? row.experimentId : null;
+      }, [fixtures.older.json, fixtures.older.experiment.provenance.resultHash]);
       if (res.olderId) {
         await page.evaluate((id) => window.OSCILLA.app.experimentsOpen(id), res.olderId);
         await H.until(() => page.evaluate((id) => !!window.OSCILLA.app.exps.detail
