@@ -28,4 +28,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-15'
-updated_at: '2026-11-17'
+updated_at: 2026-11-17T10:45:55Z
+started_at: 2026-11-17T10:45:20Z
+started_event: sha256:bf166b120f3aca428f3e245d8a6161989ff1e41b52357cb9ce204ad69ac51a40
+verified_at: 2026-11-17T10:45:34Z
+verified_event: sha256:d49fb3a5d18bcc9eac3788b748a8af9235ec335b61eeb002df8b1d277761042e
+completed_at: 2026-11-17T10:45:55Z
+completed_event: sha256:abaa6101f29db98c8f46ecb5f1a77fc135ac9df7a73f449f0732ad0410aa7f6b
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "npm test; node tests/browser/v3-ui.cjs; node tests/browser/navigation.cjs; node tests/browser/cross-links.cjs"
+    result: "Both parts landed. Pass 6, parts (a) and (c) and the Studio card, was built by oscilla-0b and landed in train T25 (PR 574, main merge commit db8fef03, v3.40.0). Pass 6b, part (b), was built by oscilla-0b on fix/czech-pass-6b and landed by PR 590 (main merge commit 5af668df, v3.41.2). Criterion 1: Podržet a hrát and Spustit are the labels and quotes since T25 (frozen-display.test.mjs, PR 574's legs). Criterion 2: core/frozen-display.js shows the frozen V1 sentences in Czech, derived from the golden; the golden is byte-exact (freeze.test.mjs). Criterion 3: calibration/display.js maps the English states to Czech at render. project.no-fake-science v3 lists the forms. tests/unit/calibration-display.test.mjs fails on main c442499e because the module is absent, and refuses a bare English badge with a census proven by mutation. The v3-ui check calibration-czech walks the rendered page in 8 states. Criterion 4: czech-prose prose total 2881 unchanged and short 1690 to 1687; src/index.html 315078 B under its 316000 cap; reviewer verdict .ai/repo/reviews/590.yaml by oscilla-c3 (C3-590-1 fixed in 58aadf23, legs OK on CI run 44043748902 at 67688cec: six browser legs 21/21 and 22/22, the linux visual gate green); MEASURE references re-accepted in e1a71849 with the reason."
+    artifact: ".ai/repo/reviews/590.yaml"
+    commit: 685db9599c9ed669fa296131627b94a1c7d058e2
+    recorded_at: 2026-11-17T10:45:48Z
