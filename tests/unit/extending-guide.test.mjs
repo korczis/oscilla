@@ -232,7 +232,7 @@ test('the guide covers each kind of extension and the rules, each as its own sec
     'The rules a change satisfies']) {
     assert.match(md, new RegExp(`^#{2,3} ${h}$`, 'm'), h);
   }
-  for (const rule of ['fail-first.v1.md', 'review-verdict.v1.md', 'no-fake-science.v2.md',
+  for (const rule of ['fail-first.v1.md', 'review-verdict.v1.md', 'no-fake-science.v3.md',
     'single-file-deliverable.v2.md', 'audio-engine-discipline.v2.md']) {
     assert.ok(md.includes(`../.ai/repo/rules/project/${rule}`), `links ${rule}`);
   }

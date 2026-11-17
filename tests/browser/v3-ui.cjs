@@ -206,6 +206,15 @@ const ORIGINS = arg('origins', 'file,http').split(',');
 const ONLY = arg('only', '') ? new Set(arg('only', '').split(',')) : null;
 const JSON_OUT = arg('json', '');
 
+// A calibration state as the page shows it: Czech over English data (U114 b, rule
+// project.no-fake-science v3). Each reading is positive: "KALIBROVÁNO" is a substring of
+// "NEKALIBROVÁNO", and an English negative ("no UNCALIBRATED") holds for every Czech text.
+const ENGLISH_STATE = /\b(?:UN)?CALIBRATED\b|PENDING INPUT CHECK|CHARACTERIZE PLAYBACK CHAIN/;
+const calibrated = (t) => typeof t === 'string' && /(?:^|\s)KALIBROVÁNO\b/.test(t)
+  && !/NEKALIBROVÁNO/.test(t) && !ENGLISH_STATE.test(t);
+const uncalibrated = (t) => typeof t === 'string' && /NEKALIBROVÁNO/.test(t)
+  && !ENGLISH_STATE.test(t);
+
 // The fake microphone's tone: Firefox's built-in fake stream is a 1 kHz sine of amplitude 0.1
 // (measured: peak 0.100, mean square -23.0 dB); Chromium's default fake device only beeps, so it
 // plays the same tone from a WAV file (written below, looped by Chromium).
@@ -909,7 +918,7 @@ function defineChecks(fixtures) {
     // Alpine renders on a later frame: wait (bounded) for the state asserted, never a sleep.
     await page.waitForFunction(() => {
       const el = document.querySelector('[data-osc="measure.levelVoid"]');
-      return /PENDING INPUT CHECK/.test(document.querySelector(
+      return /ČEKÁ NA KONTROLU VSTUPU/.test(document.querySelector(
         '[data-osc="measure.levelIndicator"]').textContent) && el && el.offsetParent !== null;
     }, null, { timeout: 3000, polling: 50 }).catch(() => {});
     res.pending = await page.textContent('[data-osc="measure.levelIndicator"]');
@@ -927,7 +936,6 @@ function defineChecks(fixtures) {
     await H.loopback(page);
     res.after = await page.textContent('[data-osc="measure.levelIndicator"]');
     await page.evaluate(() => window.OSCILLA.app.measureSetLevelManual(false));
-    const calibrated = (t) => /CALIBRATED/.test(t) && !/UNCALIBRATED/.test(t);
     return { ...res, ...H.verdict({
       profile: res.bad === false && res.good === true && calibrated(res.freq)
         && /gate-mic/.test(res.name),
@@ -936,15 +944,15 @@ function defineChecks(fixtures) {
       unboundRefused: /^Run the setup check first/.test(res.noInputNote)
         && /^Run the setup check first: a level calibration is valid only for the input/
           .test(res.unbound.error) && !res.unbound.stored && res.unbound.open
-        && /UNCALIBRATED/.test(res.unboundLevel),
+        && uncalibrated(res.unboundLevel),
       checked: res.checked === 'READY' && /bound to the input checked last/.test(res.boundNote),
       invalidRefused: !!res.refused,
       boundCalibrated: calibrated(res.level) && res.bound && res.dialogClosed
         && /entered by hand, bound to the input checked when it was stored/.test(res.state),
-      otherInputVoids: /UNCALIBRATED/.test(res.voided),
-      pendingCheck: /PENDING INPUT CHECK/.test(res.pending)
-        && /^Pending input check:/.test(res.pendingText),
-      cleared: /UNCALIBRATED/.test(res.after),
+      otherInputVoids: uncalibrated(res.voided),
+      pendingCheck: /ČEKÁ NA KONTROLU VSTUPU/.test(res.pending) && !ENGLISH_STATE.test(res.pending)
+        && /^ČEKÁ NA KONTROLU VSTUPU: kalibrace úrovně se použije/.test(res.pendingText),
+      cleared: uncalibrated(res.after),
     }) };
   });
 
@@ -990,15 +998,14 @@ function defineChecks(fixtures) {
     await H.loopback(page);
     const r = res.result;
     return { ...res, ...H.verdict({
-      stored: res.stored === true && /CALIBRATED/.test(res.before)
-        && !/UNCALIBRATED/.test(res.before),
+      stored: res.stored === true && calibrated(res.before),
       complete: res.run.state === 'COMPLETE',
       notApplied: !r.applied && r.unit === 'dB relative (dBFS-like)'
         && /a different input device/.test(r.voided || ''),
       qualitySays: /^level calibration not applied/.test(r.quality || '')
         && r.levelCalibrated === false,
       recordUncalibrated: r.recorded === false,
-      indicatorFollows: /UNCALIBRATED/.test(res.after),
+      indicatorFollows: uncalibrated(res.after),
       noSpl: res.spl.length === 0,
     }) };
   });
@@ -1069,9 +1076,11 @@ function defineChecks(fixtures) {
       testContextNamed: !!res.cal && /TEST CONTEXT/.test(res.cal.conditions || ''),
       plausible: obs > -40 && obs < -15,
       dialogClosed: res.dialogClosed,
-      calibrated: /CALIBRATED/.test(res.indicator) && !/UNCALIBRATED/.test(res.indicator),
-      voided: /UNCALIBRATED/.test(res.voided),
-      reason: /taken with a different input device.*sample rate/.test(res.voidText || ''),
+      calibrated: calibrated(res.indicator),
+      voided: uncalibrated(res.voided),
+      // The reason as shown, built from its differences (U114 b): the state first, in Czech.
+      reason: /^NEKALIBROVÁNO: vstup se od kalibrace úrovně liší \(jiné vstupní zařízení; vzorkovací frekvence při kalibraci/
+        .test((res.voidText || '').trim()) && !ENGLISH_STATE.test(res.voidText || ''),
       stopped: res.stopped === false && /stopped/.test(res.stopError),
       clean: H.zero(res.counts),
     }) };
@@ -1210,7 +1219,7 @@ function defineChecks(fixtures) {
       const r = res.record;
       return { ...res, ...H.verdict({
         imported: res.importA === true && res.importB === true,
-        calibratedNow: /CALIBRATED/.test(res.level) && !/UNCALIBRATED/.test(res.level),
+        calibratedNow: calibrated(res.level),
         rtaAsMeasured: !!res.rtaY && !/SPL/.test(res.rtaY),
         quietBefore: res.before === '',
         stated: res.after.startsWith('Calibration changed after this measurement; the saved '
@@ -3347,6 +3356,131 @@ function defineChecks(fixtures) {
         && res.noStore.saved && res.noStore.kind === 'memory' && res.noStore.persistent === false
         && /memory for this page view/.test(res.noStore.note || '') && res.noStoreRows === 1,
       noStoreClean: res.noStoreErrors.length === 0,
+    }) };
+  });
+
+  // calibration-czech (U114 b, rule project.no-fake-science v3): the calibration states are
+  // English data and are shown in Czech. Walks what is rendered in the Measure and Experiments
+  // views (visible text, titles, accessible names) in the states that show one: idle, after a
+  // run with a profile covering part of the range (each result tab), a level calibration voided
+  // by another input, one waiting for the input check, and a saved and an older record opened in
+  // Experiments. Derived from the page, not from a list: any binding left unwrapped fails here.
+  def('calibration-czech', async ({ page }) => {
+    const walk = (root) => page.evaluate(([id, src]) => {
+      const re = new RegExp(src);
+      const view = document.getElementById(id);
+      if (!view) return { english: [`no #${id}`], czech: 0 };
+      const out = [];
+      let czech = 0;
+      const shown = (el) => !!el && el.offsetParent !== null && !el.closest('template');
+      const w = document.createTreeWalker(view, NodeFilter.SHOW_TEXT);
+      for (let n = w.nextNode(); n; n = w.nextNode()) {
+        if (!shown(n.parentElement)) continue;
+        if (re.test(n.textContent)) out.push(n.textContent.trim().slice(0, 60));
+        if (/NEKALIBROVÁNO|KALIBROVÁNO|ČEKÁ NA KONTROLU VSTUPU/.test(n.textContent)) czech++;
+      }
+      for (const el of view.querySelectorAll('[title], [aria-label]')) {
+        if (!shown(el)) continue;
+        for (const k of ['title', 'aria-label']) {
+          const v = el.getAttribute(k);
+            if (v && re.test(v)) out.push(`${k}: ${v.slice(0, 60)}`);
+        }
+      }
+      return { english: out, czech };
+    }, [root, ENGLISH_STATE.source]);
+    const res = {};
+    const clean = () => page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.measureClearLevelCalibration();
+      a.measureClearCalibration();
+      a.measureSetLevelManual(false);
+      a.measureSetExpert(false);
+      a.alerts = [];
+    });
+    try {
+      await H.workspace(page, 'measure');
+      await H.loopback(page);
+      res.idle = await walk('osc-view-measure');
+      res.preset = await page.textContent('#osc-measure-flow .osc-m-preset');
+      res.importA = await page.evaluate(() => window.OSCILLA.app.measureImportCalibrationText(
+        'Hz,dB\n1000,0\n4000,1\n', 'part.csv'));
+      await page.fill('#osc-m-name', 'Gate calibration-czech');
+      await page.click('#osc-measure-primary'); // Check setup
+      await H.waitState(page, ['READY', 'INVALID', 'ERROR'], 15000);
+      res.run = await H.run(page, () => page.click('#osc-measure-primary'));
+      if (res.run.state !== 'COMPLETE') return { ok: false, failed: ['run'], ...res };
+      await page.evaluate(() => window.OSCILLA.app.measureSetExpert(true));
+      for (const tab of ['response', 'ir', 'rta']) {
+        await page.click(`[data-osc="measure.tab"][data-value="${tab}"]`);
+        res[`after-${tab}`] = await walk('osc-view-measure');
+      }
+      await page.click('[data-osc="measure.tab"][data-value="response"]');
+      res.badges = await page.evaluate(() => [...document.querySelectorAll('.osc-m-badge')]
+        .filter((el) => el.offsetParent !== null).map((el) => el.textContent.trim()));
+      await page.click('#osc-measure-save');
+      res.save = await H.saved(page);
+      res.savedId = await page.evaluate(() => window.OSCILLA.app.meas.savedId);
+      // A level calibration bound to one input, then another input: the reason is shown.
+      res.stored = await page.evaluate(() => {
+        const a = window.OSCILLA.app;
+        window.OSCILLA.measure.setInputNow({ device: { label: 'Mic A', id: 'mic-a' },
+          constraints: { applied: { echoCancellation: false, noiseSuppression: false,
+            autoGainControl: false, channelCount: 1 } }, sampleRate: 48000 });
+        a.measureSetLevelManual(true);
+        Object.assign(a.meas.levelForm, { referenceHz: '1000', referenceDb: '94',
+          observedDb: '-32.5', conditions: 'gate: calibration-czech' });
+        return a.measureSaveLevelCalibration();
+      });
+      await page.evaluate(() => window.OSCILLA.measure.setInputNow({
+        device: { label: 'Mic B', id: 'mic-b' }, constraints: { applied: {
+          echoCancellation: false, noiseSuppression: false, autoGainControl: false,
+          channelCount: 1 } }, sampleRate: 22050 }));
+      await page.waitForFunction(() => /NEKALIBROVÁNO/.test(document.querySelector(
+        '[data-osc="measure.levelIndicator"]').textContent), null, { timeout: 3000, polling: 50 })
+        .catch(() => {});
+      res.voided = await walk('osc-view-measure');
+      res.reason = await page.evaluate(() => document
+        .querySelector('[data-osc="measure.levelVoid"]').textContent.trim());
+      res.reasonTitle = await page.getAttribute('[data-osc="measure.levelIndicator"]', 'title');
+      await page.evaluate(() => window.OSCILLA.measure.setInputNow(null));
+      await page.waitForFunction(() => /ČEKÁ NA KONTROLU VSTUPU/.test(document.querySelector(
+        '[data-osc="measure.levelIndicator"]').textContent), null, { timeout: 3000, polling: 50 })
+        .catch(() => {});
+      res.pending = await walk('osc-view-measure');
+      await clean();
+      await H.workspace(page, 'experiments');
+      if (res.savedId) {
+        await page.evaluate((id) => window.OSCILLA.app.experimentsOpen(id), res.savedId);
+        await H.until(() => page.evaluate((id) => !!window.OSCILLA.app.exps.detail
+          && window.OSCILLA.app.exps.detail.id === id, res.savedId), Boolean, 5000);
+        res.saved = await walk('osc-view-experiments');
+      }
+      res.olderId = await page.evaluate((json) => window.OSCILLA.app.experimentsImportText(json),
+        fixtures.older.json);
+      if (res.olderId) {
+        await page.evaluate((id) => window.OSCILLA.app.experimentsOpen(id), res.olderId);
+        await H.until(() => page.evaluate((id) => !!window.OSCILLA.app.exps.detail
+          && window.OSCILLA.app.exps.detail.id === id, res.olderId), Boolean, 5000);
+        res.older = await walk('osc-view-experiments');
+      }
+    } finally {
+      await clean();
+      await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
+    }
+    const walks = ['idle', 'after-response', 'after-ir', 'after-rta', 'voided', 'pending',
+      'saved', 'older'];
+    return { ...res, ...H.verdict({
+      walked: walks.every((k) => res[k] && Array.isArray(res[k].english)),
+      noEnglish: walks.every((k) => res[k] && res[k].english.length === 0),
+      // Each walk reads something: the Czech state is on the page where a state is shown.
+      readsCzech: ['idle', 'after-response', 'voided', 'pending', 'saved', 'older']
+        .every((k) => res[k] && res[k].czech > 0),
+      preset: (res.preset || '').trim() === 'PROMĚŘIT ŘETĚZEC PŘEHRÁVÁNÍ',
+      badges: res.badges.length > 0 && res.badges.some((b) => /KALIBROVÁNO/.test(b))
+        && !res.badges.some((b) => ENGLISH_STATE.test(b)),
+      reason: /^NEKALIBROVÁNO: vstup se od kalibrace úrovně liší \(/.test(res.reason || '')
+        && res.reasonTitle === res.reason,
+      stored: res.importA === true && res.stored === true && res.save === null,
     }) };
   });
 

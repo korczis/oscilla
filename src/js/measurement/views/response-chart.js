@@ -58,7 +58,7 @@ import { PHASE_REASONS } from '../transfer.js';
 import {
   QUANTITY_KINDS as K, UNAVAILABLE, LINE_STYLES, DASH, ratioDbText, gridResolutionHz,
   gridFrequencyText, rangeText, nearestIndex, toPlotArray, splitByMask, extent, dbAxisRange,
-  frequencyAxis, maskOn, isDrawable, qualityStatusPresentation,
+  frequencyAxis, maskOn, isDrawable, qualityStatusPresentation, FREQUENCY_BADGES,
 } from './common.js';
 
 /** Y-axis title of a raw (not normalized) response. */
@@ -432,7 +432,7 @@ export function buildResponseView(source, options = {}) {
   };
 
   // Badges and notes: always say what the curve is.
-  const badges = [corr ? 'CALIBRATED (frequency)' : UNAVAILABLE.UNCALIBRATED];
+  const badges = [corr ? FREQUENCY_BADGES.CALIBRATED : UNAVAILABLE.UNCALIBRATED];
   if (smoothed) badges.push(smoothed.label.split(':')[0]);
   if (normalized) badges.push('NORMALIZED');
   if (!authoritative) badges.push('INVALID · not authoritative');

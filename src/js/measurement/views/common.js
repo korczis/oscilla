@@ -41,6 +41,13 @@ export const UNAVAILABLE = Object.freeze({
   NOT_ASSESSED: 'NOT ASSESSED',
 });
 
+/** The frequency-calibration badges, one copy each (calibration/display.js shows them Czech). */
+export const FREQUENCY_BADGES = Object.freeze({
+  CALIBRATED: 'CALIBRATED (frequency)',
+  UNCALIBRATED: `${UNAVAILABLE.UNCALIBRATED} (frequency)`,
+  NONE: `none (${UNAVAILABLE.UNCALIBRATED})`,
+});
+
 /**
  * Measurement colour roles (spec §117) mapped onto EXISTING semantic tokens. `token` is the key
  * of readChartTheme()/chartTheme() (src/js/ui/theme.js, src/js/charts/chart-theme.js), `cssVar`

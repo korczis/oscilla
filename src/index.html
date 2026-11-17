@@ -973,17 +973,17 @@
           <div class="osc-panel-header osc-m-head">
             <h3 class="osc-panel-title" id="osc-m-flow-title"
               x-text="meas.expert ? 'Measurement · expert' : 'Guided measurement'">Guided measurement</h3>
-            <span class="osc-m-preset" x-text="CHARACTERIZE_PLAYBACK_CHAIN.label"></span>
+            <span class="osc-m-preset" x-text="calibrationShown(CHARACTERIZE_PLAYBACK_CHAIN.label)"></span>
             <span class="osc-spacer"></span>
             <span class="osc-m-ind" data-osc="measure.freqIndicator"
-              :class="{ 'is-on': measureFreqCoverage.on }" :title="measureFreqCoverage.title">
+              :class="{ 'is-on': measureFreqCoverage.on }" :title="calibrationShown(measureFreqCoverage.title)">
               <span class="osc-m-ind-k">Frequency</span>
-              <span x-text="measureFreqIndicator">UNCALIBRATED</span></span>
+              <span x-text="calibrationShown(measureFreqIndicator)">NEKALIBROVÁNO</span></span>
             <span class="osc-m-ind" data-osc="measure.levelIndicator"
               :class="{ 'is-on': measureCalIndicator === 'CALIBRATED' }"
-              :title="meas.cal.levelVoid || meas.cal.levelPending || ''">
+              :title="calibrationShown(meas.cal.levelVoid, meas.cal.levelVoidDifferences) || calibrationShown(meas.cal.levelPending) || ''">
               <span class="osc-m-ind-k">Level</span>
-              <span x-text="measureCalIndicator">UNCALIBRATED</span></span>
+              <span x-text="calibrationShown(measureCalIndicator)">NEKALIBROVÁNO</span></span>
             <button type="button" class="osc-toggle osc-m-expert" role="switch" aria-checked="false"
               data-osc="measure.expert" :aria-checked="String(meas.expert)" :disabled="meas.busy"
               @click="measureSetExpert(!meas.expert)">
@@ -1007,7 +1007,7 @@
                 <span class="osc-m-step-text">
                   <span class="osc-m-step-label" x-text="s.label"></span>
                   <span class="osc-sr-only" x-text="', ' + ({ done: 'done', warn: 'done with warnings', blocked: 'blocked', current: 'current step', todo: 'not started' }[s.status] || s.status) + ': '"></span>
-                  <span class="osc-m-step-detail" x-text="s.detail"></span>
+                  <span class="osc-m-step-detail" x-text="calibrationShown(s.detail)"></span>
                 </span>
               </li>
             </template>
@@ -1093,8 +1093,8 @@
             <template x-for="r in meas.inputRows" :key="r.id">
               <div class="osc-metric"><dt x-text="r.label"></dt><dd class="osc-num" x-text="r.text"></dd></div>
             </template>
-            <div class="osc-metric"><dt>Frequency profile</dt><dd x-text="meas.cal.profile && meas.cal.useFrequency ? meas.cal.profile.name : 'none (UNCALIBRATED)'"></dd></div>
-            <div class="osc-metric"><dt>Levels</dt><dd x-text="measureLevelsText"></dd></div>
+            <div class="osc-metric"><dt>Frequency profile</dt><dd x-text="meas.cal.profile && meas.cal.useFrequency ? meas.cal.profile.name : calibrationShown('none (UNCALIBRATED)')"></dd></div>
+            <div class="osc-metric"><dt>Levels</dt><dd x-text="calibrationShown(measureLevelsText)"></dd></div>
           </dl>
           <p class="osc-m-hint" x-show="!meas.inputRows.length || meas.inputRows[0].text === 'UNKNOWN'">Run the setup check to read the input device, its sample rate and the processing the browser applies.</p>
           <p class="osc-m-hint">The microphone opens only for the setup check, the measurement and the live RTA, and is released when they end. Audio stays in this page.</p>
@@ -1112,9 +1112,9 @@
           </div>
           <ul class="osc-m-bar" aria-label="Live checks" data-osc="measure.bar">
             <template x-for="it in meas.bar.items" :key="it.id">
-              <li class="osc-q" :class="[it.className, it.shape]" :title="it.detail || ''">
+              <li class="osc-q" :class="[it.className, it.shape]" :title="calibrationShown(it.detail) || ''">
                 <svg class="osc-q-icon" aria-hidden="true"><use :href="'#q-' + it.status"/></svg>
-                <span class="osc-q-text" x-text="it.text"></span>
+                <span class="osc-q-text" x-text="calibrationShown(it.text)"></span>
               </li>
             </template>
           </ul>
@@ -1123,13 +1123,13 @@
             <template x-for="(r, i) in meas.quality.reasons" :key="r.code + i">
               <li class="osc-q-reason" :class="r.className">
                 <svg class="osc-q-icon" aria-hidden="true"><use :href="'#q-' + r.className.slice(7)"/></svg>
-                <span x-text="r.text"></span>
+                <span x-text="calibrationShown(r.text)"></span>
               </li>
             </template>
           </ul>
           <dl class="osc-m-rows osc-m-metrics" x-show="meas.expert && meas.quality.metrics.length" aria-label="Quality metrics">
             <template x-for="mt in meas.quality.metrics" :key="mt.id">
-              <div class="osc-metric"><dt x-text="mt.label"></dt><dd class="osc-num" x-text="mt.text"></dd></div>
+              <div class="osc-metric"><dt x-text="mt.label"></dt><dd class="osc-num" x-text="calibrationShown(mt.text)"></dd></div>
             </template>
           </dl>
         </section>
@@ -1183,7 +1183,7 @@
               </div>
               <span class="osc-spacer"></span>
               <template x-for="b in (meas.response ? meas.response.badges : [])" :key="b">
-                <span class="osc-m-badge" x-text="b"></span>
+                <span class="osc-m-badge" x-text="calibrationShown(b)"></span>
               </template>
             </div>
             <p class="osc-m-axis" x-text="meas.response ? meas.response.yLabel : ''"></p>
@@ -1193,13 +1193,13 @@
               x-text="meas.response ? meas.response.summary : 'Frequency response: NOT MEASURED.'"></p>
             <ul class="osc-m-legend" x-show="meas.response" aria-label="Curves">
               <template x-for="s in (meas.response ? meas.response.legend : [])" :key="s.id">
-                <li><span class="osc-m-swatch" :class="['is-' + s.role, s.faded ? 'is-faded' : '']" aria-hidden="true"></span><span x-text="s.label"></span></li>
+                <li><span class="osc-m-swatch" :class="['is-' + s.role, s.faded ? 'is-faded' : '']" aria-hidden="true"></span><span x-text="calibrationShown(s.label)"></span></li>
               </template>
               <li x-show="meas.response && meas.response.envelope"><span class="osc-m-swatch is-band" aria-hidden="true"></span><span x-text="meas.response ? meas.response.envelope : ''"></span></li>
             </ul>
             <ul class="osc-m-notes osc-m-notes--plain">
               <template x-for="(n, i) in (meas.response ? meas.response.notes : [])" :key="i">
-                <li x-text="n"></li>
+                <li x-text="calibrationShown(n)"></li>
               </template>
               <li data-osc="measure.phaseNote" x-show="meas.expert && meas.response && meas.response.phase && !meas.response.phase.available"
                 x-text="meas.response && meas.response.phase ? meas.response.phase.text : ''"></li>
@@ -1235,7 +1235,7 @@
                 <span>Window</span><span class="osc-toggle-track" aria-hidden="true"></span></button>
               <span class="osc-spacer"></span>
               <template x-for="b in (meas.ir ? meas.ir.badges : [])" :key="b">
-                <span class="osc-m-badge" x-text="b"></span>
+                <span class="osc-m-badge" x-text="calibrationShown(b)"></span>
               </template>
             </div>
             <p class="osc-m-axis" x-text="meas.ir ? meas.ir.yLabel + ' over time re the direct peak (ms)' : ''"></p>
@@ -1244,7 +1244,7 @@
             <p class="osc-m-summary" id="osc-m-sum-ir" data-osc="measure.irSummary"
               x-text="meas.ir ? meas.ir.summary : 'Impulse response: NOT MEASURED.'"></p>
             <ul class="osc-m-notes osc-m-notes--plain">
-              <template x-for="(n, i) in (meas.ir ? meas.ir.notes : [])" :key="i"><li x-text="n"></li></template>
+              <template x-for="(n, i) in (meas.ir ? meas.ir.notes : [])" :key="i"><li x-text="calibrationShown(n)"></li></template>
               <li x-show="meas.ir && meas.ir.window" x-text="meas.ir ? meas.ir.window : ''"></li>
             </ul>
           </div>
@@ -1285,7 +1285,7 @@
                 @click="measureRtaReset()">Reset peaks</button>
               <span class="osc-spacer"></span>
               <template x-for="b in (meas.rta ? meas.rta.badges : [])" :key="b">
-                <span class="osc-m-badge" x-text="b"></span>
+                <span class="osc-m-badge" x-text="calibrationShown(b)"></span>
               </template>
             </div>
             <p class="osc-m-error" role="alert" data-osc="measure.rtaError"
@@ -1297,7 +1297,7 @@
             <p class="osc-m-summary" id="osc-m-sum-rta" data-osc="measure.rtaSummary"
               x-text="meas.rta ? meas.rta.summary : 'RTA: NOT MEASURED.'"></p>
             <ul class="osc-m-notes osc-m-notes--plain">
-              <template x-for="(n, i) in (meas.rta ? meas.rta.notes : [])" :key="i"><li x-text="n"></li></template>
+              <template x-for="(n, i) in (meas.rta ? meas.rta.notes : [])" :key="i"><li x-text="calibrationShown(n)"></li></template>
             </ul>
           </div>
         </section>
@@ -1361,7 +1361,7 @@
             <fieldset class="osc-m-group osc-m-cal" aria-describedby="osc-m-cal-note">
               <legend>Calibration</legend>
               <p class="osc-m-calrow"><span class="osc-label">Microphone frequency profile</span>
-                <strong data-osc="measure.calName" x-text="meas.cal.profile ? meas.cal.profile.name : 'none (UNCALIBRATED)'"></strong>
+                <strong data-osc="measure.calName" x-text="meas.cal.profile ? meas.cal.profile.name : calibrationShown('none (UNCALIBRATED)')"></strong>
                 <span class="osc-m-hint" x-show="meas.cal.profile" x-text="meas.cal.profile ? meas.cal.profile.points + ' points, applied only inside ' + meas.cal.profile.coverageText : ''"></span></p>
               <p class="osc-m-hint" data-osc="measure.calConvention" x-show="meas.cal.profile"
                 x-text="meas.cal.profile ? 'Sign: ' + meas.cal.profile.conventionText + '. ' + (meas.cal.profile.preview || '') : ''"></p>
@@ -1382,7 +1382,7 @@
               <p class="osc-m-calrow"><span class="osc-label">Absolute level</span>
                 <strong data-osc="measure.levelState" x-text="measureLevelStateText"></strong></p>
               <p class="osc-pp-error" role="status" data-osc="measure.levelVoid" x-show="meas.cal.level && (meas.cal.levelVoid || meas.cal.levelPending)"
-                x-text="meas.cal.levelVoid || meas.cal.levelPending || ''"></p>
+                x-text="calibrationShown(meas.cal.levelVoid, meas.cal.levelVoidDifferences) || calibrationShown(meas.cal.levelPending) || ''"></p>
               <div class="osc-m-btnrow">
                 <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="measure.levelCal"
                   :disabled="meas.busy" @click="measureOpenLevelCalibration()">Level calibration…</button>
@@ -2404,7 +2404,7 @@
             <p class="osc-m-summary" id="osc-x-sum-detail" x-text="exps.detail && exps.detail.response ? exps.detail.response.summary : 'Frequency response: NOT MEASURED.'"></p>
             <div class="osc-x-cols">
               <ul class="osc-x-lines" aria-label="Summary">
-                <template x-for="(l, i) in (exps.detail ? exps.detail.lines : [])" :key="i"><li x-text="l"></li></template>
+                <template x-for="(l, i) in (exps.detail ? exps.detail.lines : [])" :key="i"><li x-text="calibrationShown(l)"></li></template>
                 <li x-text="exps.detail ? 'Notes: ' + exps.detail.environment : ''"></li>
                 <li data-osc="exp.annotation" x-show="exps.detail && exps.detail.annotation" style="display: none"
                   x-text="exps.detail && exps.detail.annotation ? 'Annotation (added after the measurement): ' + exps.detail.annotation : ''"></li>
@@ -2557,14 +2557,14 @@
           <div class="osc-x-cols">
             <dl class="osc-m-rows" aria-label="Common configuration">
               <template x-for="c in (exps.compare ? exps.compare.common : [])" :key="c.field">
-                <div class="osc-metric"><dt x-text="c.label"></dt><dd x-text="c.text"></dd></div>
+                <div class="osc-metric"><dt x-text="c.label"></dt><dd x-text="calibrationShown(c.text)"></dd></div>
               </template>
             </dl>
             <ul class="osc-x-diffs" aria-label="Differences">
               <template x-for="d in (exps.compare ? exps.compare.differences : [])" :key="d.field">
                 <li class="osc-q-reason" :class="d.className">
                   <svg class="osc-q-icon" aria-hidden="true"><use :href="'#q-' + d.className.slice(7)"/></svg>
-                  <span><strong x-text="d.label"></strong>: <span x-text="d.values.map((v) => v.label + ' ' + v.text).join(' · ')"></span></span>
+                  <span><strong x-text="d.label"></strong>: <span x-text="d.values.map((v) => v.label + ' ' + calibrationShown(v.text)).join(' · ')"></span></span>
                 </li>
               </template>
             </ul>

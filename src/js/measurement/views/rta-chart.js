@@ -43,7 +43,7 @@ import { toDisplayLevel } from '../../calibration/level.js';
 import { formatHzTick, formatHz, linearTicks } from '../../charts/axes.js';
 import {
   QUANTITY_KINDS as K, UNAVAILABLE, LINE_STYLES, levelAxis, dbAxisRange, extent, frequencyAxis,
-  fixedText,
+  fixedText, FREQUENCY_BADGES,
 } from './common.js';
 
 /**
@@ -136,8 +136,7 @@ export function buildRtaView(input = {}) {
   // nothing (no extrapolation, ADR 0020), so it is no correction (T017).
   const corr = given && given.covered && Array.prototype.some.call(given.covered,
     (c, i) => i < n && c === 1) ? given : null;
-  if (corr) badges.splice(1, 0, 'CALIBRATED (frequency)');
-  else badges.splice(1, 0, `${UNAVAILABLE.UNCALIBRATED} (frequency)`);
+  badges.splice(1, 0, corr ? FREQUENCY_BADGES.CALIBRATED : FREQUENCY_BADGES.UNCALIBRATED);
 
   const bars = [];
   for (let i = 0; i < n; i++) {
@@ -242,8 +241,7 @@ function fftView({ fft, peakDb, frozen, axisY, levelKind, display, avgText, badg
   if (!f || !fft.levelsDb || f.length !== fft.levelsDb.length || f.length < 2) return null;
   const cov = frequencyCovered && frequencyCovered.length === f.length ? frequencyCovered : null;
   const anyCovered = cov ? cov.some((c) => c === 1) : false;
-  badges.splice(1, 0, anyCovered ? 'CALIBRATED (frequency)'
-    : `${UNAVAILABLE.UNCALIBRATED} (frequency)`);
+  badges.splice(1, 0, anyCovered ? FREQUENCY_BADGES.CALIBRATED : FREQUENCY_BADGES.UNCALIBRATED);
   const vals = Array.from(fft.levelsDb, (v) => (drawableLevel(v) ? display(v) : null));
   const series = [{ id: 'fft', label: `OBSERVED spectrum · ${axisY.unit}`, kind: axisY.calibrated
     ? K.CALIBRATED : K.DIGITAL, role: 'observed', values: vals, width: 1, dash: null,

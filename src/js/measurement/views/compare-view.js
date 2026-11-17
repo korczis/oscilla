@@ -57,13 +57,13 @@ import { buildIrOverlayView } from './ir-chart.js';
 import {
   QUANTITY_KINDS as K, COMPARE_ROLES, LINE_STYLES, STATUS_PRESENTATION, UNAVAILABLE,
   splitByMask, extent, dbAxisRange, frequencyAxis, interpLogF, nearestIndex, maskOn, rangeText,
-  ratioDbText, gridFrequencyText,
+  ratioDbText, gridFrequencyText, FREQUENCY_BADGES,
 } from './common.js';
 
 /** Human text of one compared value; the level text names SPL only for a valid calibration. */
 function valueText(field, v, e) {
   if (v === null || v === undefined) {
-    if (field === 'calibration.frequency') return 'none (UNCALIBRATED)';
+    if (field === 'calibration.frequency') return FREQUENCY_BADGES.NONE;
     if (field === 'calibration.level') return 'none (levels relative, dBFS-like)';
     if (field === 'input.device.label') return 'UNKNOWN (not exposed by the browser)';
     return 'none';

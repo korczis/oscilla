@@ -354,7 +354,7 @@ names the check that enforces it. The ones an extension meets most often:
 
 | Rule | What it asks of you |
 | --- | --- |
-| [`project.no-fake-science`](../.ai/repo/rules/project/no-fake-science.v2.md) | no approximation shown as measurement; relative is not calibrated; no dB SPL without a level calibration |
+| [`project.no-fake-science`](../.ai/repo/rules/project/no-fake-science.v3.md) | no approximation shown as measurement; relative is not calibrated; no dB SPL without a level calibration |
 | [`project.audio-engine-discipline`](../.ai/repo/rules/project/audio-engine-discipline.v2.md) | nodes only through the engine's accounting, timing on the audio clock, click-free envelopes |
 | [`project.typed-ports`](../.ai/repo/rules/project/typed-ports.v1.md) | every port has a type and a role; every refused connection has a readable reason |
 | [`project.no-silent-feedback`](../.ai/repo/rules/project/no-silent-feedback.v1.md) | a cycle is refused with its path, never rerouted quietly |

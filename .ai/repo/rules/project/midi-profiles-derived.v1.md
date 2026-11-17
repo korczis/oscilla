@@ -7,7 +7,7 @@ description: A device profile is written only by scripts/midi/derive-devices.mjs
 statement: src/data/midi-devices.json is the output of scripts/midi/derive-devices.mjs, never edited by hand, and names for each device the source files and their sha256; it and the generated region of docs/midi-devices.md hold only derived facts (names, identity numbers, memory count, per control its kind, bank, message, channel and number; per controller number a count and a role word), never a key, an updater field, an image or layout reference, a template, a preset, a sample, firmware or a decompiled library; the full decode lives only in the ignored .local/ directory; and a protocol fact the maker's files do not state is derived clean-room from the device itself (a probe of scripts/midi), never from decompiled code.
 status: active
 class: blocking
-depends_on: [project.no-fake-science@2]
+depends_on: [project.no-fake-science@3]
 tags: [midi, licensing, data, tooling]
 ---
 

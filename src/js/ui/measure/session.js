@@ -19,9 +19,11 @@ import {
 } from '../../measurement/views/announcements.js';
 import { PROFILE_CONVENTIONS } from '../../calibration/profile.js';
 import {
-  isValidLevelCalibration, levelCalibrationApplies, LEVEL_LIMITS, LEVEL_SCALE,
+  isValidLevelCalibration, levelCalibrationApplies, LEVEL_LIMITS, LEVEL_SCALE, LEVEL_NOT_VALID_TEXT,
+  LEVEL_PENDING_INDICATOR, LEVEL_OFFSET_APPLIED_TEXT,
 } from '../../calibration/level.js';
 import { REFERENCE_CAPTURE_S } from '../../calibration/reference.js';
+import { calibrationShown } from '../../calibration/display.js';
 import { describeStimulus } from '../../experiments/schema.js';
 import { setupRecipe } from '../../experiments/definition.js';
 import { canonicalJson } from '../../experiments/canonical-json.js';
@@ -109,6 +111,7 @@ export function createSession(ctx, svc, ops) {
     m.cal.level = null;
     m.cal.useLevel = false;
     m.cal.levelVoid = null;
+    m.cal.levelVoidDifferences = [];
   }
 
   /**
@@ -290,6 +293,7 @@ export function measureStatePart(ctx, svc, ops) {
     OUTPUT_LEVEL_CHOICES,
     ROOM_NOTES,
     CHARACTERIZE_PLAYBACK_CHAIN,
+    calibrationShown, // U114 b: a calibration state as the page shows it (data stays English)
     LEVEL_LIMITS,
     LEVEL_SCALE,
     RESPONSE_QUANTITIES,
@@ -329,7 +333,7 @@ export function measureStatePart(ctx, svc, ops) {
       testContext: null,
       loopback: !!svc.loopback,
       cal: { useFrequency: true, useLevel: false, profile: null, level: null, errors: [],
-        warnings: [], levelVoid: null, levelPending: null },
+        warnings: [], levelVoid: null, levelVoidDifferences: [], levelPending: null },
       levelForm: { referenceHz: '1000', referenceDb: '94', observedDb: '', conditions: '',
         error: '', manual: false, capturing: false, reading: null },
       calImport: null,
@@ -372,15 +376,15 @@ export function measureDerivedPart(ctx, svc, ops) {
       const pending = this.meas.cal.levelPending;
       const a = ops.levelApplies();
       if (this.meas.cal.levelVoid || !a.applies) return 'UNCALIBRATED';
-      return pending || !a.checked ? 'PENDING INPUT CHECK' : 'CALIBRATED';
+      return pending || !a.checked ? LEVEL_PENDING_INDICATOR : 'CALIBRATED';
     },
     /** The "Levels" row of the setup summary, in words. */
     get measureLevelsText() {
       if (!(this.meas.cal.level && this.meas.cal.useLevel)) return 'relative (dBFS-like)';
       const ind = this.measureCalIndicator;
-      if (ind === 'CALIBRATED') return 'CALIBRATED (reference offset applied)';
-      if (ind === 'PENDING INPUT CHECK') return 'relative until the input is checked';
-      return 'UNCALIBRATED (the calibration is not valid for this input)';
+      if (ind === 'CALIBRATED') return LEVEL_OFFSET_APPLIED_TEXT;
+      if (ind === LEVEL_PENDING_INDICATOR) return 'relative until the input is checked';
+      return LEVEL_NOT_VALID_TEXT;
     },
     /**
      * What differs between the completed result's evidence and the workspace now (calibration,
