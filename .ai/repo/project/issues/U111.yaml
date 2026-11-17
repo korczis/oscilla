@@ -30,4 +30,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-12'
-updated_at: '2026-11-12'
+updated_at: 2026-11-17T03:46:38Z
+started_at: 2026-11-17T03:46:12Z
+started_event: sha256:d22ed6b206a54e027b52331461e60f2e4e61a2ddda3b32c838629525524e6d22
+completed_at: 2026-11-17T03:46:38Z
+completed_event: sha256:68904cd1b28350c806b45e39ac3c6598d7cd65e398d3e5ec9888043eea607eec
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/synth-insert-notice.test.mjs; node tests/browser/ui-current.cjs; node tests/browser/synth.cjs --only s-notice,s-notice-cold"
+    result: "On main 3273bbbf: synth-insert-notice 11/11; ui-current exit 0 in chromium, firefox and webkit (webkit 407/407); synth s-notice and s-notice-cold ok in 3 engines. Criteria C3-541-1..4 and C3-540-4 present on main (short line from one source, until() before close, pair-named debt keys with comparePairs, s-notice-cold nav-link variant, MARGIN log); landed in T19 #544 (a661ae5b) under verdict 544.yaml"
+    artifact: ".ai/repo/reviews/544.yaml"
+    commit: 3273bbbfd828058bb4d7c7699cc0685d350dc609
+    recorded_at: 2026-11-17T03:46:30Z
