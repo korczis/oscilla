@@ -34,11 +34,7 @@
 }
 
 .osc-view--studio {
-  min-height: 0;
   height: 100%;
-  padding: 0;
-  border: 0;
-  background: none;
 }
 
 .osc-studio {

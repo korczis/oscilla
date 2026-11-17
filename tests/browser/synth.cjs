@@ -338,7 +338,7 @@ async function openSynth(context, base, hash = '#m=synth') {
     && !document.getElementById('osc-view-synth').hidden
     && document.querySelector('[data-osc="synth.bay.svg"]'))),
   { ms: LOAD_MS, what: 'the Synth view is shown and its panel rendered' });
-  await page.locator('#osc-synth-title').click();
+  await page.locator('[data-osc="page.title"]').click();
   return page;
 }
 const knob = (page, cid) => page.locator(`[data-knob="${cid}"]`);
@@ -370,7 +370,7 @@ async function tapJack(page, id) {
   await page.keyboard.press('Enter');
 }
 async function hold(page, code) {
-  await page.locator('#osc-synth-title').click();
+  await page.locator('[data-osc="page.title"]').click();
   await page.keyboard.down(code);
 }
 const silent = (page, what) => sound(page, (p) => p.rmsDb < -70, what);
@@ -1200,7 +1200,7 @@ function defineChecks() {
   // taps on KEYS (QWERTY A, dispatched together in one task) is heard above -60 dB rel within the
   // deadline, and the voice is silent again before the next.
   def('s-tap', async ({ page }) => {
-    await page.locator('#osc-synth-title').click();
+    await page.locator('[data-osc="page.title"]').click();
     // A tap lasts tens of ms, shorter than a probe round trip: the page measures it itself
     // (lib/tap-meter.cjs), from the samples after each tap, so a stalled frame cannot miss one.
     await page.evaluate(watchTaps);
@@ -1502,7 +1502,7 @@ function defineChecks() {
     const sq = await sound(page, (q) => peakAt(q, 3 * f) && levelAt(q, 2 * f)
       <= levelAt(q, 3 * f) - 30, "the square's 2nd harmonic is 30 dB below its 3rd");
     out.square = [levelAt(sq, 2 * f), levelAt(sq, 3 * f)];
-    await page.locator('#osc-synth-title').click();
+    await page.locator('[data-osc="page.title"]').click();
     await page.keyboard.up('KeyA');
     // A quick preset by pointer or touch, linked to the Studio Inspector.
     const b0 = await depth();

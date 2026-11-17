@@ -51,8 +51,11 @@ export const PRO = Object.freeze({
   tabOn: 'text-primary-700 border-primary-700 dark:text-primary-500 dark:border-primary-500',
   tabOff: 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 '
     + 'dark:text-gray-400 dark:hover:text-gray-300',
-  /** A page's heading. */
-  pageTitle: 'mb-4 text-xl font-semibold text-gray-900 sm:text-2xl dark:text-white',
+  /** The one Pro page frame every workspace stands in (PRO_STRUCTURE.page of
+   *  scripts/ui-flowbite-pro-measure.mjs, owner decision Q110): a view of its own carries it in
+   *  its class, <main> carries it for a workspace whose panels stand in its grid (shell.js
+   *  mainFrameOf). The page's visible title is the page header's alone. */
+  page: 'px-4 pt-6',
 });
 
 /** The Alpine part: PRO for the markup's :class bindings. */

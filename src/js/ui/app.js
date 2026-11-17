@@ -443,6 +443,15 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
     workspaceLang() {
       return workspaceLang(this.workspace);
     },
+    /**
+     * The page header's last crumb: the tab in view of a page with tabs of its own (the
+     * Synth's, from synth.tabs), else ''. The page's content shows no second title (Q110).
+     */
+    workspaceTabLabel() {
+      if (this.workspace !== 'synth' || !this.synth || !this.synth.tabs) return '';
+      const t = this.synth.tabs.find((x) => x.id === this.synth.tab);
+      return t ? t.label : '';
+    },
     workspaceGroupLabel() {
       const g = navGroupOf(this.workspace);
       return g ? GROUP_REGISTRY[g].label : '';

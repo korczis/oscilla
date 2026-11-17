@@ -48,7 +48,6 @@
   flex: 1 0 auto;
   grid-template-columns: minmax(0, 1fr);
   row-gap: 6px;
-  padding: 7px 9px 12px 11px;
 }
 
 .osc-main:focus {
@@ -160,14 +159,6 @@
 .osc-app:is([data-mode="learn"], [data-mode="presets"], [data-mode="about"]) :is(.osc-top,
   .osc-row3) {
   display: none;
-}
-
-.osc-view {
-  min-height: 600px;
-  padding: 16px;
-  border: 1px solid var(--osc-border);
-  border-radius: var(--osc-radius-panel);
-  background: var(--osc-surface-1);
 }
 
 /* Nav focus on desktop: the focused workspace's panels get an accent ring. */

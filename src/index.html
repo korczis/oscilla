@@ -405,11 +405,18 @@
               <span class="ml-1 text-sm font-medium text-gray-500 md:ml-2 dark:text-gray-400" x-text="workspaceGroupLabel()"></span>
             </div>
           </li>
-          <li class="min-w-0" aria-current="page">
+          <li class="min-w-0" aria-current="page" :aria-current="workspaceTabLabel() ? null : 'page'">
             <div class="flex items-center min-w-0">
               <svg class="flex-none w-5 h-5 text-gray-400 max-md:hidden" aria-hidden="true"><use href="#i-right"/></svg>
               <p class="text-sm font-semibold text-gray-900 truncate md:ml-2 dark:text-white"
                 data-osc="page.title" x-text="workspaceLabel()" lang="en" :lang="workspaceLang()">Playground</p>
+            </div>
+          </li>
+          <li class="min-w-0" aria-current="page" x-show="workspaceTabLabel()" x-cloak>
+            <div class="flex items-center min-w-0">
+              <svg class="flex-none w-5 h-5 text-gray-400" aria-hidden="true"><use href="#i-right"/></svg>
+              <span class="ml-1 text-sm font-medium text-gray-500 truncate md:ml-2 dark:text-gray-400"
+                x-text="workspaceTabLabel()"></span>
             </div>
           </li>
         </ol>
@@ -463,8 +470,9 @@
   <!-- ================= Main grid ================= -->
   <!-- K247: a workspace the docked keys cover (every one but the Playground, whose keys stay
        under its panels; the Synth and the Studio reserve the band in their own views) keeps the
-       band below its content, so no control ends under the dock or its folded handle. -->
-  <main class="osc-main scroll-pb-[var(--osc-dock-h,0px)]" id="osc-main" tabindex="-1" :class="[workspace === 'synth' && '!block !pt-0 scroll-pt-[var(--osc-synth-nav-h,0px)]', kbdDocked && workspace !== 'synth' && workspace !== 'studio' && '!mb-[max(0px,calc(var(--osc-dock-h,0px)_-_var(--osc-statusbar-h)))]']">
+       band below its content, so no control ends under the dock or its folded handle.
+       Q110: one Pro page frame, on <main> or on the workspace's own view (shell.js). -->
+  <main class="osc-main scroll-pb-[var(--osc-dock-h,0px)]" id="osc-main" tabindex="-1" :class="[mainFrame(), workspace === 'synth' && '!block !pt-0 scroll-pt-[var(--osc-synth-nav-h,0px)]', kbdDocked && workspace !== 'synth' && workspace !== 'studio' && '!mb-[max(0px,calc(var(--osc-dock-h,0px)_-_var(--osc-statusbar-h)))]']">
     <!-- The first screen (P002, Q004 option A): the positioning sentence of Q002 leads the
          Playground; the other workspaces lead with their own heading and keep it unseen. -->
     <h1 class="max-sm:-mt-1" :class="{ 'osc-sr-only': workspace !== 'playground' }">A zero-install, scientifically
@@ -957,9 +965,10 @@
          option A): the same panel and state, not a copy; the measurement runs here
          (measureRunPrimary opens MEASURE first). It stands between the Playground's rows, so
          reading and Tab order follow them. -->
-    <section class="osc-view osc-view--measure" id="osc-view-measure" data-osc="measure-view"
+    <section class="osc-view osc-view--measure px-4 pt-6 pb-6" id="osc-view-measure" data-osc="measure-view"
       data-osc-modes="measure" hidden
       :hidden="workspace !== 'measure' && workspace !== 'playground'"
+      :class="workspace !== 'measure' && '!p-0'"
       aria-labelledby="osc-measure-title" tabindex="-1">
       <h2 class="osc-sr-only" id="osc-measure-title">Měření</h2>
       <p class="osc-sr-only" role="status" aria-live="polite" aria-atomic="true"
@@ -2182,7 +2191,7 @@
 
     <!-- Full-width workspace views -->
     <!-- EXPERIMENTS (V3): local experiment management -->
-    <section class="osc-view osc-view--experiments" id="osc-view-experiments" data-osc="experiments-view"
+    <section class="osc-view osc-view--experiments px-4 pt-6 pb-6" id="osc-view-experiments" data-osc="experiments-view"
       data-osc-modes="experiments" hidden :hidden="workspace !== 'experiments'"
       aria-labelledby="osc-exp-title" tabindex="-1">
       <h2 class="osc-sr-only" id="osc-exp-title">Experimenty</h2>
@@ -2575,7 +2584,7 @@
     <section class="px-4 pt-6 pb-6" id="osc-view-learn" data-osc="learn-view"
       data-osc-modes="learn" hidden :hidden="mode !== 'learn'" aria-labelledby="osc-learn-title"
       tabindex="-1">
-      <h2 :class="PRO.pageTitle" id="osc-learn-title">Výuka</h2>
+      <h2 class="sr-only" id="osc-learn-title">Výuka</h2>
       <div data-osc="learn-content">
         <ul class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" role="list">
           <template x-for="t in LEARN_CARDS" :key="t.id">
@@ -2615,7 +2624,7 @@
     <section class="px-4 pt-6 pb-6" id="osc-view-presets" data-osc="presets-view"
       data-osc-modes="presets" hidden :hidden="mode !== 'presets'"
       aria-labelledby="osc-presets-title" tabindex="-1">
-      <h2 :class="PRO.pageTitle" id="osc-presets-title">Předvolby</h2>
+      <h2 class="sr-only" id="osc-presets-title">Předvolby</h2>
       <div data-osc="presets-content">
         <div class="flex flex-wrap mb-4 text-sm font-medium text-center border-b border-gray-200
           dark:border-gray-700" role="tablist" aria-label="Preset categories">
@@ -2717,17 +2726,14 @@
          src/js/ui/studio/workspace.js): every module plate, knob, switch and jack is generated
          from src/js/synth/panels/semi-mono.js and the registry's node descriptors. The keyboard
          docks at the bottom here and plays the panel. -->
-    <section class="px-4 pt-6 max-md:pt-0 pb-[max(1.5rem,var(--osc-dock-h,20rem))]" id="osc-view-synth" data-osc="synth-view"
+    <section class="px-4 pt-6 pb-[max(1.5rem,var(--osc-dock-h,20rem))]" id="osc-view-synth" data-osc="synth-view"
       data-osc-modes="synth" hidden :hidden="workspace !== 'synth'"
       aria-labelledby="osc-synth-title" tabindex="-1">
       <!-- U108: below md the insert alert comes first (order), clear of the dock. -->
       <div class="flex flex-col md:block">
       <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <nav aria-label="Breadcrumb" class="text-xs text-gray-500 dark:text-gray-400"
-            x-text="'Synth / ' + synth.tabs.find((t) => t.id === synth.tab).label">Synth / Panel</nav>
-          <h2 id="osc-synth-title" class="text-xl font-semibold text-gray-900 dark:text-white"
-            x-text="synth.title">Semimodulární monofonní hlas</h2>
+          <h2 id="osc-synth-title" class="sr-only" x-text="synth.title">Semimodulární monofonní hlas</h2>
           <p class="hidden max-w-3xl text-sm text-gray-600 sm:block dark:text-gray-300"
             x-text="synth.description"></p>
         </div>
@@ -2813,7 +2819,7 @@
          editor, node library, Inspector and compact widget are rendered by their modules from
          the ONE Studio store; the timeline region belongs to src/js/ui/studio/timeline-editor.js
          (spec §131-§136). Below 768 px one of GRAPH / TIMELINE / INSPECTOR is shown at a time. -->
-    <section class="osc-view osc-view--studio box-border !pb-[max(0px,calc(var(--osc-dock-h,0px)_-_var(--osc-statusbar-h)))]" id="osc-view-studio" data-osc="studio-view"
+    <section class="osc-view osc-view--studio box-border px-4 pt-6 !pb-[max(0px,calc(var(--osc-dock-h,0px)_-_var(--osc-statusbar-h)))]" id="osc-view-studio" data-osc="studio-view"
       data-osc-modes="studio" hidden :hidden="workspace !== 'studio'" :data-subview="studio.subview"
       aria-labelledby="osc-studio-title" tabindex="-1">
       <h2 class="osc-sr-only" id="osc-studio-title">Studio</h2>
@@ -2977,7 +2983,7 @@
     <!-- ---------- About: the instrument explaining itself ----------
          Static, semantic copy (no text lives in canvas or script). The provenance times are
          commit timestamps; tests/unit/about-provenance.test.mjs checks them against git. -->
-    <section class="osc-view osc-view--about osc-about" id="osc-view-about" data-osc="about-view"
+    <section class="osc-view osc-view--about osc-about px-4 pt-6 pb-6" id="osc-view-about" data-osc="about-view"
       data-osc-modes="about" hidden :hidden="workspace !== 'about'"
       aria-labelledby="osc-about-title" tabindex="-1">
 
