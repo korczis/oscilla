@@ -1,0 +1,85 @@
+# Review verdict for pull request #590 (fix/czech-pass-6b): Czech pass 6b (U114 b), the
+# calibration states shown in Czech over English data, project.no-fake-science v3 and its
+# enforcement test. Built by oscilla-0b on main c442499e: 9059cde0 fix(ui), 9fc2c5ea
+# test(v3-ui), e1a71849 test(visual) MEASURE references re-accepted, 58aadf23 fix(ui) closing
+# C3-590-1. Judged at 58aadf23 on base origin/main c442499e, 2026-11-17, in the reviewer's own
+# detached worktree ~/dev/oscilla-wt/review-526.
+#
+# Reviewer: rev-seat-2 (session oscilla-c3, claude-code c0f0687c), a separate top-level session
+# acting as rev-seat (Q108 A). It built none of this: oscilla-0b built every commit. The design
+# was read by the reviewer before the build (six points; all six answered in the head).
+#
+# The digest: origin/main's (c442499e) scripts/review-verdict.mjs --content --list at 58aadf23:
+# 02b053046e0e... over 9 guarded paths (src/js/calibration/display.js, calibration/level.js,
+# measurement/views/common.js, compare-view.js, response-chart.js, rta-chart.js,
+# ui/measure/constants.js, session.js, views.js). At e1a71849 it was bd8c1379 (before the fix).
+#
+# How it was judged:
+# - Data stays English: level.js, the views' badges, saved reasons, exports and the honesty
+#   tests keep UNCALIBRATED / CALIBRATED / PENDING INPUT CHECK. The reason sentences moved to
+#   level.js as the one copy of each (ui/measure/constants.js re-exports them); the "taken with"
+#   reason is built from the same parts (TAKEN_WITH, BINDING_WORDS, OTHER_DEVICE_TEXT,
+#   NOT_REPORTED_TEXT) as before, so its text is unchanged. czech-prose baseline: level.js
+#   11 -> 20, constants.js 14 -> 6, session.js 2 -> 1 (sentences moved, total unchanged).
+# - Display: src/js/calibration/display.js calibrationShown(text, differences) is the one map;
+#   index.html wraps every binding that can carry a state (both header indicators and the
+#   Level title, the preset, step detail, Levels row, the two 'none (UNCALIBRATED)' literals,
+#   quality items and rows, metrics, the three badge loops, legend, IR/RTA notes, levelVoid /
+#   levelPending, Experiments lines, checks and compare values) and the response chart's
+#   canvas label. The "taken with" reason is built from levelCalibrationApplies' differences
+#   (meas.cal.levelVoidDifferences, set from the same lv as levelVoid, views.js); a stored
+#   reason without them is read back from level.js's own words; an unknown or mutated one
+#   keeps "NEKALIBROVÁNO: ..." (reviewer's probes: a new binding field, stored differences of
+#   every kind, "UNCALIBRATED: something new").
+# - C3-590-1 (found by the reviewer at e1a71849, closed by 58aadf23): the fallback replaced
+#   phrases in object order with split/join, so an embedded 'UNCALIBRATED (frequency)' became
+#   "UNKALIBROVÁNO (frekvence)", a calibrated-looking state. Now one alternation, longest
+#   first, guarded by (?<![A-Za-z]); the reviewer's probes read NEKALIBROVÁNO (frekvence) in
+#   every embedding. Unreachable on the page at e1a71849 (the badges arrive whole).
+# - Enforcement: tests/unit/calibration-display.test.mjs (13 tests): the census of state
+#   sources is derived from the code (session getters, meas.cal reason fields, the views'
+#   badge lists, the preset, literals) and proven by dropping each wrap; bare English state
+#   text in index.html; English state regexes on DOM-read lines in tests/browser (line-local,
+#   as 0b says); the Czech forms carry no forbidden claim (SPL, certifik, léč, ultrazvuk, ...).
+#   v3-ui gains calibration-czech (Measure and Experiments in 8 states, no English state shown
+#   or in a title); its negative English checks became Czech positives (calibrated() needs
+#   (^|\s)KALIBROVÁNO and no NEKALIBROVÁNO).
+# - Fail-first, measured by the reviewer: with the head's src/js and tests but main's
+#   src/index.html, calibration-display.test fails 3 of 12 (census, mutation, bare English);
+#   with e1a71849's display.js under the head's test, test 6 (C3-590-1) fails, 12/13.
+# - Rule: no-fake-science v3 keeps v2's requirements and adds the display table; v2 is
+#   deprecated and its two dependants pin @3.
+#
+# Measured by the reviewer (Node 22.20.0, majordomus 1.0.1 first on PATH, ci.yml's pin):
+# - At 58aadf23: build:check 0; GITHUB_BASE_REF=main npm test exit 0 (5916 tests, 5915 pass,
+#   0 fail, 1 skipped). Browser, OSC_BROWSERS=chromium,firefox,webkit, run-suites exit 0, "all
+#   4 suites passed": v3-ui 38/38 in each of the 6 legs (calibration-czech among them; main has
+#   37 checks), v3-measure ALL PASS (145 checks), first-screen ALL PASS (645 checks), app 66/66
+#   in each of the 6 legs.
+# - At e1a71849 (src/js identical except display.js's fallback): npm test exit 0 (5915/0); the
+#   reviewer's own probe of the Measure header at 320, 375, 390, 1280, 1536 and 1920 px in the
+#   3 engines, as shown and with "ČEKÁ NA KONTROLU VSTUPU" forced into the Level indicator: no
+#   clip, overlap, covered element (elementFromPoint) or horizontal page scroll, 36/36.
+# Not run by the reviewer: the visual gate (MEASURE references re-accepted by 0b in both
+# environments; the reviewer read the linux phone reference: Frequency / Level NEKALIBROVÁNO,
+# PROMĚŘIT ŘETĚZEC PŘEHRÁVÁNÍ), and the other browser suites; the CI legs run every one.
+#
+# P3 notes, open, none blocks: the surrounding Measure prose stays English (Guided measurement,
+# the Frequency / Level keys, quality notes, 'dB relative
+# (dBFS-like)'), named out of scope in the PR for a later pass.
+#
+# THE CONDITION of this verdict: it binds once the reviewer has read the six "Browser leg N
+# (browser)" logs of this pull request's run at this verdict's commit and found each leg's
+# suite list equal to shards.cjs --plan at this head, "run-suites: all K suites passed" and no
+# FAIL line (a flake is judged against main before any rerun), and the linux visual job passes
+# with the re-accepted MEASURE references. Auto-merge is armed only after the reviewer reports
+# "legs OK"; otherwise a superseding verdict.
+#
+# Verdict: merge, under the condition above. Findings: C3-590-1 closed.
+schema: review-verdict/v1
+pr: 590
+verdict: merge
+reviewer: oscilla-c3 rev-seat-2 (claude-code c0f0687c, a separate top-level session; built none of 58aadf23)
+content: 02b053046e0edb62808913b43cbea7325c6ea0d93d4f8764178a15bd55019799
+findings:
+  - { id: C3-590-1, severity: P2, status: closed, title: "calibrationShown's fallback replaced phrases in object order, so an embedded 'UNCALIBRATED (frequency)' read 'UNKALIBROVÁNO (frekvence)' (calibrated-looking); closed by 58aadf23 (one alternation, longest first, not inside a word)" }

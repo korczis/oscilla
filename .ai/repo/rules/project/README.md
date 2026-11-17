@@ -42,7 +42,7 @@ rule files in this directory, and fails when a row is missing, extra or stale.
 | --- | --- | --- | --- |
 | `project.single-file-deliverable` v2 | blocking | one static `dist/index.html`, no runtime fetch | `scripts/verify-dist.mjs`, browser gate, `scripts/verify-deploy.mjs` |
 | `project.audio-engine-discipline` v2 | blocking | nodes and timing only inside the engine's accounting | `tests/unit/freeze.test.mjs`, `tests/browser/engine-v1port.cjs` |
-| `project.no-fake-science` v2 | blocking | no unsupported claim; dB SPL only when calibrated | `x-majordomus` tests |
+| `project.no-fake-science` v3 | blocking | no unsupported claim; dB SPL only when calibrated; calibration states English as data, shown in Czech | `x-majordomus` tests |
 | `project.no-inert-surfaces` v1 | blocking | no placeholder copy, no control disabled without a stated reason, no `data-osc` control without a handler; the allowance only shrinks | `tests/unit/no-inert-surfaces.test.mjs`, `no-inert-controls` in `tests/browser/qa-regressions.cjs`; review-only: a literal shown as data, placeholder copy in substance |
 | `project.about-names-current-release` v2 | blocking | the About timeline names the release line, rendered from `src/data/about-stations.json`, its numbers derived or stamped | `tests/unit/release-about-station.test.mjs`, `tests/unit/about.test.mjs` |
 | `project.czech-prose` v1 | blocking | the app's visible prose is Czech (a per-file English ratchet that only falls); release notes, PR/issue bodies and published pages are Czech; code and commits stay English (Q104) | `tests/unit/czech-prose.test.mjs` |

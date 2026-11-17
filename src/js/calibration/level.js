@@ -77,7 +77,7 @@ export const LEVEL_METHODS = Object.freeze(['captured', 'manual']);
 /** Applied input settings a calibration is bound to (besides deviceId and sampleRate). */
 export const LEVEL_INPUT_FLAGS = Object.freeze(['echoCancellation', 'noiseSuppression',
   'autoGainControl']);
-const BINDING_KEYS = Object.freeze(['deviceId', 'sampleRate', ...LEVEL_INPUT_FLAGS,
+export const BINDING_KEYS = Object.freeze(['deviceId', 'sampleRate', ...LEVEL_INPUT_FLAGS,
   'channelCount']);
 
 export const LEVEL_LIMITS = Object.freeze({
@@ -220,14 +220,53 @@ export function isBoundLevelCalibration(cal) {
 /** The words for a calibration without an input binding (records, evidence, compare). */
 export const UNBOUND_TEXT = 'not bound to an input';
 
-const BINDING_WORDS = Object.freeze({
+// The reason sentences, one copy each; calibration/display.js keys its Czech forms on them.
+const AGAIN = 'Calibrate again for this input.';
+export const UNBOUND_REASON = `UNCALIBRATED: the level calibration is ${UNBOUND_TEXT} (it was `
+  + 'stored without the input it was taken with), so it cannot be shown to apply to this one. '
+  + AGAIN;
+/** The "taken with <differences>" reason around its differences. */
+export const TAKEN_WITH = Object.freeze(['UNCALIBRATED: the level calibration was taken with ',
+  `. ${AGAIN}`]);
+/** The setup summary's Levels row when the calibration does not apply to the input. */
+export const LEVEL_NOT_VALID_TEXT = 'UNCALIBRATED (the calibration is not valid for this input)';
+
+/**
+ * A level calibration is on but no input has been checked since the input may have changed
+ * (review F3 of #139): no display applies it until the setup check or a measurement confirms
+ * the input it belongs to, so the indicator does not say CALIBRATED.
+ */
+export const LEVEL_PENDING_TEXT = 'Pending input check: the level calibration is applied only '
+  + 'once the setup check or a measurement confirms the input it was taken with; until then '
+  + 'levels are relative (dBFS-like).';
+/**
+ * Why a level calibration made in one context does not apply in the other (ledger W7f): its
+ * input was named there, and no check here can show that it is the input in use now. It is
+ * kept across the transition (owner decision of 2026-10-11) and applies again in its own
+ * context once its input is checked there.
+ */
+export const LEVEL_FROM_TEST_CONTEXT = 'UNCALIBRATED: the level calibration was made in TEST '
+  + 'CONTEXT (digital loopback, no microphone), so it does not apply to a microphone input. '
+  + 'It is kept for TEST CONTEXT; calibrate again for this input.';
+export const LEVEL_FROM_MICROPHONE = 'UNCALIBRATED: the level calibration was taken with a '
+  + 'microphone input, so it does not apply in TEST CONTEXT (digital loopback, no microphone). '
+  + 'It is kept, and applies again once that input is checked after leaving TEST CONTEXT.';
+
+export const BINDING_WORDS = Object.freeze({
   deviceId: 'input device', sampleRate: 'sample rate', echoCancellation: 'echo cancellation',
   noiseSuppression: 'noise suppression', autoGainControl: 'automatic gain control',
   channelCount: 'channel count',
 });
 
+/** Words of a difference (levelCalibrationApplies); calibration/display.js reads them back. */
+export const NOT_REPORTED_TEXT = 'not reported';
+export const OTHER_DEVICE_TEXT = 'a different input device';
+/** The Level indicator's states besides UNCALIBRATED and CALIBRATED, and its Levels row. */
+export const LEVEL_PENDING_INDICATOR = 'PENDING INPUT CHECK';
+export const LEVEL_OFFSET_APPLIED_TEXT = 'CALIBRATED (reference offset applied)';
+
 function bindingValueText(k, v) {
-  if (v === null) return 'not reported';
+  if (v === null) return NOT_REPORTED_TEXT;
   if (k === 'sampleRate') return `${v} Hz`;
   if (typeof v === 'boolean') return v ? 'on' : 'off';
   return String(v);
@@ -253,23 +292,20 @@ export function levelCalibrationApplies(cal, current) {
   if (!now) return { applies: true, checked: false, reason: null, differences: [] };
   if (!was) {
     return { applies: false, checked: true, differences: [],
-      reason: `UNCALIBRATED: the level calibration is ${UNBOUND_TEXT} (it was stored without the `
-        + 'input it was taken with), so it cannot be shown to apply to this one. Calibrate again '
-        + 'for this input.' };
+      reason: UNBOUND_REASON };
   }
   const differences = [];
   for (const k of BINDING_KEYS) {
     if (was[k] !== now[k]) {
       differences.push({ field: k, was: was[k], now: now[k],
-        text: k === 'deviceId' ? 'a different input device'
+        text: k === 'deviceId' ? OTHER_DEVICE_TEXT
           : `${BINDING_WORDS[k]} ${bindingValueText(k, was[k])} at calibration, `
             + `${bindingValueText(k, now[k])} now` });
     }
   }
   if (!differences.length) return { applies: true, checked: true, reason: null, differences };
   return { applies: false, checked: true, differences,
-    reason: `UNCALIBRATED: the level calibration was taken with ${differences.map((d) => d.text)
-      .join('; ')}. Calibrate again for this input.` };
+    reason: `${TAKEN_WITH[0]}${differences.map((d) => d.text).join('; ')}${TAKEN_WITH[1]}` };
 }
 
 // Unit label for displayed levels (spec §24). With `current` (the input in use), a calibration

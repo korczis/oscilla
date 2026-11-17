@@ -718,7 +718,7 @@ async function layoutDesktop(ctx) {
     if (!f.primary || f.primary.text !== 'Check setup' || !f.primary.enabled) {
       wrong.push(`primary ${JSON.stringify(f.primary)}`);
     }
-    if (!/UNCALIBRATED/.test(f.freq || '') || !/UNCALIBRATED/.test(f.level || '')) {
+    if (!/^Frequency NEKALIBROVÁNO$/.test(f.freq || '') || !/^Level NEKALIBROVÁNO$/.test(f.level || '')) {
       wrong.push(`indicators ${f.freq} / ${f.level}`);
     }
     if (f.folds.some((d) => !d.open || d.summary)) {

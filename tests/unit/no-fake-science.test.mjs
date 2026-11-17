@@ -1,4 +1,4 @@
-// Rule project.no-fake-science v2: the shipped copy makes no medical, therapeutic, wellness,
+// Rule project.no-fake-science v3: the shipped copy makes no medical, therapeutic, wellness,
 // cognitive, pseudoscientific, animal-effect, inaudibility, frequency-safety, calibration or
 // ultrasound claim the application cannot support.
 //

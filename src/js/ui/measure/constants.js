@@ -9,6 +9,12 @@ import { UNAVAILABLE } from '../../measurement/views/common.js';
 import { RECIPE_WIRE_KEYS } from '../../core/url-state-measure.js';
 import { MIC_UNAVAILABLE_TEXT } from '../../audio/microphone.js';
 
+// The level calibration's reason sentences live with it (calibration/level.js), where its Czech
+// display map (calibration/display.js) reads them too (U114 b).
+export {
+  LEVEL_PENDING_TEXT, LEVEL_FROM_TEST_CONTEXT, LEVEL_FROM_MICROPHONE,
+} from '../../calibration/level.js';
+
 /**
  * The live input's availability as the RTA tab shows it (C033): the "not available here"
  * sentence only where the page has no microphone API. Where it has one (a granted microphone
@@ -67,31 +73,11 @@ export const LIVE_RTA_FIELDS = Object.freeze({
   rtaMode: 'rtaMode', averaging: 'rtaAveraging', fftSize: 'rtaFftSize', window: 'rtaWindow',
 });
 export const LIVE_FIELD_HELP = 'Live RTA (RTA tab); not part of the measurement recipe.';
-/**
- * A level calibration is on but no input has been checked since the input may have changed
- * (review F3 of #139): no display applies it until the setup check or a measurement confirms
- * the input it belongs to, so the indicator does not say CALIBRATED.
- */
-export const LEVEL_PENDING_TEXT = 'Pending input check: the level calibration is applied only '
-  + 'once the setup check or a measurement confirms the input it was taken with; until then '
-  + 'levels are relative (dBFS-like).';
 /** Why a level calibration cannot be stored before an input is known (ledger C1). */
 export const LEVEL_NEEDS_INPUT = 'Run the setup check first: a level calibration is valid only '
   + 'for the input it was taken with, and no input has been checked yet, so a reading typed now '
   + 'could not be bound to one.';
 
-/**
- * Why a level calibration made in one context does not apply in the other (ledger W7f): its
- * input was named there, and no check here can show that it is the input in use now. It is
- * kept across the transition (owner decision of 2026-10-11) and applies again in its own
- * context once its input is checked there.
- */
-export const LEVEL_FROM_TEST_CONTEXT = 'UNCALIBRATED: the level calibration was made in TEST '
-  + 'CONTEXT (digital loopback, no microphone), so it does not apply to a microphone input. '
-  + 'It is kept for TEST CONTEXT; calibrate again for this input.';
-export const LEVEL_FROM_MICROPHONE = 'UNCALIBRATED: the level calibration was taken with a '
-  + 'microphone input, so it does not apply in TEST CONTEXT (digital loopback, no microphone). '
-  + 'It is kept, and applies again once that input is checked after leaving TEST CONTEXT.';
 /** What a level reading typed by hand in TEST CONTEXT says of itself (ledger W7c). */
 export const MANUAL_TEST_CONTEXT_LABEL = 'TEST CONTEXT: reading typed by hand while the page '
   + 'was in TEST CONTEXT (digital loopback, no microphone checked).';

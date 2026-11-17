@@ -27,6 +27,7 @@ import uPlot from 'uplot';
 import { chartTheme, withAlpha, uplotAxis, canvasFont, observeSize } from './chart-theme.js';
 import { formatHzTick, formatDbTick } from './axes.js';
 import { MEASUREMENT_ROLES } from '../measurement/views/common.js';
+import { calibrationShown } from '../calibration/display.js';
 
 /** The theme colour of a measurement role (an existing token, src/styles/tokens.css). */
 export function roleColour(theme, role) {
@@ -338,7 +339,7 @@ function drawResponseMarkers(self, v, theme) {
     if (b < left + width - 1) hatch(ctx, b, top, left + width - b, height, withAlpha(c, 0.18), dpr);
     vline(ctx, a, top, height, c, m.calibratedRange.dash || [3, 3], dpr);
     vline(ctx, b, top, height, c, m.calibratedRange.dash || [3, 3], dpr);
-    label(ctx, theme, 'CALIBRATED', a + 4 * dpr, top + height - 14 * dpr, dpr, 'left', c);
+    label(ctx, theme, calibrationShown('CALIBRATED'), a + 4 * dpr, top + height - 14 * dpr, dpr, 'left', c);
   }
   if (m.requestedRange) {
     const [lo, hi] = m.requestedRange.range;

@@ -913,9 +913,14 @@ function defineChecks() {
       res.outside = await now();
       res.outsideText = await until(async () => {
         const t = await indicatorText();
-        return t === 'Level UNCALIBRATED' ? t : null;
-      }, { ms: 5000, what: 'the level indicator reads UNCALIBRATED outside TEST CONTEXT' })
+        return t === 'Level NEKALIBROVÁNO' ? t : null;
+      }, { ms: 5000, what: 'the level indicator reads NEKALIBROVÁNO outside TEST CONTEXT' })
         .catch(() => indicatorText());
+      // The reason as shown: in Czech over the English data (U114 b), its state first.
+      res.outsideReason = await p.evaluate(() => {
+        const el = document.querySelector('[data-osc="measure.levelVoid"]');
+        return el ? el.textContent.trim() : null;
+      });
       const v = {
         setup: res.setup.loopback === true && res.setup.values === true,
         ran: res.run.state === 'COMPLETE' && res.run.input === 'known' && res.run.testContext,
@@ -936,7 +941,9 @@ function defineChecks() {
           && res.outside.indicator === 'UNCALIBRATED' && !res.outside.pending
           && /^UNCALIBRATED: the level calibration was made in TEST CONTEXT/
             .test(res.outside.void || '')
-          && res.outsideText === 'Level UNCALIBRATED'
+          && res.outsideText === 'Level NEKALIBROVÁNO'
+          && /^NEKALIBROVÁNO: kalibrace úrovně vznikla v TESTOVACÍM KONTEXTU/
+            .test(res.outsideReason || '')
           && /level relative \(dBFS-like\)$/.test(res.outside.step),
       };
       // With a fake microphone: the checked microphone is the one input a reading binds to,

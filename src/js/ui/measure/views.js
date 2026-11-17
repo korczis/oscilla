@@ -74,6 +74,10 @@ export function createViews(ctx, svc, ops) {
     if (lite) return;
     m.inputRows = inputFacts();
     m.cal.levelVoid = lv && !lv.applies && lv.checked ? lv.reason : null;
+    // U114 b: what differs, so the page builds the Czech reason from it (calibration/display.js).
+    // Set from the same lv as levelVoid: the page passes the two together, and calibrationShown
+    // trusts that the differences belong to that reason.
+    m.cal.levelVoidDifferences = m.cal.levelVoid && lv.differences ? plain(lv.differences) : [];
     m.cal.levelPending = lv && m.cal.useLevel && lv.applies && !lv.checked ? LEVEL_PENDING_TEXT
       : null;
     m.safety = safetyNotes({ recipe, preflight: ctx.preflight });

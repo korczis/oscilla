@@ -5,7 +5,7 @@ kind: rule
 title: No fake science
 description: User-facing content makes no medical, wellness, cognitive, pseudoscientific, animal-effect, audibility, frequency-safety, ultrasound or calibration claim the application cannot support, and labels a level dB SPL only under a valid level calibration.
 statement: No text OSCILLA can show claims a therapeutic, medical, sleep, focus, cognitive or animal-specific effect, inaudibility, the safety of a frequency, ultrasound below 20 kHz, certification, or that digital generation implies acoustic reproduction; a level is relative (dBFS-like) and is labelled dB SPL only while a valid absolute level calibration with an explicit external reference applies (ADR 0017, claim spl-only-with-level-calibration).
-status: active
+status: deprecated
 class: blocking
 depends_on: []
 tags: [content, safety]
@@ -13,6 +13,10 @@ x-majordomus:
   claims: [no-fake-science-in-shipped-copy, spl-only-with-level-calibration]
   tests: [tests/unit/no-fake-science.test.mjs, tests/unit/v3-calibration.test.mjs]
 ---
+
+> Deprecated on 2026-11-17: superseded by `no-fake-science.v3.md`, which restates every clause
+> below and adds the Czech display forms of the calibration states (U114 b, Q090). This file is
+> kept as history and binds nothing.
 
 # Rationale
 

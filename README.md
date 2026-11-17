@@ -946,7 +946,7 @@ steps of the journey. The notes beside the spectrum and waveform (V504) have not
   differing published values.
 
 The reasoning is in [ADR 0017](.ai/repo/adrs/0017-relative-levels-spl-only-when-calibrated.md)
-and the rule [`project.no-fake-science`](.ai/repo/rules/project/no-fake-science.v2.md).
+and the rule [`project.no-fake-science`](.ai/repo/rules/project/no-fake-science.v3.md).
 
 ## Architecture
 
