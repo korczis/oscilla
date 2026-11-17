@@ -1,0 +1,71 @@
+# Review verdict for pull request #586 (train/t27): train T27 and release v3.41.1 (a patch:
+# release:analyze derives patch from #473's fix(release) fc523f6 and 65c1835).
+# Member (verified an ancestor of 7b3f11d2 by the reviewer): #473 fix/release-notes-czech at
+# 42d2e047, the Czech Release notes (Q104), built by oscilla-2b, rebuilt and brought up to main by
+# oscilla-ff (merge 42d2e047 of main a0bd12bc, equal to git's automatic merge; ff froze it and left
+# #473 unarmed). Composed by oscilla-43 on main a0bd12bc: c5e2ac6b merges #473 bd078ce7 on 62f4aa40,
+# 79432c5f merges main a0bd12bc, f3516130 merges #473 42d2e047, chore(release): v3.41.1 7b3f11d2.
+# f3516130's tree equals git merge-tree's automatic merge of a0bd12bc and 42d2e047 (no difference
+# at all). The stamp changes only package.json, package-lock.json, dist/index.html's version and
+# the derived roadmap counts (done 6 -> 8 for V503/V509, required 70 -> 71 for Q109);
+# about-stations.mjs --check-station: "changes only the derived fields the stamp writes" (exit 0;
+# a patch adds no station). Judged at 7b3f11d2 on base origin/main a0bd12bc, 2026-11-17, in the
+# reviewer's own detached worktree ~/dev/oscilla-wt/review-526.
+#
+# Reviewer: rev-seat-2 (session oscilla-c3, claude-code c0f0687c), a separate top-level session
+# acting as rev-seat for every train (Q108 A). It built none of this: oscilla-2b built #473,
+# oscilla-ff rebuilt it, oscilla-43 composed the train. .ai/repo/reviews/473.yaml (oscilla-a3, round
+# 2, content c3b8705d) stays as the record of the old round; main's review-verdict.mjs refuses it
+# for #473 at 42d2e047 (content a5635fe0), so this file is the verdict on that content.
+#
+# The digest: origin/main's (a0bd12bc) scripts/review-verdict.mjs --content --list at 7b3f11d2:
+# a5635fe0c511... over 2 guarded paths (scripts/release-publish.mjs,
+# tests/unit/release-publish.test.mjs). The guarded patch (with the czech-prose rule paragraph) has
+# the same git patch-id --stable (dfeea13d) at bd078ce7 on 62f4aa40 and at 42d2e047 on a0bd12bc.
+#
+# How it was judged:
+# - releaseNotes() alone changes: the section headings Zásadní změny, Nové funkce, Opravy, Údržba,
+#   Původ and the provenance lines (Otisk zdrojů (sha256 vstupů sestavení), Živá stránka ...
+#   (ověřuje scripts/verify-deploy.mjs), Rozdíl, "celá historie až po v<version>"); the grouping
+#   by impact, the commit and compare URLs and the digest are unchanged; the commit subjects stay
+#   as written (Conventional Commits, parsed by release:analyze). A generated sample for v3.41.1
+#   (a fix and the stamp) reads Opravy / Údržba / Původ with the subjects in English.
+# - No reader of the Release body: release-record.mjs takes only the Release's URL (notes_url),
+#   facts.mjs and verify-deploy.mjs read no notes; no script or test outside release-publish's own
+#   matches the old English headings.
+# - The test: Q104's check excludes a commit line by its trailing commit link (4 of 4 excluded)
+#   and reads every other line through the czech-prose rule's own isEnglishProse plus the old
+#   English heading words; the existing note tests now match the Czech headings.
+# - Fail-first: with main's (a0bd12bc) scripts/release-publish.mjs under the head's test file,
+#   release-publish.test.mjs fails 4 (dry run's notes, grouped-by-impact, Q104, R021 resume),
+#   41 pass; with the head's, 45/45.
+# - The rule czech-prose.v1.md states that Releases from the one carrying #473 are Czech and that
+#   published Releases are records, not rewritten.
+#
+# Measured by the reviewer (Node 22.20.0, majordomus 1.0.1 first on PATH, ci.yml's pin):
+# - At 7b3f11d2: build:check 0; GITHUB_BASE_REF=main npm test exit 0 (5903 tests, 5902 pass,
+#   0 fail, 1 skipped); release-publish.test.mjs 45/45; about-stations --check-station 0;
+#   release:analyze patch.
+# - On a simulated merge of bd078ce7 into main 62f4aa40 (the same guarded patch): npm test 0
+#   (5902/0), release-publish.test 45/45, the czech-prose tests 8/8.
+# Not run by the reviewer: the browser suites (no src/ change; dist differs from main's only in the
+# version the stamp writes); the CI legs run every one.
+#
+# P3 note, open, does not block: "Zásadní změny" reads as "major changes"; for breaking changes
+# "Nekompatibilní změny" is the precise term (shown only in a major release).
+#
+# THE CONDITION of this verdict (as for the trains since #509): it binds once the reviewer has read
+# the six "Browser leg N (browser)" logs of this pull request's run at this verdict's commit and
+# found each leg's suite list equal to shards.cjs --plan at this head, "run-suites: all K suites
+# passed" and no FAIL line (a flake is judged against main before any rerun), AND has run the
+# release CI receipt check against this run with the base ci.yml (a0bd12bc's). Auto-merge is armed
+# only after the reviewer reports "legs OK"; otherwise a superseding verdict. After the publish,
+# the integrator reads the v3.41.1 Release body: its generated lines are Czech.
+#
+# Verdict: merge, under the condition above. Findings: none open.
+schema: review-verdict/v1
+pr: 586
+verdict: merge
+reviewer: oscilla-c3 rev-seat-2 (claude-code c0f0687c, a separate top-level session; built none of 7b3f11d2)
+content: a5635fe0c5111a070ba6187e8e549b33a6c91629e86245c7f27d27267ebb9e27
+findings: []

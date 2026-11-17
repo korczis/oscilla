@@ -1,0 +1,42 @@
+# Review verdict for pull request #473 (branch fix/release-notes-czech): the generated lines of the
+# GitHub Release notes are Czech (Q104, rule project.czech-prose); the commit subjects they list
+# stay English (Conventional Commits, which release:analyze parses). Reviewed head fc523f6c; base
+# origin/main 1c5a9252 (the 1.0.0 layer, v3.25.0), its merge base. Reviewer: oscilla-a3
+# (claude-code 12f1e384). Disclosure: the reviewer built none of this change (oscilla-2b did) and
+# wrote only this file, in a detached review worktree at the reviewed head.
+#
+# The digest. origin/main's scripts/review-verdict.mjs --content --list --base-branch origin/main at
+# fc523f6c (the branch's copy is identical to main's): f7fbe18a38bec368eac564a7bdd2d49bffccee770aaf
+# 69312f87b41893eb7938 over two guarded paths: scripts/release-publish.mjs and
+# tests/unit/release-publish.test.mjs.
+#
+# The change. releaseNotes() alone: the section headings (Zásadní změny, Nové funkce, Opravy,
+# Údržba, Původ) and the provenance lines (Otisk zdrojů, Živá stránka, Rozdíl, "celá historie až po
+# v<version>"); the grouping by impact (analyzeCommits), the commit and compare URLs, the digest and
+# the release title "OSCILLA v<version>" are unchanged. Nothing reads the notes back: scripts/
+# release-record.mjs takes the Release's URL and asset digests only, verify-deploy and
+# release-metadata read the stamp, and no script, workflow, skill or rule names the old English
+# headings (searched scripts, tests, .github, docs, .ai/repo/skills and rules).
+#
+# Evidence at fc523f6c: npm test 5013 pass, 0 fail, 1 skipped (GITHUB_BASE_REF=main
+# GITHUB_EVENT_NAME=pull_request); fail-first (origin/main's scripts/fail-first.mjs on the PR's title
+# and body) proven by 1 of 1 file, release-publish.test.mjs fails on the base (assertion); the new
+# Q104 test runs every generated line through czech-prose's isEnglishProse and refuses the old
+# heading words.
+#
+# Round 2 at 65c1835d (2b's answer to F1 and F2): the Q104 test excludes a line only when it ends
+# with the commit link releaseNotes writes ([sha7](.../commit/sha40)) and asserts that exactly the
+# four fixture commit lines are excluded (the provenance Commit line has no such ending, so it is
+# measured); project.czech-prose says the generated notes are Czech from the release carrying #473
+# and that the Releases published before stay as written. The new digest c3b8705d...1522fbd (the
+# test changed); release-publish, czech-prose and knowledge-integrity 79/0; fail-first 1/1.
+#
+# Verdict: merge. F1 and F2 are closed.
+schema: review-verdict/v1
+pr: 473
+verdict: merge
+reviewer: oscilla-a3 (claude-code 12f1e384)
+content: c3b8705da083db1ed1769b35fb47e229b5739d741ff82615d7e68e28e1522fbd
+findings:
+  - { id: F1, severity: P3, status: closed, title: "the Q104 test excludes the listed subjects by the fixture's own first words (drop, new, stop, tidy, **): a generated line beginning with one of them would escape; exclude by the commit lines releaseNotes builds (their sha link) instead" }
+  - { id: F2, severity: P3, status: closed, title: "published Releases up to v3.25.0 keep their English notes; the rule binds new notes only, so say so in project.czech-prose or regenerate them by gh release edit in a follow-up" }

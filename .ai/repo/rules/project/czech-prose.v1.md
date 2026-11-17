@@ -48,8 +48,12 @@ stand never counted) into `tests/unit/czech-prose-short-baseline.json`.
 with any and an unrecorded fall each fail, and mutation cases prove it finds short English and
 passes Czech text and code.
 
-The release notes, pull request bodies and published pages are held by review and by the
-issues that automate them (Q104's follow-ups); until those land, this rule binds the agents.
+The generated lines of the GitHub Release notes are Czech from the release that carries #473 on
+(`scripts/release-publish.mjs` releaseNotes; `tests/unit/release-publish.test.mjs` reads them
+through the same measure); the Releases published before stay as they were written, since a
+published Release is a record and is not rewritten. Pull request bodies and published pages
+are held by review and by the issues that automate them (Q104's follow-ups); until those
+land, this rule binds the agents.
 
 # Failure behaviour
 
