@@ -19,4 +19,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-11'
-updated_at: '2026-11-11'
+updated_at: 2026-11-17T03:45:49Z
+started_at: 2026-11-17T03:45:11Z
+started_event: sha256:1059ae25c478393e11caa2480d83e1230f5152a22831ec6186f128a2d1852a41
+completed_at: 2026-11-17T03:45:49Z
+completed_event: sha256:925f5877d6d59f40335ae50598cdedd020b2bc6e2b97e50b3765996747dae02b
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node tests/browser/xy-pad.cjs --browsers webkit --only x-pointer (10 runs)"
+    result: "On main 3273bbbf: 10/10 passed in webkit (x-pointer settles: band reference read settled, pad points awaited); landed in T9 #531 (0e20f83c) under verdict 531.yaml"
+    artifact: ".ai/repo/reviews/531.yaml"
+    commit: 3273bbbfd828058bb4d7c7699cc0685d350dc609
+    recorded_at: 2026-11-17T03:45:36Z
