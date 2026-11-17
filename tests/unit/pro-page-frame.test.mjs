@@ -52,10 +52,17 @@ test('every workspace of the registry stands in the one Pro page frame', () => {
       for (const c of FRAME) assert.ok(frame.includes(c), `${id}: <main> carries ${c}`);
     }
   }
-  for (const id of VIEWS.keys()) {
-    assert.ok(WORKSPACE_IDS.includes(id) && ownsViewOf(id),
-      `#osc-view-${id} is a workspace of the registry with view: true`);
-  }
+});
+
+test('the registry\'s view flag and the markup\'s views agree, both ways', () => {
+  // `view: true` is typed in the registry; the views are sections of src/index.html. Neither
+  // may drift from the other: every flagged id has its section, every section is flagged.
+  const flagged = WORKSPACE_IDS.filter(ownsViewOf).sort();
+  const sections = [...VIEWS.keys()].sort();
+  assert.ok(sections.length > 0, 'the reader finds the views of the markup');
+  assert.deepEqual(flagged, sections,
+    `view: true in the registry (${flagged}) = the #osc-view-<id> sections (${sections})`);
+  for (const id of sections) assert.ok(WORKSPACE_IDS.includes(id), `${id} is a workspace`);
 });
 
 test('<main> binds the frame and has no padding of its own', () => {
