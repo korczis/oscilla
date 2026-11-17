@@ -513,7 +513,7 @@ function defineChecks(fixtures) {
     const v = H.verdict({
       banner: res.banner,
       preflightReady: res.afterPreflight.state === 'READY'
-        && res.afterPreflight.primary === 'Start measurement',
+        && res.afterPreflight.primary === 'Spustit měření',
       run1: res.run1.state === 'COMPLETE',
       analysisWorker: res.workers.length === 1 && res.workers[0].sameText
         && res.workers[0].kinds[0] === 'ready' && res.workers[0].kinds.at(-1) === 'result',
@@ -526,7 +526,7 @@ function defineChecks(fixtures) {
       barPhone: res.barPhone.fits === true,
       quality: /^(GOOD|USABLE)$/.test(d.quality) && d.reasons > 0,
       response: /^Frequency response \(/.test(d.response) && /TEST CONTEXT/.test(d.shown)
-        && d.primary === 'Save experiment' && d.chart,
+        && d.primary === 'Uložit experiment' && d.chart,
       ir: /^Impulse response: direct peak/.test(res.ir.text) && res.ir.chart
         && res.ir.tabs === 'true' && res.rtaTab === 'osc-m-tab-rta',
       // T019: the full-overlap tail estimates an upper bound, with the window it was read over
@@ -638,7 +638,7 @@ function defineChecks(fixtures) {
     const counts = await H.until(() => H.counts(page), H.zero, 3000);
     await page.evaluate(() => window.OSCILLA.measure.useLoopback());
     const ok = res.state === 'READY' && res.kind === 'microphone' && res.tracks >= 1
-      && res.rows.some((r) => /^Sample rate\s*\d+ Hz$/.test(r)) && H.zero(counts);
+      && res.rows.some((r) => /^Vzorkovací frekvence\s*\d+ Hz$/.test(r)) && H.zero(counts);
     return { ok, ...res, counts };
   });
 
@@ -941,14 +941,14 @@ function defineChecks(fixtures) {
         && /gate-mic/.test(res.name),
       needsCapture: /Capture the reference first/.test(res.needsCapture),
       scale: /mean-square scale/.test(res.scale),
-      unboundRefused: /^Run the setup check first/.test(res.noInputNote)
-        && /^Run the setup check first: a level calibration is valid only for the input/
+      unboundRefused: /^Nejdřív spusťte kontrolu nastavení/.test(res.noInputNote)
+        && /^Nejdřív spusťte kontrolu nastavení: kalibrace úrovně platí jen pro vstup/
           .test(res.unbound.error) && !res.unbound.stored && res.unbound.open
         && uncalibrated(res.unboundLevel),
       checked: res.checked === 'READY' && /bound to the input checked last/.test(res.boundNote),
       invalidRefused: !!res.refused,
       boundCalibrated: calibrated(res.level) && res.bound && res.dialogClosed
-        && /entered by hand, bound to the input checked when it was stored/.test(res.state),
+        && /zadaná ručně, vázaná na vstup zkontrolovaný při uložení/.test(res.state),
       otherInputVoids: uncalibrated(res.voided),
       pendingCheck: /ČEKÁ NA KONTROLU VSTUPU/.test(res.pending) && !ENGLISH_STATE.test(res.pending)
         && /^ČEKÁ NA KONTROLU VSTUPU: kalibrace úrovně se použije/.test(res.pendingText),
@@ -1222,9 +1222,9 @@ function defineChecks(fixtures) {
         calibratedNow: calibrated(res.level),
         rtaAsMeasured: !!res.rtaY && !/SPL/.test(res.rtaY),
         quietBefore: res.before === '',
-        stated: res.after.startsWith('Calibration changed after this measurement; the saved '
-          + 'record keeps the calibration it was measured with (frequency profile "mic-a", levels '
-          + 'relative).') && /Notes edited after this measurement started are saved as an /
+        stated: res.after.startsWith('Kalibrace se po tomto měření změnila; uložený záznam si '
+          + 'ponechá kalibraci, se kterou se měřilo (frekvenční profil „mic-a“, úrovně '
+          + 'relativní).') && /Poznámky upravené po začátku tohoto měření se uloží jako anotace/
           .test(res.after) && !/SPL/.test(res.after),
         namesA: !!r.frequency && r.frequency.id === res.profileA && r.frequency.name === 'mic-a'
           && !!r.corrected,
@@ -1285,7 +1285,7 @@ function defineChecks(fixtures) {
     return { ...res, ...H.verdict({
       applied: res.applied === true,
       staysSaved: res.afterLink.saved === true
-        && res.afterLink.label === 'Update name and notes',
+        && res.afterLink.label === 'Aktualizovat název a poznámky',
       sameRun: res.again === res.id,
       neverNotSaved: !res.alerts.some((t) => /not saved/.test(t))
         && res.alerts.includes('Experiment updated'),
@@ -1339,7 +1339,7 @@ function defineChecks(fixtures) {
     await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
     await page.click('#osc-measure-save');
     await settle(async () => (await stored()).ann === 'typed after the save'
-      && /are stored as its annotation/.test(await status()),
+      && /jsou uložené jako jeho anotace/.test(await status()),
     'the update stores the notes as the annotation and the page says so');
     res.after = await stored();
     res.stated = await status();
@@ -1361,13 +1361,13 @@ function defineChecks(fixtures) {
       a.alerts = [];
     });
     return { ...res, ...H.verdict({
-      notYet: /^These notes are not stored yet: "Update name and notes" saves them/
-        .test(res.pending) && !/are saved as an annotation/.test(res.pending),
-      button: res.button.label === 'Update name and notes' && res.button.disabled === false,
+      notYet: /^Tyto poznámky zatím nejsou uložené: „Aktualizovat název a poznámky“ je uloží/
+        .test(res.pending) && !/se uloží jako anotace/.test(res.pending),
+      button: res.button.label === 'Aktualizovat název a poznámky' && res.button.disabled === false,
       notStoredBefore: res.before.ann === null,
       stored: res.after.ann === 'typed after the save'
         && /^at start\b/.test(res.after.env || ''),
-      statedStored: /are stored as its annotation/.test(res.stated),
+      statedStored: /jsou uložené jako jeho anotace/.test(res.stated),
       updated: res.alerts1.includes('Experiment updated'),
       kept: res.kept.ann === 'from Experiments' && res.alerts2.includes('Nothing to update')
         && !res.alerts2.some((t) => /not saved/.test(t)),
@@ -3179,7 +3179,7 @@ function defineChecks(fixtures) {
       url: window.OSCILLA.app.meas.recipeLink,
       field: document.querySelector('[data-osc="measure.recipeLinkUrl"]').value,
       alerts: window.OSCILLA.app.alerts.map((a) => a.title) })),
-    (x) => x.dialog || x.alerts.includes('Recipe link copied'), 3000);
+    (x) => x.dialog || x.alerts.includes('Odkaz na recept zkopírován'), 3000);
     if (res.copy.dialog) await page.click('[data-osc="measure.recipeLinkDone"]');
     // A link opened in a new page (load): MEASURE opens with the recipe and nothing runs.
     const p2 = await context.newPage();
@@ -3213,9 +3213,9 @@ function defineChecks(fixtures) {
       applied: same(res.applied.v) && res.applied.ws === 'measure',
       coexists: res.applied.freq === 440,
       neverStarts: res.idle.state === 'IDLE' && H.zero(res.idle.counts)
-        && res.idle.alerts.includes('Measurement recipe loaded from the link'),
-      refused: res.refused.errors.some((t) => /Start frequency/.test(t)) && res.refused.shown
-        && res.refused.alerts.includes('Recipe link not applied') && res.unchanged,
+        && res.idle.alerts.includes('Recept měření načten z odkazu'),
+      refused: res.refused.errors.some((t) => /Počáteční frekvence/.test(t)) && res.refused.shown
+        && res.refused.alerts.includes('Odkaz na recept nebyl použit') && res.unchanged,
       copied: res.copy.hash.includes(`mr=${res.param}`) && res.copy.url.includes(`mr=${res.param}`)
         && (res.copy.dialog ? res.copy.field === res.copy.url : true),
       load: res.load.ws === 'measure' && same(res.load.v) && res.load.state === 'IDLE'

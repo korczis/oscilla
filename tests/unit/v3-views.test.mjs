@@ -816,7 +816,7 @@ test('flow: warnings never block; READY → measure → review → save', async 
   assert.match(by.calibration.detail, /UNCALIBRATED/);
   assert.equal(by.stimulus.status, 'warn');
   assert.ok(by.stimulus.reasons.some((r) => r.code === 'HIGH_OUTPUT'));
-  assert.match(by.stimulus.detail, /^20 Hz → 20 kHz log sweep, 1 s, HIGH output, 1 run$/);
+  assert.match(by.stimulus.detail, /^20 Hz → 20 kHz log sweep, 1 s, výstup VYSOKÁ, běhy: 1$/);
   assert.equal(by.noise.status, 'current');
   assert.equal(flow.primaryAction.id, 'measure');
   assert.ok(safetyNotes({ recipe, preflight: report }).some((n) => n.id === 'headphones'));
@@ -826,10 +826,10 @@ test('flow: warnings never block; READY → measure → review → save', async 
   const done = measureFlow({ state: m.engine.state, preflight: report, recipe, result });
   const d = Object.fromEntries(done.steps.map((s) => [s.id, s]));
   assert.equal(d.noise.status, 'done');
-  assert.match(d.noise.detail, /^Background −\d+\.\d dB relative \(dBFS-like\)$/);
+  assert.match(d.noise.detail, /^Pozadí −\d+\.\d dB relativně \(obdoba dBFS\)$/);
   assert.equal(d.measure.status, 'done');
   assert.ok(['done', 'warn'].includes(d.review.status));
-  assert.match(d.review.detail, new RegExp(`Quality ${result.quality.status}`));
+  assert.match(d.review.detail, new RegExp(`Kvalita ${result.quality.status}`));
   assert.equal(d.save.status, 'current');
   assert.equal(done.primaryAction.id, 'save');
   const saved = measureFlow({ state: m.engine.state, preflight: report, recipe, result,
@@ -867,8 +867,8 @@ test('preset CHARACTERIZE PLAYBACK CHAIN: honest wording, valid recipe, levels n
   assert.equal(plan.stimulusSpec.level, MEASUREMENT_LEVELS.low);
   assert.equal(plan.repeats, 3);
   assert.deepEqual(OUTPUT_LEVEL_CHOICES.map((c) => [c.label, c.value]),
-    [['LOW', MEASUREMENT_LEVELS.low], ['MEDIUM', MEASUREMENT_LEVELS.medium],
-      ['HIGH', MEASUREMENT_LEVELS.high]]);
+    [['NÍZKÁ', MEASUREMENT_LEVELS.low], ['STŘEDNÍ', MEASUREMENT_LEVELS.medium],
+      ['VYSOKÁ', MEASUREMENT_LEVELS.high]]);
   const notes = safetyNotes({ recipe: p.recipe });
   assert.deepEqual(notes.map((n) => n.id), ['conservative', 'stop', 'low-frequency',
     'high-frequency']);

@@ -138,10 +138,10 @@ test('vocabulary: user text never calls a stored record a run, or the app a proj
 test('vocabulary: a capture is still a run, and run is still the verb', () => {
   const html = userText('src/index.html');
   assert.ok(html.includes('>Runs CSV</button>'), 'the Experiments export "Runs CSV"');
-  assert.ok(html.includes('<dt>Runs</dt>'), 'the Measure setup metric "Runs"');
+  assert.ok(html.includes('<dt>Běhy</dt>'), 'the Measure setup metric "Běhy" (runs, U115)');
   assert.ok(html.includes('>Run this definition</button>'), 'the verb "Run this definition"');
   assert.ok(html.includes('Changed between experiments'), 'the compare heading');
   assert.ok(html.includes('O aplikaci · OSCILLA'), 'the About label');
   const flow = userText('src/js/measurement/views/measure-flow.js');
-  assert.ok(flow.includes("gapS: 'Gap between runs'"), 'the Measure field between captures');
+  assert.ok(flow.includes("gapS: 'Mezera mezi běhy'"), 'the Measure field between captures');
 });

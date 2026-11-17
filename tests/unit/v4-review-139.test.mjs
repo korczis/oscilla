@@ -230,7 +230,7 @@ test('F3: between an input change and the next check the indicator is PENDING IN
     seam.setInputNow(null);
     assert.equal(cmp.measureCalIndicator, 'PENDING INPUT CHECK');
     assert.match(cmp.meas.cal.levelPending, /^Pending input check: the level calibration is /);
-    assert.equal(cmp.measureLevelsText, 'relative until the input is checked');
+    assert.equal(cmp.measureLevelsText, 'relativní, dokud se vstup nezkontroluje');
     // Checked again: CALIBRATED on the same input, UNCALIBRATED on another.
     seam.setInputNow(MIC_A);
     assert.equal(cmp.measureCalIndicator, 'CALIBRATED');
@@ -269,14 +269,16 @@ test('F5: a binding without a device id is only "as far as the browser reports i
   cmp.measureSetLevelManual(true);
   Object.assign(cmp.meas.levelForm, { observedDb: '-30' });
   assert.equal(cmp.measureSaveLevelCalibration(), true);
-  assert.match(cmp.measureLevelStateText, /bound to the input checked when it was stored as far /);
-  assert.match(cmp.measureLevelStateText, /no device id: sample rate and processing only/);
+  assert.match(cmp.measureLevelStateText,
+    /vázaná na vstup zkontrolovaný při uložení podle toho, co prohlížeč sdělí/);
+  assert.match(cmp.measureLevelStateText, /bez id zařízení: jen vzorkovací frekvence a zpracování/);
   const withId = ui();
   withId.measureTestSeam().setInputNow(MIC_A);
   withId.measureSetLevelManual(true);
   Object.assign(withId.meas.levelForm, { observedDb: '-30' });
   withId.measureSaveLevelCalibration();
-  assert.doesNotMatch(withId.measureLevelStateText, /as far as the browser/);
+  assert.match(withId.measureLevelStateText, /vázaná na vstup zkontrolovaný při uložení;/);
+  assert.doesNotMatch(withId.measureLevelStateText, /podle toho, co prohlížeč sdělí/);
 });
 
 test('F5: the evidence of a run bound without a device id says so', async () => {

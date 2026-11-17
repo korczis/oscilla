@@ -273,23 +273,23 @@ test('V355: a link is validated like every import and refused whole', () => {
     assert.ok(r.errors.some((t) => re.test(t)), `${r.errors.join(' | ')} !~ ${re}`);
     assert.equal(r.values, undefined, 'nothing partly applied');
   };
-  refuse('', /no recipe/);
-  refuse('A'.repeat(RECIPE_LINK_MAX_CHARS + 1), /longer than/);
-  refuse('not base64!', /base64url/);
-  refuse(base64UrlEncode('{"v":1,'), /not valid JSON/);
-  refuse(link([1, 2]), /must be an object/);
-  refuse(link({ f1: 20 }), /unsupported recipe version none/);
-  refuse(link({ v: 2 }), /unsupported recipe version 2/);
-  refuse(link({ v: 1, results: { transfer: [] } }), /unknown key "results".*never results/);
-  refuse(link({ v: 1, f1: -5 }), /Start frequency: must be/);
-  refuse(link({ v: 1, f1: '20' }), /must be a number/);
-  refuse(link({ v: 1, d: 9999 }), /Sweep duration: must be/);
-  refuse(link({ v: 1, n: 2.5 }), /whole number/);
-  refuse(link({ v: 1, l: 'loud' }), /Output level: must be one of low, medium, high/);
-  refuse(link({ v: 1, ph: 'yes' }), /true or false/);
-  refuse(link({ v: 1, f1: 5000, f2: 1000 }), /below the end frequency/);
+  refuse('', /nenese žádný recept/);
+  refuse('A'.repeat(RECIPE_LINK_MAX_CHARS + 1), /delší než/);
+  refuse('not base64!', /není text v base64url/);
+  refuse(base64UrlEncode('{"v":1,'), /není platný JSON/);
+  refuse(link([1, 2]), /musí být objekt/);
+  refuse(link({ f1: 20 }), /nepodporovaná verze receptu žádná/);
+  refuse(link({ v: 2 }), /nepodporovaná verze receptu 2/);
+  refuse(link({ v: 1, results: { transfer: [] } }), /neznámý klíč „results“.*nikdy výsledky/);
+  refuse(link({ v: 1, f1: -5 }), /Počáteční frekvence: musí být/);
+  refuse(link({ v: 1, f1: '20' }), /musí být číslo/);
+  refuse(link({ v: 1, d: 9999 }), /Délka sweepu: musí být/);
+  refuse(link({ v: 1, n: 2.5 }), /celé číslo/);
+  refuse(link({ v: 1, l: 'loud' }), /Výstupní úroveň: musí být jedna z hodnot low, medium, high/);
+  refuse(link({ v: 1, ph: 'yes' }), /true nebo false/);
+  refuse(link({ v: 1, f1: 5000, f2: 1000 }), /musí být pod koncovou/);
   refuse(link({ v: 1, ...Object.fromEntries(Array.from({ length: 20 }, (_, i) => [`k${i}`,
-    i])) }), /too many keys/);
+    i])) }), /příliš mnoho klíčů/);
 });
 
 test('V355: the recipe coexists with the instrument state in one hash', () => {

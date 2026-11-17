@@ -859,7 +859,7 @@ const FREQ_HEAD = () => {
     on: el.classList.contains('is-on'), title: el.getAttribute('title') || '' } : null;
 };
 // Shown in Czech over English data (U114 b): NEKALIBROVÁNO / KALIBROVÁNO.
-const NOT_COVERED = /^Frequency NEKALIBROVÁNO \(mimo pásmo\)$/;
+const NOT_COVERED = /^Frekvence NEKALIBROVÁNO \(mimo pásmo\)$/;
 
 /** measure-freq-coverage (T036): the header never says CALIBRATED without coverage. */
 async function freqCoverage(page, key) {
@@ -879,7 +879,7 @@ async function freqCoverage(page, key) {
     { ms: 60000, what: `${key} ${name}: the loopback measurement ends` });
     const none = await says(NOT_COVERED, 'UNCALIBRATED over the result');
     const wide = await load('Hz,dB\n20,0\n1000,0.5\n20000,1\n', 't036-wide.csv');
-    const full = await says(/^Frequency KALIBROVÁNO \d[^–]*Hz–[^–]*Hz$/,
+    const full = await says(/^Frekvence KALIBROVÁNO \d[^–]*Hz–[^–]*Hz$/,
       'CALIBRATED over the grid');
     const all = /korigováno (\d+) z \1 bodů/.test(full.title);
     check(key, `${name}: a profile covering none of the measured points reads UNCALIBRATED before `

@@ -31,20 +31,21 @@ export function createViews(ctx, svc, ops) {
     const f = p && p.facts ? p.facts : null;
     const rows = [];
     const label = f && f.input && f.input.device ? f.input.device.label : null;
-    rows.push({ id: 'device', label: 'Input', text: f ? (label || (ctx.ioKind === 'loopback'
-      ? 'TEST CONTEXT loopback (no device)' : 'Device label not exposed by the browser'))
+    rows.push({ id: 'device', label: 'Vstup', text: f ? (label || (ctx.ioKind === 'loopback'
+      ? 'TESTOVACÍ KONTEXT, smyčka (bez zařízení)' : 'Prohlížeč název zařízení nesdělil'))
       : UNAVAILABLE.UNKNOWN });
-    rows.push({ id: 'rate', label: 'Sample rate', text: p && p.sampleRate ? `${p.sampleRate} Hz`
-      : UNAVAILABLE.UNKNOWN });
+    rows.push({ id: 'rate', label: 'Vzorkovací frekvence', text: p && p.sampleRate
+      ? `${p.sampleRate} Hz` : UNAVAILABLE.UNKNOWN });
     const applied = f && f.input && f.input.constraints ? f.input.constraints.applied : null;
-    const proc = (k) => (applied && typeof applied[k] === 'boolean' ? (applied[k] ? 'on' : 'off')
-      : UNAVAILABLE.UNKNOWN);
-    rows.push({ id: 'processing', label: 'Echo / noise / AGC', text: f ? (ctx.ioKind === 'loopback'
-      ? 'not applicable (loopback)' : `${proc('echoCancellation')} / ${proc('noiseSuppression')}`
-        + ` / ${proc('autoGainControl')}`) : UNAVAILABLE.UNKNOWN });
-    rows.push({ id: 'capture', label: 'Capture', text: f && f.worklet ? (f.worklet.supported
-      ? (f.worklet.mode === 'audioworklet' ? 'AudioWorklet' : 'ScriptProcessor (fallback)')
-      : 'unsupported') : UNAVAILABLE.UNKNOWN });
+    const proc = (k) => (applied && typeof applied[k] === 'boolean' ? (applied[k] ? 'zap.'
+      : 'vyp.') : UNAVAILABLE.UNKNOWN);
+    rows.push({ id: 'processing', label: 'Ozvěna / šum / AGC', text: f
+      ? (ctx.ioKind === 'loopback' ? 'nepoužije se (smyčka)'
+        : `${proc('echoCancellation')} / ${proc('noiseSuppression')}`
+          + ` / ${proc('autoGainControl')}`) : UNAVAILABLE.UNKNOWN });
+    rows.push({ id: 'capture', label: 'Záznam', text: f && f.worklet ? (f.worklet.supported
+      ? (f.worklet.mode === 'audioworklet' ? 'AudioWorklet' : 'ScriptProcessor (záložní)')
+      : 'nepodporováno') : UNAVAILABLE.UNKNOWN });
     return rows;
   }
 

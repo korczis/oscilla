@@ -30,7 +30,7 @@ import { SMOOTHING_FRACTIONS } from '../smoothing.js';
 import { RTA_MODES } from '../rta.js';
 import { safeMaxFrequency } from '../stimulus.js';
 import { describeStimulus } from '../../experiments/schema.js';
-import { fixedText, UNAVAILABLE } from './common.js';
+import { fixedText, QUANTITY_KINDS, UNAVAILABLE } from './common.js';
 import { SAFE_NYQUIST_FACTOR_TEXT } from '../../core/constants.js';
 
 // ----------------------------------------------------------------------------- output level
@@ -43,10 +43,11 @@ export const OUTPUT_LEVEL_CHOICES = Object.freeze(['low', 'medium', 'high'].map(
   const value = MEASUREMENT_LEVELS[id];
   return Object.freeze({
     id,
-    label: id.toUpperCase(),
+    // The shown name (U115); the id ('low', 'medium', 'high') is the data value.
+    label: { low: 'NÍZKÁ', medium: 'STŘEDNÍ', high: 'VYSOKÁ' }[id],
     value,
-    detail: `digital peak ${value} (${fixedText(20 * Math.log10(value), 1)} dBFS digital), `
-      + 'before the master volume; the acoustic level is unknown',
+    detail: `digitální špička ${value} (${fixedText(20 * Math.log10(value), 1)} dBFS digitálně), `
+      + 'před hlavní hlasitostí; akustická úroveň je neznámá',
   });
 }));
 
@@ -66,9 +67,9 @@ export const OUTPUT_LEVEL_CHOICES = Object.freeze(['low', 'medium', 'high'].map(
  * field keeps its meaning).
  */
 export const DEFAULT_NOISE_CHECK_S = 5;
-const NOISE_CHECK_HELP = `${DEFAULT_NOISE_CHECK_S} s by default: the SNR is assessed only above `
-  + 'about 10 / (0.1156 × length) Hz (17 Hz for 5 s, 87 Hz for 1 s), so a shorter check leaves '
-  + 'the low end NOT ASSESSED. 0 skips it (SNR NOT MEASURED).';
+const NOISE_CHECK_HELP = `Výchozí ${DEFAULT_NOISE_CHECK_S} s: SNR se posuzuje jen nad `
+  + 'přibližně 10 / (0,1156 × délka) Hz (17 Hz pro 5 s, 87 Hz pro 1 s), takže kratší kontrola '
+  + 'nechá spodní pásmo neposouzené. 0 ji vynechá (SNR nezměřeno).';
 
 const CHARACTERIZE_RECIPE = Object.freeze({
   stimulus: Object.freeze({ kind: 'log-sweep', f1: 20, f2: 20000, duration: 10, level: 'low' }),
@@ -100,22 +101,21 @@ export const CHARACTERIZE_PLAYBACK_CHAIN = Object.freeze({
 
 /** Room / distance (spec §107) and repeatability (§108) notes. */
 export const ROOM_NOTES = Object.freeze([
-  Object.freeze({ id: 'position', text: 'The microphone position changes the response: '
-    + 'reflections and room modes are part of what is measured. Note the distance and '
-    + 'location with the experiment.' }),
-  Object.freeze({ id: 'repeat', text: 'Repeated runs are averaged automatically; their spread '
-    + 'shows how repeatable the result is.' }),
+  Object.freeze({ id: 'position', text: 'Poloha mikrofonu mění odezvu: odrazy a módy '
+    + 'místnosti jsou součástí měřeného. Vzdálenost a místo si poznamenejte k experimentu.' }),
+  Object.freeze({ id: 'repeat', text: 'Opakované běhy se automaticky průměrují; jejich rozptyl '
+    + 'ukazuje, jak opakovatelný je výsledek.' }),
 ]);
 
 const SAFETY = Object.freeze({
-  conservative: 'Start at a LOW output level and raise it only as far as needed; the '
-    + 'measurement never raises the gain on its own to overcome noise.',
-  stop: 'Escape or STOP ends the sound immediately.',
-  headphones: 'High output level: lower it before using headphones.',
-  lowFrequency: 'Very low frequencies can drive a speaker to large excursion and distortion '
-    + 'before they are clearly audible; do not turn the level up until they become audible.',
-  highFrequency: 'Weak perception of very high frequencies does not imply weak output; the '
-    + 'microphone and its calibration may also be poor there.',
+  conservative: 'Začněte na NÍZKÉ výstupní úrovni a zvyšujte ji jen tolik, kolik je třeba; '
+    + 'měření samo nikdy nezvyšuje zisk, aby přehlušilo šum.',
+  stop: 'Escape nebo Zastavit zvuk okamžitě ukončí.',
+  headphones: 'Vysoká výstupní úroveň: před použitím sluchátek ji snižte.',
+  lowFrequency: 'Velmi nízké frekvence mohou rozkmitat reproduktor do velké výchylky a '
+    + 'zkreslení dřív, než jsou zřetelně slyšet; nezvyšujte úroveň, dokud je neuslyšíte.',
+  highFrequency: 'Slabé vnímání velmi vysokých frekvencí neznamená slabý výstup; mikrofon a '
+    + 'jeho kalibrace tam také mohou být slabé.',
 });
 
 /** Below this sweep start the low-frequency excursion note is shown (Hz). */
@@ -150,13 +150,13 @@ export function safetyNotes({ recipe = null, preflight = null } = {}) {
 // ----------------------------------------------------------------------------- flow
 
 export const FLOW_STEPS = Object.freeze([
-  Object.freeze({ id: 'input', label: 'Input' }),
-  Object.freeze({ id: 'calibration', label: 'Calibration' }),
-  Object.freeze({ id: 'noise', label: 'Noise check' }),
-  Object.freeze({ id: 'stimulus', label: 'Stimulus' }),
-  Object.freeze({ id: 'measure', label: 'Measure' }),
-  Object.freeze({ id: 'review', label: 'Review' }),
-  Object.freeze({ id: 'save', label: 'Save' }),
+  Object.freeze({ id: 'input', label: 'Vstup' }),
+  Object.freeze({ id: 'calibration', label: 'Kalibrace' }),
+  Object.freeze({ id: 'noise', label: 'Kontrola šumu' }),
+  Object.freeze({ id: 'stimulus', label: 'Stimul' }),
+  Object.freeze({ id: 'measure', label: 'Měření' }),
+  Object.freeze({ id: 'review', label: 'Posouzení' }),
+  Object.freeze({ id: 'save', label: 'Uložení' }),
 ]);
 
 /** Which step a preflight reason code belongs to. */
@@ -190,9 +190,10 @@ function recipeKey(recipe) {
 }
 
 function levelName(level) {
-  if (typeof level === 'string') return level.toUpperCase();
-  const c = OUTPUT_LEVEL_CHOICES.find((x) => x.value === level);
-  return c ? c.label : (typeof level === 'number' ? `digital peak ${level}` : UNAVAILABLE.UNKNOWN);
+  const c = OUTPUT_LEVEL_CHOICES.find((x) => (typeof level === 'string' ? x.id : x.value)
+    === level);
+  return c ? c.label : (typeof level === 'number' ? `digitální špička ${level}`
+    : UNAVAILABLE.UNKNOWN);
 }
 
 /**
@@ -225,7 +226,7 @@ export function measureFlow(ctx = {}) {
     && result.preflight.ready === false);
   const quality = result && result.quality ? result.quality.status : null;
   const run = progress && Number.isInteger(progress.run) ? progress.run : null;
-  const runText = run !== null ? `Run ${run + 1}/${repeats}` : null;
+  const runText = run !== null ? `Běh ${run + 1}/${repeats}` : null;
   const resultReasons = result && Array.isArray(result.reasons) ? result.reasons : [];
 
   const raw = {};
@@ -244,8 +245,10 @@ export function measureFlow(ctx = {}) {
       blocked: b.length > 0 || errIn,
       warn: w.length > 0,
       reasons: errIn ? [{ code: error.code, text: error.message }, ...b] : [...b, ...w],
-      detail: b.length ? b[0].text : (preflight ? `${label || 'Input device (label not exposed)'}`
-        + `${preflight.sampleRate ? `, ${preflight.sampleRate} Hz` : ''}` : 'Not checked yet'),
+      detail: b.length ? b[0].text : (preflight
+        ? `${label || 'Vstupní zařízení (název neznámý)'}`
+          + `${preflight.sampleRate ? `, ${preflight.sampleRate} Hz` : ''}`
+        : 'Zatím nezkontrolováno'),
     });
   }
   // 2 calibration (optional; only invalid data blocks)
@@ -254,11 +257,11 @@ export function measureFlow(ctx = {}) {
     const freq = calibration && calibration.frequency;
     const lvl = calibration && calibration.level;
     const detail = b.length ? b[0].text : [
-      freq ? `frequency profile "${freq.name || UNAVAILABLE.UNKNOWN}"`
-        : `frequency ${UNAVAILABLE.UNCALIBRATED}`,
+      freq ? `frekvenční profil „${freq.name || UNAVAILABLE.UNKNOWN}“`
+        : `frekvence ${UNAVAILABLE.UNCALIBRATED}`,
       // A level calibration that waits for its input check is not CALIBRATED yet.
-      lvl ? (levelChecked ? 'level CALIBRATED' : 'level pending input check')
-        : 'level relative (dBFS-like)',
+      lvl ? (levelChecked ? `úroveň ${QUANTITY_KINDS.CALIBRATED}`
+        : 'úroveň čeká na kontrolu vstupu') : 'úroveň relativní (obdoba dBFS)',
     ].join(', ');
     set('calibration', { complete: (!!preflight && !b.length) || measured,
       blocked: b.length > 0, warn: false,
@@ -274,11 +277,11 @@ export function measureFlow(ctx = {}) {
     const rms = noise && Number.isFinite(noise.rmsDb) ? noise.rmsDb : null;
     let detail;
     if (clip) detail = clip.text;
-    else if (skipped) detail = 'Skipped: SNR will be NOT MEASURED';
-    else if (state === S.NOISE_CHECK) detail = 'Measuring the background…';
-    else if (noise) detail = rms === null ? 'Digital silence' : `Background ${fixedText(rms, 1)} `
-      + 'dB relative (dBFS-like)';
-    else detail = `${noiseCheckS} s of background before the sweep`;
+    else if (skipped) detail = 'Vynecháno: SNR bude nezměřeno';
+    else if (state === S.NOISE_CHECK) detail = 'Měří se pozadí…';
+    else if (noise) detail = rms === null ? 'Digitální ticho' : `Pozadí ${fixedText(rms, 1)} `
+      + 'dB relativně (obdoba dBFS)';
+    else detail = `${noiseCheckS} s pozadí před sweepem`;
     set('noise', { complete: skipped ? preflightDone || measured : !!noise && !clip,
       blocked: !!clip, warn: skipped || w.length > 0, reasons: clip ? [clip] : w, detail });
   }
@@ -289,10 +292,10 @@ export function measureFlow(ctx = {}) {
     // A blocked step says why, as the input and calibration steps do (C021): the description
     // of the sweep the check refused is not the reason it refused it.
     let detail = st ? `${describeStimulus({ ...st, kind: st.kind || 'log-sweep' })}, `
-      + `${levelName(st.level)} output, ${repeats} run${repeats === 1 ? '' : 's'}`
-      : 'No stimulus chosen';
+      + `výstup ${levelName(st.level)}, běhy: ${repeats}`
+      : 'Žádný stimul nezvolen';
     if (b.length) detail = b[0].text;
-    else if (stale) detail += ' (changed since the setup check)';
+    else if (stale) detail += ' (změněno od kontroly nastavení)';
     set('stimulus', { complete: (!!preflight && !stale && !b.length) || measured,
       blocked: b.length > 0, warn: w.length > 0, reasons: [...b, ...w], detail });
   }
@@ -300,14 +303,14 @@ export function measureFlow(ctx = {}) {
   {
     const failed = state === S.ERROR || (resultInvalid && !resultReasons.some((r) => r.code
       === 'NOISE_CLIPPING') && quality !== 'INVALID');
-    let detail = 'Not started';
-    if (reached(S.ARMED, S.MEASURING)) detail = runText || 'Starting…';
-    else if (state === S.ANALYZING) detail = 'Analyzing the captured audio…';
-    else if (measured) detail = `${result && result.runs ? result.runs.length : repeats} `
-      + `run${repeats === 1 ? '' : 's'} captured`;
-    else if (state === S.ABORTED) detail = 'Stopped; nothing was kept';
-    if (failed) detail = state === S.ERROR ? (error && error.message) || 'Error'
-      : (resultReasons[0] && resultReasons[0].text) || 'Invalid capture';
+    let detail = 'Nezahájeno';
+    if (reached(S.ARMED, S.MEASURING)) detail = runText || 'Spouští se…';
+    else if (state === S.ANALYZING) detail = 'Analyzuje se zachycený zvuk…';
+    else if (measured) detail = `Zachycené běhy: ${result && result.runs ? result.runs.length
+      : repeats}`;
+    else if (state === S.ABORTED) detail = 'Zastaveno; nic se neuchovalo';
+    if (failed) detail = state === S.ERROR ? (error && error.message) || 'Chyba'
+      : (resultReasons[0] && resultReasons[0].text) || 'Neplatný záznam';
     set('measure', { complete: measured, blocked: failed,
       reasons: failed ? resultReasons.map((r) => ({ code: r.code, text: r.text })) : [], detail });
   }
@@ -319,13 +322,13 @@ export function measureFlow(ctx = {}) {
       blocked: invalidQ,
       warn: quality === 'POOR' || (state === S.COMPLETE && !quality),
       reasons: invalidQ ? resultReasons.map((r) => ({ code: r.code, text: r.text })) : [],
-      detail: quality ? `Quality ${quality}` : (state === S.COMPLETE
-        ? `Quality ${UNAVAILABLE.NOT_ASSESSED}` : 'Response, impulse response and quality'),
+      detail: quality ? `Kvalita ${quality}` : (state === S.COMPLETE
+        ? `Kvalita ${UNAVAILABLE.NOT_ASSESSED}` : 'Odezva, impulsní odezva a kvalita'),
     });
   }
   // 7 save
-  set('save', { complete: !!saved, detail: saved ? 'Saved as an experiment'
-    : 'Save the result as an experiment (local, this browser only)' });
+  set('save', { complete: !!saved, detail: saved ? 'Uloženo jako experiment'
+    : 'Uložte výsledek jako experiment (místně, jen v tomto prohlížeči)' });
 
   // Statuses: blocked, warn (complete with warnings), done, the first open step current.
   let currentFound = false;
@@ -370,37 +373,38 @@ function primaryAction({ state, preflight, blockers, saved, expert, quality }) {
   const a = (id, label, enabled = true, reason = null) => ({ id, label, enabled, reason });
   switch (state) {
     case S.IDLE:
-      return expert ? a('measure', 'Measure (setup check runs first)')
-        : a('preflight', 'Check setup');
+      return expert ? a('measure', 'Měřit (nejdřív proběhne kontrola nastavení)')
+        : a('preflight', 'Zkontrolovat nastavení');
     case S.PREFLIGHT:
     case S.NOISE_CHECK:
     case S.ARMED:
     case S.MEASURING:
     case S.ANALYZING:
-      return a('stop', 'Stop (Esc)');
+      return a('stop', 'Zastavit (Esc)');
     case S.READY:
-      return a('measure', 'Start measurement');
+      return a('measure', 'Spustit měření');
     case S.COMPLETE:
-      return saved ? a('repeat', 'Measure again')
-        : a('save', 'Save experiment', quality !== 'INVALID');
+      return saved ? a('repeat', 'Měřit znovu')
+        : a('save', 'Uložit experiment', quality !== 'INVALID');
     case S.INVALID:
       return preflight && !preflight.ready
-        ? a('preflight', 'Check setup again', true, blockers.length ? blockers[0].text : null)
-        : a('preflight', 'Measure again');
+        ? a('preflight', 'Znovu zkontrolovat nastavení', true, blockers.length ? blockers[0].text
+          : null)
+        : a('preflight', 'Měřit znovu');
     case S.ABORTED:
-      return a('preflight', 'Check setup');
+      return a('preflight', 'Zkontrolovat nastavení');
     case S.ERROR:
-      return a('acknowledge', 'Dismiss error');
+      return a('acknowledge', 'Zavřít chybu');
     default:
-      return a('preflight', 'Check setup');
+      return a('preflight', 'Zkontrolovat nastavení');
   }
 }
 
 function secondaryActions({ state, active }) {
   const out = [];
-  if (state === S.READY) out.push({ id: 'stop', label: 'Cancel' });
-  if (state === S.COMPLETE) out.push({ id: 'repeat', label: 'Repeat (new experiment)' });
-  if (!active) out.push({ id: 'expert', label: 'Expert settings' });
+  if (state === S.READY) out.push({ id: 'stop', label: 'Zrušit' });
+  if (state === S.COMPLETE) out.push({ id: 'repeat', label: 'Opakovat (nový experiment)' });
+  if (!active) out.push({ id: 'expert', label: 'Expertní nastavení' });
   return out;
 }
 
@@ -419,75 +423,76 @@ const field = (o) => Object.freeze({ disclosure: 'basic', unit: null, min: null,
 export function expertFields({ disclosure = 'basic', sampleRate = null } = {}) {
   const fTop = sampleRate > 0 ? safeMaxFrequency(sampleRate) : 20000;
   const groups = [
-    { id: 'stimulus', label: 'Stimulus', disclosure: 'basic', fields: [
-      field({ id: 'f1', path: 'stimulus.f1', label: 'Start frequency', kind: 'number', unit: 'Hz',
-        min: 1, max: fTop, step: 1, default: 20 }),
-      field({ id: 'f2', path: 'stimulus.f2', label: 'End frequency', kind: 'number', unit: 'Hz',
+    { id: 'stimulus', label: 'Stimul', disclosure: 'basic', fields: [
+      field({ id: 'f1', path: 'stimulus.f1', label: 'Počáteční frekvence', kind: 'number',
+        unit: 'Hz', min: 1, max: fTop, step: 1, default: 20 }),
+      field({ id: 'f2', path: 'stimulus.f2', label: 'Koncová frekvence', kind: 'number', unit: 'Hz',
         min: 1, max: fTop, step: 1, default: Math.min(20000, fTop),
-        help: `Limited to ${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist of the device rate.` }),
-      field({ id: 'duration', path: 'stimulus.duration', label: 'Sweep duration', kind: 'number',
+        help: `Omezeno na ${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist vzorkovací frekvence zařízení.` }),
+      field({ id: 'duration', path: 'stimulus.duration', label: 'Délka sweepu', kind: 'number',
         unit: 's', min: 1, max: CONTRACT_LIMITS.maxSweepS, step: 0.5, default: 10 }),
-      field({ id: 'level', path: 'stimulus.level', label: 'Output level', kind: 'choice',
+      field({ id: 'level', path: 'stimulus.level', label: 'Výstupní úroveň', kind: 'choice',
         choices: OUTPUT_LEVEL_CHOICES.map((c) => ({ value: c.id, label: c.label,
-          detail: c.detail })), default: 'low', help: 'A digital level, not a sound level.' }),
+          detail: c.detail })), default: 'low', help: 'Digitální úroveň, ne hladina zvuku.' }),
     ] },
-    { id: 'repeats', label: 'Repeats', disclosure: 'basic', fields: [
-      field({ id: 'repeats', path: 'repeats', label: 'Runs', kind: 'number', min: 1,
+    { id: 'repeats', label: 'Opakování', disclosure: 'basic', fields: [
+      field({ id: 'repeats', path: 'repeats', label: 'Běhy', kind: 'number', min: 1,
         max: CONTRACT_LIMITS.maxRepeats, step: 1, default: 3 }),
-      field({ id: 'aggregation', path: 'analysis.aggregation', label: 'Aggregation',
-        kind: 'choice', choices: [{ value: 'mean', label: 'Mean (power)' },
-          { value: 'median', label: 'Median' }], default: 'mean' }),
+      field({ id: 'aggregation', path: 'analysis.aggregation', label: 'Agregace',
+        kind: 'choice', choices: [{ value: 'mean', label: 'Průměr (výkonový)' },
+          { value: 'median', label: 'Medián' }], default: 'mean' }),
     ] },
-    { id: 'calibration', label: 'Calibration', disclosure: 'basic', fields: [
-      field({ id: 'frequencyCorrection', path: null, label: 'Frequency correction',
-        kind: 'toggle', default: true, help: 'Applies the loaded microphone profile where it '
-          + 'covers; RAW is always kept.' }),
-      field({ id: 'levelCalibration', path: null, label: 'Absolute level calibration',
-        kind: 'toggle', default: false, help: 'Only a level calibration you make from an '
-          + 'external reference enables absolute levels; it is kept in page memory only (a '
-          + 'reload discards it) and there is no default.' }),
+    { id: 'calibration', label: 'Kalibrace', disclosure: 'basic', fields: [
+      field({ id: 'frequencyCorrection', path: null, label: 'Frekvenční korekce',
+        kind: 'toggle', default: true, help: 'Použije načtený profil mikrofonu tam, kde pokrývá; '
+          + 'RAW se vždy uchová.' }),
+      field({ id: 'levelCalibration', path: null, label: 'Kalibrace absolutní úrovně',
+        kind: 'toggle', default: false, help: 'Absolutní úrovně umožní jen kalibrace úrovně, '
+          + 'kterou uděláte podle vnější reference; drží se jen v paměti stránky (obnovení ji '
+          + 'zahodí) a žádná výchozí neexistuje.' }),
     ] },
-    { id: 'view', label: 'View', disclosure: 'basic', fields: [
-      field({ id: 'smoothing', path: null, label: 'Smoothing', kind: 'choice',
-        choices: SMOOTHING_FRACTIONS.map((n) => ({ value: n, label: n === 0 ? 'None'
-          : `1/${n} octave` })), default: 0, help: 'A derived view; RAW is kept.' }),
-      field({ id: 'normalization', path: null, label: 'Normalization', kind: 'choice',
-        choices: [{ value: 'none', label: 'None' }, { value: '1k', label: '0 dB at 1 kHz' },
-          { value: 'band', label: '0 dB = mean 500 Hz–2 kHz' }], default: 'none',
-        help: 'Labelled NORMALIZED whenever on.' }),
+    { id: 'view', label: 'Zobrazení', disclosure: 'basic', fields: [
+      field({ id: 'smoothing', path: null, label: 'Vyhlazení', kind: 'choice',
+        choices: SMOOTHING_FRACTIONS.map((n) => ({ value: n, label: n === 0 ? 'Žádné'
+          : `1/${n} oktávy` })), default: 0, help: 'Odvozený pohled; RAW se uchová.' }),
+      field({ id: 'normalization', path: null, label: 'Normalizace', kind: 'choice',
+        choices: [{ value: 'none', label: 'Žádná' }, { value: '1k', label: '0 dB na 1 kHz' },
+          { value: 'band', label: '0 dB = průměr 500 Hz–2 kHz' }], default: 'none',
+        help: 'Když je zapnutá, nese štítek NORMALIZED.' }),
     ] },
-    { id: 'timing', label: 'Timing', disclosure: 'advanced', fields: [
+    { id: 'timing', label: 'Časování', disclosure: 'advanced', fields: [
       ...['noiseCheckS', 'preRollS', 'postRollS', 'gapS'].map((k) => field({ id: k,
-        path: `analysis.${k}`, label: { noiseCheckS: 'Noise check', preRollS: 'Pre-roll',
-          postRollS: 'Post-roll (tail)', gapS: 'Gap between runs' }[k], kind: 'number',
+        path: `analysis.${k}`, label: { noiseCheckS: 'Kontrola šumu', preRollS: 'Náběh',
+          postRollS: 'Doběh (dozvuk)', gapS: 'Mezera mezi běhy' }[k], kind: 'number',
         unit: 's', min: k === 'noiseCheckS' ? 0 : TIMING_LIMITS[k][0],
         max: k === 'noiseCheckS' ? Math.min(TIMING_LIMITS[k][1], CONTRACT_LIMITS.maxNoiseS)
           : TIMING_LIMITS[k][1], step: 0.05,
         default: k === 'noiseCheckS' ? DEFAULT_NOISE_CHECK_S : DEFAULT_TIMING[k],
         disclosure: 'advanced', help: k === 'noiseCheckS' ? NOISE_CHECK_HELP : null })),
     ] },
-    { id: 'analysis', label: 'Analysis', disclosure: 'advanced', fields: [
-      field({ id: 'phase', path: 'analysis.phase', label: 'Phase (when alignment is robust)',
+    { id: 'analysis', label: 'Analýza', disclosure: 'advanced', fields: [
+      field({ id: 'phase', path: 'analysis.phase', label: 'Fáze (při spolehlivém zarovnání)',
         kind: 'toggle', default: false, disclosure: 'advanced' }),
-      field({ id: 'rtaMode', path: null, label: 'RTA mode', kind: 'choice',
-        choices: [{ value: 'fft', label: 'FFT' }, { value: 'octave', label: 'Octave' },
-          { value: 'third', label: '1/3 octave' }], default: 'third', disclosure: 'advanced' }),
-      field({ id: 'fftSize', path: null, label: 'FFT size', kind: 'choice',
+      field({ id: 'rtaMode', path: null, label: 'Režim RTA', kind: 'choice',
+        choices: [{ value: 'fft', label: 'FFT' }, { value: 'octave', label: 'Oktáva' },
+          { value: 'third', label: '1/3 oktávy' }], default: 'third', disclosure: 'advanced' }),
+      field({ id: 'fftSize', path: null, label: 'Velikost FFT', kind: 'choice',
         choices: [4096, 8192, 16384, 32768].map((v) => ({ value: v, label: String(v) })),
-        default: 8192, disclosure: 'advanced', help: 'Resolution Δf = sample rate / FFT size.' }),
-      field({ id: 'window', path: null, label: 'Window', kind: 'choice',
+        default: 8192, disclosure: 'advanced', help: 'Rozlišení Δf = vzorkovací frekvence / '
+          + 'velikost FFT.' }),
+      field({ id: 'window', path: null, label: 'Okno', kind: 'choice',
         choices: [{ value: 'hann', label: 'Hann' },
           { value: 'blackman-harris', label: 'Blackman-Harris' }], default: 'hann',
         disclosure: 'advanced' }),
-      field({ id: 'averaging', path: null, label: 'RTA averaging', kind: 'choice',
+      field({ id: 'averaging', path: null, label: 'Průměrování RTA', kind: 'choice',
         choices: Object.keys(RTA_MODES).map((m) => ({ value: m, label: m.toUpperCase() })),
         default: 'fast', disclosure: 'advanced' }),
     ] },
-    { id: 'device', label: 'Device', disclosure: 'advanced', fields: [
-      field({ id: 'sampleRate', path: null, label: 'Sample rate', kind: 'readonly',
+    { id: 'device', label: 'Zařízení', disclosure: 'advanced', fields: [
+      field({ id: 'sampleRate', path: null, label: 'Vzorkovací frekvence', kind: 'readonly',
         readonly: true, unit: 'Hz', default: sampleRate || UNAVAILABLE.UNKNOWN,
-        disclosure: 'advanced', help: 'The running audio context rate; the stimulus is '
-          + 'rendered at it.' }),
+        disclosure: 'advanced', help: 'Frekvence běžícího audio kontextu; stimul se vykresluje '
+          + 'v ní.' }),
     ] },
   ];
   const shown = disclosure === 'advanced' ? groups

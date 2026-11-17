@@ -70,17 +70,17 @@ export function encodeRecipeLink(values) {
 
 function checkValue(f, v) {
   if (f.kind === 'number') {
-    if (typeof v !== 'number' || !Number.isFinite(v)) return 'must be a number';
-    if (v < f.min || v > f.max) return `must be ${f.min}–${f.max}${f.unit ? ` ${f.unit}` : ''}`;
-    if (f.id === 'repeats' && !Number.isInteger(v)) return 'must be a whole number';
+    if (typeof v !== 'number' || !Number.isFinite(v)) return 'musí být číslo';
+    if (v < f.min || v > f.max) return `musí být ${f.min}–${f.max}${f.unit ? ` ${f.unit}` : ''}`;
+    if (f.id === 'repeats' && !Number.isInteger(v)) return 'musí být celé číslo';
     return null;
   }
   if (f.kind === 'choice') {
     return (f.choices || []).some((c) => c.value === v) ? null
-      : `must be one of ${(f.choices || []).map((c) => c.value).join(', ')}`;
+      : `musí být jedna z hodnot ${(f.choices || []).map((c) => c.value).join(', ')}`;
   }
-  if (f.kind === 'toggle') return typeof v === 'boolean' ? null : 'must be true or false';
-  return 'cannot be set by a link';
+  if (f.kind === 'toggle') return typeof v === 'boolean' ? null : 'musí být true nebo false';
+  return 'odkazem nastavit nejde';
 }
 
 /**
@@ -89,29 +89,29 @@ function checkValue(f, v) {
  */
 export function decodeRecipeLink(param, { defaults = {} } = {}) {
   const fail = (...errors) => ({ ok: false, errors });
-  if (typeof param !== 'string' || param === '') return fail('the link carries no recipe');
+  if (typeof param !== 'string' || param === '') return fail('odkaz nenese žádný recept');
   if (param.length > RECIPE_LINK_MAX_CHARS) {
-    return fail(`the recipe is longer than ${RECIPE_LINK_MAX_CHARS} characters`);
+    return fail(`recept je delší než ${RECIPE_LINK_MAX_CHARS} znaků`);
   }
-  if (!/^[A-Za-z0-9_-]+$/.test(param)) return fail('the recipe is not base64url text');
+  if (!/^[A-Za-z0-9_-]+$/.test(param)) return fail('recept není text v base64url');
   let doc;
   try {
     doc = JSON.parse(base64UrlDecode(param));
   } catch (e) {
-    return fail('the recipe is not valid JSON');
+    return fail('recept není platný JSON');
   }
-  if (!isPlain(doc)) return fail('the recipe must be an object');
+  if (!isPlain(doc)) return fail('recept musí být objekt');
   const keys = Object.keys(doc);
-  if (keys.length > Object.keys(RECIPE_WIRE_KEYS).length + 1) return fail('too many keys');
+  if (keys.length > Object.keys(RECIPE_WIRE_KEYS).length + 1) return fail('příliš mnoho klíčů');
   const errors = [];
   if (doc.v !== RECIPE_LINK_VERSION) {
-    errors.push(`unsupported recipe version ${JSON.stringify(doc.v) ?? 'none'} (this OSCILLA `
-      + `reads version ${RECIPE_LINK_VERSION})`);
+    errors.push(`nepodporovaná verze receptu ${JSON.stringify(doc.v) ?? 'žádná'} (tato OSCILLA `
+      + `čte verzi ${RECIPE_LINK_VERSION})`);
   }
   for (const k of keys) {
     if (k !== 'v' && !Object.hasOwn(RECIPE_WIRE_KEYS, k)) {
-      errors.push(`unknown key "${String(k).slice(0, 20)}" (a link carries a recipe only, never `
-        + 'results)');
+      errors.push(`neznámý klíč „${String(k).slice(0, 20)}“ (odkaz nese jen recept, nikdy `
+        + 'výsledky)');
     }
   }
   if (errors.length) return fail(...errors);
@@ -128,7 +128,7 @@ export function decodeRecipeLink(param, { defaults = {} } = {}) {
   }
   if (!errors.length && typeof values.f1 === 'number' && typeof values.f2 === 'number'
     && !(values.f1 < values.f2)) {
-    errors.push('Start frequency must be below the end frequency');
+    errors.push('Počáteční frekvence musí být pod koncovou');
   }
   return errors.length ? fail(...errors) : { ok: true, values };
 }

@@ -470,8 +470,8 @@ test('noise check: 5 s by default in the preset and the field, with the reason i
     const field = flow.expertFields({ disclosure: 'advanced' }).groups
       .flatMap((g) => g.fields).find((x) => x.id === 'noiseCheckS');
     assert.equal(field.default, 5);
-    assert.match(field.help, /17 Hz for 5 s, 87 Hz for 1 s/);
-    assert.match(field.help, /0 skips it/);
+    assert.match(field.help, /17 Hz pro 5 s, 87 Hz pro 1 s/);
+    assert.match(field.help, /0 ji vynechá/);
     assert.equal(flow.recipeFromFields({}).analysis.noiseCheckS, 5);
     assert.equal(flow.REASON_STEP.ANALYSIS_MEMORY, 'stimulus');
   });

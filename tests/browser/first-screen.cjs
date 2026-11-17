@@ -715,10 +715,10 @@ async function layoutDesktop(ctx) {
       wrong.push(`the compact Studio's signal path is clipped ${JSON.stringify(f.studioPath)}`);
     }
     if (f.steps.length !== 7) wrong.push(`${f.steps.length} measurement steps shown`);
-    if (!f.primary || f.primary.text !== 'Check setup' || !f.primary.enabled) {
+    if (!f.primary || f.primary.text !== 'Zkontrolovat nastavení' || !f.primary.enabled) {
       wrong.push(`primary ${JSON.stringify(f.primary)}`);
     }
-    if (!/^Frequency NEKALIBROVÁNO$/.test(f.freq || '') || !/^Level NEKALIBROVÁNO$/.test(f.level || '')) {
+    if (!/^Frekvence NEKALIBROVÁNO$/.test(f.freq || '') || !/^Úroveň NEKALIBROVÁNO$/.test(f.level || '')) {
       wrong.push(`indicators ${f.freq} / ${f.level}`);
     }
     if (f.folds.some((d) => !d.open || d.summary)) {
@@ -761,7 +761,7 @@ async function layoutPhone(ctx) {
       wrong.push(`steps not folded to the current one: ${JSON.stringify(f.steps)} of `
         + `${f.stepsInDom}`);
     }
-    if (!f.primary || f.primary.text !== 'Check setup') {
+    if (!f.primary || f.primary.text !== 'Zkontrolovat nastavení') {
       wrong.push(`primary ${JSON.stringify(f.primary)}`);
     }
     if (f.folds.some((d) => d.open || !d.summary)) {
