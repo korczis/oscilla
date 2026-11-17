@@ -138,7 +138,7 @@ test('review D1: a retried save stores one run, never a second copy', async () =
   assert.ok(id);
   assert.equal(cmp.meas.saved, true);
   assert.deepEqual(errors(notes), []);
-  assert.ok(notes.some((n) => n.title === 'Experiment saved' && /reported an error/.test(n.text)));
+  assert.ok(notes.some((n) => n.title === 'Experiment uložen' && /ohlásil chybu/.test(n.text)));
   assert.equal(await cmp.measureSave(), id, 'saving again is the same run');
   assert.deepEqual((await s.list()).map((r) => r.experimentId), [id], 'one run, one record');
   // A failed write (nothing stored) of the next measurement, retried, writes it once.
@@ -169,8 +169,8 @@ test('save model: a lost acknowledgement, a metadata edit, then a retry annotate
       return Promise.reject(new Error('read failed'));
     };
     assert.equal(await cmp.measureSave(), null);
-    assert.ok(errors(notes).some((n) => n.title === 'Experiment not confirmed'));
-    assert.ok(!errors(notes).some((n) => n.title === 'Experiment not saved'));
+    assert.ok(errors(notes).some((n) => n.title === 'Experiment nepotvrzen'));
+    assert.ok(!errors(notes).some((n) => n.title === 'Experiment nebyl uložen'));
     // The user edits the name and notes, then retries: the same id, never "immutable".
     cmp.meas.name = 'edited before the retry';
     cmp.meas.notes = 'typed before the retry';
@@ -226,7 +226,7 @@ test('save model: an update with nothing changed annotates nothing and says so',
   const before = notes.length;
   assert.equal(await cmp.measureSave(), id);
   assert.equal(calls, 0, 'no annotate is sent');
-  assert.deepEqual(notes.slice(before).map((n) => n.title), ['Nothing to update']);
+  assert.deepEqual(notes.slice(before).map((n) => n.title), ['Není co aktualizovat']);
   assert.equal((await s.get(id)).annotations.notes, 'from Experiments', 'never cleared');
 });
 
@@ -248,7 +248,7 @@ test('save model: a failed re-store of a deleted record is never announced as st
     assert.equal(cmp.meas.saved, false);
     assert.equal(await s.get(id), null);
     const said = notes.slice(before);
-    assert.ok(said.some((n) => n.title === 'Experiment not stored' && /save again/.test(n.text)));
+    assert.ok(said.some((n) => n.title === 'Experiment není uložen' && /uložte ho znovu/.test(n.text)));
     assert.ok(!said.some((n) => /is stored|only the metadata/.test(n.text)), JSON.stringify(said));
     // Space freed: Save stores the same run under its id.
     s.put = put;
@@ -274,9 +274,9 @@ test('save model: a read-back is the run only when its result hash matches', asy
   assert.equal(await cmp.measureSave(), null);
   assert.equal(cmp.meas.saved, false);
   const said = notes.slice(before);
-  assert.ok(said.some((n) => n.title === 'Experiment not saved'
-    && /different record is stored under this id/.test(n.text)), JSON.stringify(said));
-  assert.ok(!said.some((n) => n.title === 'Experiment saved'));
+  assert.ok(said.some((n) => n.title === 'Experiment nebyl uložen'
+    && /je uložen jiný záznam/.test(n.text)), JSON.stringify(said));
+  assert.ok(!said.some((n) => n.title === 'Experiment uložen'));
   // A retry stores this run under a new id, beside the other record.
   const id = await cmp.measureSave();
   assert.ok(id);

@@ -32,7 +32,7 @@ export function createLive(ctx, svc, ops) {
     m.rtaLive.running = false;
     m.rtaLive.kind = null;
     m.rtaFrozen = ctx.rta ? ctx.rta.averager.frozen : false;
-    ops.announce({ politeness: 'polite', text: 'Live RTA stopped' });
+    ops.announce({ politeness: 'polite', text: 'Živé RTA zastaveno' });
     ops.rebuildRta();
   }
 
@@ -42,8 +42,8 @@ export function createLive(ctx, svc, ops) {
     if (!L || L.token !== token || L.closing) return; // stopLive() is already cleaning up
     endLive(L);
     if (reason === 'track-ended') {
-      ctx.cmp.meas.rtaLive.error = 'Live RTA stopped: the input device was disconnected or '
-        + 'stopped.';
+      ctx.cmp.meas.rtaLive.error = 'Živé RTA zastaveno: vstupní zařízení bylo odpojeno nebo '
+        + 'zastaveno.';
     }
   }
 
@@ -110,7 +110,7 @@ export function createLive(ctx, svc, ops) {
       m.rtaLive.running = true;
       m.rtaLive.kind = kind;
       m.rtaFrozen = false;
-      ops.announce({ politeness: 'polite', text: 'Live RTA started' });
+      ops.announce({ politeness: 'polite', text: 'Živé RTA spuštěno' });
       ops.rebuildRta();
       L.off = onFrame(liveTick);
       ops.inputOpened(null);

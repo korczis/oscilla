@@ -212,8 +212,8 @@ export function createViews(ctx, svc, ops) {
 
   function liveSourceText(kind) {
     return kind === 'loopback'
-      ? 'LIVE · TEST CONTEXT loopback input (the output chain through the synthetic system)'
-      : 'LIVE · microphone input (feedback only, not stored)';
+      ? 'LIVE · vstup smyčky TESTOVACÍHO KONTEXTU (výstupní řetězec přes syntetický systém)'
+      : 'LIVE · vstup mikrofonu (jen zpětná vazba, neukládá se)';
   }
 
   function liveCalibration(m) {
@@ -269,15 +269,15 @@ export function createViews(ctx, svc, ops) {
         peakDb: m.view.rtaPeakHold && st.last.peakDb ? st.last.peakDb : null,
         frozen: st.averager.frozen,
         snapshotLabel: 'NOISE CHECK SNAPSHOT',
-        averaging: { text: 'Welch average of the whole noise check (Hann, 50 % overlap); peak '
-          + 'hold across successive noise checks' },
+        averaging: { text: 'Welchův průměr celé kontroly šumu (Hann, překryv 50 %); držení '
+          + 'špiček přes po sobě jdoucí kontroly šumu' },
         binHz: st.binHz,
         levelCalibration: snapshotLevel(st, m),
       });
     }
     m.rta = view ? { summary: view.summary, badges: view.badges.slice(), notes: view.notes.slice(),
       yLabel: `${view.axes.y.label} (${view.axes.y.unit})`, mode: RTA_MODE_LABELS[view.mode],
-      source: 'Background (noise check), one-third-octave band power', live: false } : null;
+      source: 'Pozadí (kontrola šumu), výkon v pásmech třetiny oktávy', live: false } : null;
     if (ctx.charts.rta) {
       ctx.charts.rta.setLive(null);
       ctx.charts.rta.setView(view);
@@ -309,6 +309,9 @@ export function createViews(ctx, svc, ops) {
       : 0));
     updateRtaFrame();
   }
+  /** The names of the result views as shown (the internal names stay the keys). */
+  const VIEW_NAMES = Object.freeze({ 'frequency response': 'frekvenční odezvy',
+    'impulse response': 'impulsní odezvy', RTA: 'RTA' });
   /** One view; a view that cannot be built is a note, never a failed measurement (M6). */
   function safely(name, fn) {
     try {
@@ -316,8 +319,8 @@ export function createViews(ctx, svc, ops) {
     } catch (e) {
       console.error(`OSCILLA ${name} view:`, e);
       const m = ctx.cmp.meas;
-      const note = `The ${name} view could not be drawn with these view options (${e.message
-        || e}); the measurement itself is kept.`;
+      const note = `Pohled ${VIEW_NAMES[name] || name} nešlo s těmito volbami vykreslit (${e.message
+        || e}); samotné měření zůstává.`;
       const key = name === 'impulse response' ? 'ir' : name === 'RTA' ? 'rta' : 'response';
       m[key] = { summary: note, badges: [], notes: [note], yLabel: '', legend: [], envelope: null,
         authoritative: false, quality: null, phase: null, mode: '', source: '', window: null };
@@ -352,8 +355,8 @@ export function createViews(ctx, svc, ops) {
     }
     if (result && (result.transfer || result.ir)) {
       const tc = result.testContext ? result.testContext.label || LOOPBACK_LABEL : null;
-      ctx.shown = { kind: 'result', src: result, title: tc ? 'TEST CONTEXT result' : 'Latest '
-        + 'measurement', testContext: tc };
+      ctx.shown = { kind: 'result', src: result, title: tc ? 'Výsledek TESTOVACÍHO KONTEXTU'
+        : 'Poslední měření', testContext: tc };
     } else if (result && result.state === S.INVALID) {
       ctx.shown = null;
     }

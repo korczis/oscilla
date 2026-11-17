@@ -389,8 +389,8 @@ test('the policy names every raw capture of MEASURE, the reference capture inclu
   const html = read('src/index.html');
   const hint = html.match(/data-osc="levelCal\.retention"[^>]*>([\s\S]*?)<\/p>/);
   assert.ok(hint, 'the level calibration dialog says what happens to the reference capture');
-  assert.match(flat(hint[1]), /discarded/);
-  assert.match(flat(hint[1]), /only the level reading/);
+  assert.match(flat(hint[1]), /zahodí/);
+  assert.match(flat(hint[1]), /zůstane jen naměřená úroveň/);
   // The code the sentence describes: the capture is a local of captureReference.
   const ui = read('src/js/ui/measure/calibration.js');
   assert.match(ui, /const cap = await io\.captureNoise\(REFERENCE_CAPTURE_S, \{\}\);/);

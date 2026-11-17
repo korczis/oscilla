@@ -113,7 +113,7 @@ test('R1: a reference capture closed during the prompt releases the output refus
       assert.deepEqual(res, { ok: true, v: false }, `${outcome}: nothing is stored`);
       assert.equal(ctx.refCapture, null, `${outcome}: the refusal is released`);
       assert.equal(cmp.meas.levelForm.capturing, false, `${outcome}: not capturing`);
-      assert.match(cmp.meas.levelForm.error, /stopped; nothing was stored/, outcome);
+      assert.match(cmp.meas.levelForm.error, /zastaveno; nic se neuložilo/, outcome);
       assert.equal(play(), 'plays', `${outcome}: play plays with the prompt still open`);
       prompt.answer(outcome);
       await until(() => s.sets.length >= 2, `${outcome}: the session put back`);
