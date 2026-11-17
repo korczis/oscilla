@@ -45,6 +45,10 @@ test('a workspace scrolled into view keeps the scroller\'s top padding as its ga
   assert.ok(main, '.osc-main has its rule');
   const top = main[2].match(/padding:\s*(\S+)/)[1];
   const tag = read('src/index.html').match(/<main\b[^>]*\bid="osc-main"[^>]*>/)[0];
-  assert.ok(tag.includes(`scroll-pt-[${top}]`),
-    `<main> carries scroll-pt-[${top}], its own padding-top, so scrollIntoView keeps the gap`);
+  // One scroll-pt per workspace, never two competing classes: the Synth keeps its own (the
+  // height of its sticky nav), every other workspace takes main's padding-top.
+  assert.ok(tag.includes(`workspace !== 'synth' && 'scroll-pt-[${top}]'`),
+    `<main> binds scroll-pt-[${top}], its own padding-top, outside the Synth`);
+  assert.ok(!/(?<![:\w-])class="[^"]*scroll-pt-/.test(tag),
+    'no static scroll-pt competes with the bound one');
 });
