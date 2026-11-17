@@ -19,7 +19,7 @@
     {
       "id": "M046",
       "title": "Engineering integrity: orchestration split, structural checks, measured costs",
-      "done": 39,
+      "done": 40,
       "required": 71,
       "phase": "now"
     },
@@ -54,7 +54,7 @@
     {
       "id": "M054",
       "title": "The whole interface shows the current product",
-      "done": 20,
+      "done": 21,
       "required": 78,
       "phase": "now"
     },
