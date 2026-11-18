@@ -431,6 +431,11 @@
           "px": 0,
           "faint": 0
         },
+        "desktop-engines-dark": {
+          "runs": 10,
+          "px": 0,
+          "faint": 0
+        },
         "desktop-engines-light": {
           "runs": 10,
           "px": 0,
@@ -446,6 +451,11 @@
           "px": 0,
           "faint": 43
         },
+        "phone-panel-dark": {
+          "runs": 10,
+          "px": 0,
+          "faint": 0
+        },
         "phone-panel-light": {
           "runs": 10,
           "px": 0,
@@ -460,6 +470,11 @@
           "runs": 10,
           "px": 0,
           "faint": 11
+        },
+        "phone-xy-dark": {
+          "runs": 10,
+          "px": 0,
+          "faint": 0
         },
         "phone-xy-light": {
           "runs": 10,
