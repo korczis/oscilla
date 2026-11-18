@@ -3,7 +3,9 @@ title: "The public face: README front page, GitHub shell and a measured library 
 slug: the-public-face-readme-front-page-github-shell-and-a-measured-library-decision
 order: 98
 priority: p2
+superseded_by: "M122"
 problem: "The README opens on the right sentence but has no tagline, no artwork of its own and no diagram; the repository has no custom social preview; and the owner named four visualization libraries nobody has measured against uPlot and p5 (owner prompt pack, 2026-10-29)."
+current_state: "Merged into M122 on 2026-11-18 by the plan triage the owner approved in bulk (Q112: 'schvaluji vse', 2026-11-18T02:27Z, Claude Code session 980e22ee-d9d4-4dd0-8318-8b727f127ce9, oscilla-e5; triage derived from origin/main 4682eea4): 10 done and 1 blocked: the public face's tail joins the live landing. Its open issues (P007) moved to M122, its done and cancelled issues stay here as history, and intent public-discoverability now names M122 as well, so their serves entries still hold. M122's acceptance criteria carry what is left of this outcome. Undo: remove superseded_by, move the issues back and drop M122 from the intent."
 outcome: "README works as a GitHub front page with original art and a native diagram, GitHub's shell matches it, and the owner adopts or declines each named library on measured numbers (Q070)."
 acceptance_criteria:
   - "P006, P007, P009 and Q070 are done with their evidence."
@@ -15,4 +17,4 @@ risks:
   - "README is touched by about thirty open pull requests; P006 lands on top of E028 (#286), which already rewrote the top of README."
   - "P007's social preview is set in the repository settings by hand; gh cannot upload it, so its evidence is the owner's action read back through gh, and the card goes stale whenever the first screen changes (P007 waits for P012, the live landing)."
 created_at: 2026-10-30
-updated_at: 2026-10-30
+updated_at: 2026-11-18

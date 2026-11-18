@@ -17,7 +17,7 @@ scope:
   - "tests/README.md"
   - "dist"
 depends_on:
-  - "K115"
+  - "W007"
   - "K066"
 acceptance_criteria:
   - "Failing on the merge base: the Keys registry entry (src/js/studio/nodes/instrument.js) declares Chord with default off and the triads of the pattern's scale, and a target's chord plays that shape; a document saved before the change with a Keys node hashes once anew (the pull request says so) and every pinned template studioHash is unchanged."
@@ -37,4 +37,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-18

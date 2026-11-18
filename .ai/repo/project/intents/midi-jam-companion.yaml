@@ -9,6 +9,7 @@ invariants:
   - "New surfaces are built on the Flowbite Pro shell and components (owner, 2026-10-28; ADR 0061, project.ui-uses-flowbite-pro, project.visual-identity-lock v2, intent ui-flowbite-pro), add no surface off Pro and no legacy osc-* primitive, keep the signal palette for the note and spectrum visuals, and have a non-pointer path"
 milestones:
   - M045
+  - M069
 satisfaction:
   - id: midi-support-state
     criterion: "OSCILLA states one of unsupported, permission needed, denied, no devices or connected (with device names), and nothing else changes when MIDI is absent"
