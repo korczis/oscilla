@@ -1,0 +1,28 @@
+id: U117
+milestone: M055
+serves:
+  - "ui-flowbite-pro#pro-shell"
+title: "A darwin-arm64 baseline for the 1536 visual gate, whose first row is 38 px taller than CI's linux-x64"
+slug: darwin-visual-gate-baseline
+priority: p3
+profile: implementation
+objective: "Give darwin-arm64 an accepted baseline for scripts/visual-gate.mjs again, without widening any tolerance. Since PR #601 (F002 shell:main, owner decision Q110) tests/visual/regions.json and reference.png are the linux-x64 scene of mcr.microsoft.com/playwright:v1.63.0-noble (the review consensus with oscilla-c3), and the darwin-arm64 entry left tests/visual/baseline.json, so the darwin gate fails closed ('no accepted baseline for darwin-arm64'). Its re-acceptance against the new reference is refused by the 2 px geometry rule: on darwin the first row's panels are 38 px taller than on linux-x64 (system fonts re-wrap the panel text), so every panel below them is off by 38 px. Decide the mechanism (per-environment region and control boxes in regions.json, or another one the owner or the reviewers choose), implement it in scripts/visual-gate.mjs with its fixtures, and accept darwin-arm64 with --update-baseline."
+why: "The darwin entry was already red on main before #601 (header 15.74 % over 14.89 %, every panel's geometry 30-31 px off, total 7.49 % over 3.21 %), so the local gate has not judged anything on a Mac; removing it in ce8f7144 made that visible instead of leaving it to name a reference it was never measured against (oscilla-c3's condition on #601)."
+current_state: "Filed 2026-11-18 by the F002 shell:main builder (session 980e22ee-d9d4-4dd0-8318-8b727f127ce9) on feat/f002-pro-page-frame, from the refusal of node scripts/visual-gate.mjs dist --update-baseline --runs 3 on darwin-arm64 (chromium 153.0.8010.12): 'source: DOM box 39 px from the reference box (limit 2)'."
+scope:
+  - "scripts/visual-gate.mjs"
+  - "tests/visual/regions.json"
+  - "tests/visual/baseline.json"
+  - "tests/unit/visual-gate-bound.test.mjs"
+depends_on: []
+acceptance_criteria:
+  - "node scripts/visual-gate.mjs dist passes on darwin-arm64 and in the linux-x64 container, with no tolerance wider than tests/visual/baseline.json's current ones."
+  - "tests/unit/visual-gate-bound.test.mjs passes; the darwin entry stores the digest of the reference it was accepted against."
+  - "The mechanism has fixtures that fail when an environment's boxes are judged against another's."
+validation:
+  - "npm test"
+  - "npm run test:visual"
+evidence_required:
+  - "verified"
+created_at: '2026-11-18'
+updated_at: '2026-11-18'
