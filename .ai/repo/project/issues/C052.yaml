@@ -8,6 +8,7 @@ priority: p1
 profile: implementation
 objective: "Lands as fix(bus). Split from C037 by af's critique of 96daa67b (BLOCKING 5): no criterion of 96daa67b covered the master-level writers, and C012 is stamped done (C034 re-checks it). Line numbers at origin/main a19f1ff6. engine.setMasterGain and engine.holdMasterGain (src/js/audio/audio-engine.js:397, :415) are called from: src/js/main.js:718 (the status-bar gainLevel watcher); src/js/core/instrument.js:410 (the first voice) and :482-483 (claimMasterLevel, reached from main.js:151's claimOutput); src/js/studio/adapters/engine-hooks.js:75-82 (setMasterLevel) and :89-95 (holdMasterGain), called by src/js/studio/runtime.js:359-368 (setMasterLevel) and :384-386 (restoreMaster) and by the Output node (src/js/studio/adapters/output.js:22-33); the offline engine's own setMasterGain (src/js/studio/offline.js:214) is a separate context and stays. The mirrors of who wrote it are reset in three places: main.js:720, instrument.js:484 and src/js/ui/studio/workspace.js:252 (cmp.studio.masterLevel). After: the bus is the one writer of the live engine's master level: it applies the level of the current owner (the status-bar level for the instrument and the sequencer, the Studio's Output level while the Studio owns the output) at claim and on that owner's change; every other site asks the bus; cmp.studio.masterLevel is a read of the bus."
 why: "af's critique of 96daa67b (BLOCKING 5): add a single-writer scan of engine.setMasterGain with a mutation; C034 (origin/chore/plan-nav-folds) found 4 master-level writers contradicting C012's done stamp."
+current_state: "Re-checked on main 4682eea4 in audit-and-stamp train A (oscilla-d9, 2026-11-18); left open. AC2's \"drops the Studio's saved level\" and \"ensureAudio never moves it\" are asserted only in tests/unit/c012-studio-master-level.test.mjs (:109-121, :52-66), not in master-level-writer.test.mjs as the criterion requires: add the two cases there, or restate AC2 to cite the C012 tests. The criterion naming prismatic-majordomus-98 is met under Q111 (verdict 515.yaml by oscilla-c1 with oscilla-c3, who built none of it)."
 scope:
   - "src/js/core/output-bus.js"
   - "src/js/main.js"
@@ -34,4 +35,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-05
-updated_at: 2026-11-09
+updated_at: 2026-11-18

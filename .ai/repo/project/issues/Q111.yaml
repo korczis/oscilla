@@ -1,0 +1,37 @@
+id: Q111
+milestone: M011
+serves:
+  - "release-provenance#gate-runs-every-suite"
+title: "LLM decision: a criterion naming a specific review seat is met by any seat passing project.review-verdict v2's non-builder separate-session test (d9 with e5, 2026-11-17)"
+slug: llm-decision-review-seat-substitution
+priority: p2
+profile: routine
+owner: "oscilla-d9 with oscilla-e5, mesh 2026-11-17, owner order 'work autonomously, settle with peers'"
+objective: "Record the decision AGREED by oscilla-d9 with oscilla-e5 on the mesh on 2026-11-17, during audit-and-stamp train A (Q110, PR #598, the owner's order of 2026-11-17): an acceptance criterion that names a specific review seat (for example 'prismatic-majordomus-98 writes the verdict', from Q091 part 4) is met by any review seat that passes project.review-verdict v2's test, a session that built none of the change and is a separate top-level session (Q108), provided the verdict file names that seat and states it built none of the guarded content. A verdict written by a seat that built or co-built the pull request never meets it."
+why: "Q091 is itself an LLM decision (af with b0, 2026-11-05), not the owner's words, so peers may settle a seat substitution under the owner's standing order ('settle with peers', owner-only actions excepted). When those criteria were written prismatic-majordomus-98 was the non-builder review seat: the seat name is the instance, the rule's test is the requirement. The verdicts of #509 and #515 (oscilla-c1 rev-seat with oscilla-c3 rev-seat-2, 'built none of' the content) and #523 (oscilla-c3 standing in for oscilla-c1, a separate top-level session, 'built none of the guarded content') meet that test; leaving C036, C037, C050, R034 and R035 open on a seat name alone would keep landed, reviewed work from being stamped."
+current_state: "Decided (AGREED) by oscilla-d9 with oscilla-e5 on the mesh on 2026-11-17 (e5's message: '(a); consensus between us'), attributed to the deciding sessions, not presented as the owner's words. Recorded by oscilla-d9 in the train A stamp pull request, which cites it in the evidence of the issues it lets close."
+scope:
+  - ".ai/repo/project/issues/Q111.yaml"
+depends_on: []
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers owner_decision) naming the deciding sessions (oscilla-d9 with oscilla-e5), the mesh, its date 2026-11-17 and the owner's order it was taken under, attributed to the sessions and not to the owner."
+  - "Every issue stamped done under it cites Q111 in its evidence, and its verdict file names the reviewing seat and states that seat built none of the guarded content."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-11-17
+updated_at: 2026-11-17T23:05:30Z
+started_at: 2026-11-17T22:56:53Z
+started_event: sha256:8950e1ab0653a522a148caa6c8dbf9358755a652155642b4d48a6396f6198689
+verified_at: 2026-11-17T22:59:46Z
+verified_event: sha256:c0cbe6fef42b69291f05e527fc8fda2170e7830e7ba8b33263fa5a273ed1971a
+completed_at: 2026-11-17T23:05:30Z
+completed_event: sha256:13024612d8d6899c5df7ef7cb5bae69918b9d45658e6491f261f23c007b0046d
+evidence:
+  - covers: "owner_decision"
+    type: manual
+    result: "Decision AGREED by oscilla-d9 with oscilla-e5 on the mesh on 2026-11-17 (d9 proposed options (a) and (b); e5 answered '(a); consensus between us'), during audit-and-stamp train A under the owner's order of 2026-11-17 (Q110, PR #598: 'work autonomously, settle with peers'); attributed to the two sessions, not to the owner. Applied in the same pull request to C036, C037, R034 and R035, whose verdicts (509.yaml, 515.yaml, 523.yaml) name their seats and state they built none of the content."
+    artifact: ".ai/repo/project/issues/Q111.yaml"
+    commit: 4682eea40739a7b37a7be04d3d19cd7be0dd5226
+    recorded_at: 2026-11-17T23:03:31Z

@@ -2,12 +2,14 @@ id: N001
 milestone: M111
 serves:
 - "parameter-controls#one-declaration"
+- "connected-instrument#parameter-contract"
 title: "One parameter declaration: the section 79 descriptor plus id, state path, links, docs and a stated reason, derived for every registry parameter"
 slug: one-parameter-declaration-the-section-79-descriptor-plus-id-st
 priority: p2
 profile: implementation
 objective: "Lands as feat(ui). src/js/ui/catalog/param-spec.js exports paramSpec(descriptor, { id, state, links, docs, staticReason }), which freezes the section 79 descriptor of src/js/studio/nodes/common.js (key, label, type, min, max, step, unit, scale, options, default, softRange, automatable, modulatable, modDepth: unchanged, built only by numberParam, frequencyParam and the other constructors) with four new fields: a global id, a canonical state path in G001's sources grammar (documentation and tests only; nothing resolves it at run time), links (opens, related) as G007 addresses, and a one-sentence docs; staticReason is required exactly when a number or integer parameter is neither automatable nor modulatable (synth K105's rule, moved here so it lands in wave 1). specsOf(type) derives the spec of every NODE_REGISTRY parameter (id studio.param:<type>.<key>, state studio.param:<type>.<key>, links to its node, docs from the node's help); the only registry edit is staticReason on the parameters that need one. The parameter declarations of G018 and G019 (kind param) are paramSpec values; no third declaration exists. The ADR is J001's: its first decision states that a parameter is declared once and every control is a projection of it; this slice cites it and writes no ADR. Before: VERIFIED the descriptor has automatable and modulatable but no id, state, links, docs or reason; seven hand-built parameter fields declare nothing. After: one declaration per parameter, validated in Node. Negative cases: duplicate id, scale log with min <= 0, default outside the range, state not in sources, docs that repeats the label, a continuous parameter that is neither automatable nor modulatable without a reason. Rollback: revert the merge commit; nothing stored changes (the registry is not in the model, so no studioHash changes)."
 why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs, KB and interlinking; full DAW, full sequencer, full piano, everything interlinked, clickable, parameterized and joined; knobs, sliders and control panels in one generic way, integrated with Majordomus; every element tweakable; mobile first; the landing easy to use, easy to extend and open to hack. Owner decisions: knobs that always show value and unit (D11, Q018, the ADR 0058 note of 2026-10-29), every parameter on the box face (Q031), the generator in its own workspace (Q033). Design: the params-controls part of the component follow-up of 2026-10-29 (scratchpad components-followup/params-controls.md), checked against origin/main b67d1e58 and the head of plan pull request #285 (c0a631b2)."
+current_state: "2026-11-18: K105 (the contract test over every parameter and every Synth-card control) merged into this issue by the plan triage the owner approved in bulk (Q112: 'schvaluji vse', 2026-11-18T02:27Z, Claude Code session 980e22ee-d9d4-4dd0-8318-8b727f127ce9, oscilla-e5; triage derived from origin/main 4682eea4): it is the test half of this declaration (paramSpec with a required staticReason). Its criteria are the ones that start 'From K105', the Synth cards it checks are K062's, and this issue now serves connected-instrument#parameter-contract, whose intent names M111 for it. K189, K106 and G029 depend on this issue instead of K105. The triage rated the merge low-confidence: if the owner wants the Synth-card binding audited separately, K105 is restored by its undo."
 scope:
 - src/js/ui/catalog/param-spec.js
 - src/js/studio/nodes
@@ -15,6 +17,11 @@ scope:
 - tests/unit/source-size-baseline.json
 - tests/README.md
 - dist
+- "src/js/studio/registry.js"
+- "src/js/ui/synth"
+- "docs/v31/studio-model.md"
+- "tests/unit/parameter-contract.test.mjs"
+- "tests/browser/synth.cjs"
 depends_on:
 - G001
 - G003
@@ -30,10 +37,14 @@ acceptance_criteria:
 - "Its scope includes guarded paths (src/js/studio/nodes; scripts/review-verdict.mjs GUARDED), so the pull request carries a reviewer's .ai/repo/reviews/<pr>.yaml written by a session that did not build it (project.review-verdict); as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
 - "Before Pro (it may land before F001): it adds no class token, selector, markup surface or inline style and only removes legacy ones, so tests/unit/ui-flowbite-pro-baseline.json stays equal or falls (node scripts/ui-flowbite-pro-record.mjs --check passes) and node --test tests/unit/ui-flowbite-pro.test.mjs passes; no module, listener or string it adds contains an osc- name; studio.css, studio-timeline.css, charts.css and tokens.css gain no selector or declaration (project.ui-uses-flowbite-pro, project.visual-identity-lock v2)."
 - "scripts/size-report.mjs shows at most 1.0 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the line's sum stays within its row of the cap Q037 records, under the 1.2 MB gzip budget of scripts/build-config.mjs (project.single-file-deliverable)."
+- "From K105 (merged by Q112): tests/unit/parameter-contract.test.mjs fails on the merge base: every registry parameter declares key, label, unit, range, default, mapping, automatable, modulatable and its deep-link address (#m=studio&node=<id>&param=<key>); every continuous control on a Synth, mixer or engine card is bound to exactly one declared parameter or edge property; a fixture control bound to no parameter fails, a fixture parameter with no control on its card fails (every parameter is shown, owner decision of 2026-10-29), and a fixture parameter neither automatable nor modulatable without a reason fails."
+- "From K105 (merged by Q112): a browser check in tests/browser/synth.cjs, wired into npm run test:synth, fails on the merge base. Linked: a parameter's deep link opens the Studio with that node selected and that parameter focused in the Inspector, and Back returns to the card. Real-time: after the deep link, a knob turn on the card changes the focused Inspector value within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: every control of one card per node type is reached by Tab and operated by keyboard, pointer and touch, its role asserted. It runs inside tests/browser/lib/suite.cjs and adds nothing to tests/browser/timing-baseline.json."
+- "From K105 (merged by Q112): every edit is one undoable dispatch through the one Studio store and the model holds plain data only (project.studio-model-is-canonical); every connection goes through canConnect and full-model validation, and a refusal leaves model, history and runtime unchanged (project.typed-ports, project.no-silent-feedback); every link it adds is a row of tests/browser/integration-map.json walked by tests/browser/integration-map.cjs; every string it adds passes tests/unit/synth-wording.test.mjs; a change under src/js/studio carries a reviewer's verdict (project.review-verdict); scripts/size-report.mjs shows at most 1 KB gzip added within the cap Q023 records."
 validation:
 - node --test tests/unit/param-spec.test.mjs
 - npm test
+- "node --test tests/unit/parameter-contract.test.mjs"
 evidence_required:
 - verified
 created_at: '2026-10-29'
-updated_at: '2026-10-30'
+updated_at: 2026-11-18
