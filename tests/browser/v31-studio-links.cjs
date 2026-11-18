@@ -457,7 +457,7 @@ function defineChecks() {
       await touch.close();
     }
     return { ...H.verdict({
-      link: link.label === 'Open the First patch in Studio'
+      link: link.label === 'Otevřít šablonu First Patch ve Studiu'
         && link.href === '#m=studio&st=first-patch',
       opened: /#m=studio&st=first-patch$/.test(st.hash) && !st.dirty && st.title === 'First Patch'
         && st.labels.map((l) => l[0]).join('') === '12345' && st.playing === false,

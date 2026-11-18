@@ -16,6 +16,7 @@ import {
   WORKSPACE_IDS, relatedOf, relatedRef, workspaceAccusative, workspaceLang, workspaceOf,
 } from './shell.js';
 import { getTemplate } from '../studio/templates/index.js';
+import { LEARN_CARDS_SHOWN, learnTitleShown, topicExampleShown } from '../data/learn-display.js';
 
 /** The template id a related entry's address names (`studio&st=<id>`), or null. */
 export function templateOfRef(ref) {
@@ -148,15 +149,23 @@ export function filterLabToggle(workspace) {
     : { to: 'filter', label: 'Otevřít stránku Filtry', icon: '#i-expand' };
 }
 
-/** The action a Learn demo's notice carries: back to the lesson it came from. */
+/** The action a Learn demo's notice carries: back to the lesson it came from, named in Czech. */
 export function learnReturnAction(topic) {
   // data-osc-link: alert.action
-  return { href: '#m=learn', text: `Back to the lesson: ${topic.title}` };
+  return { href: '#m=learn', text: `Zpět na lekci: ${learnTitleShown(topic.id) || topic.title}` };
 }
 
 /** The Alpine members the markup binds to (composed by main.js). */
 export function createCrossLinksUi() {
   return {
+    // U116: the Výuka page's cards in Czech (data/learn-display.js), same ids and demos.
+    LEARN_CARDS: LEARN_CARDS_SHOWN,
+    /**
+     * The current lesson's live example as the page shows it, in Czech. main.js composes this
+     * part after the instrument, so it is the component's topicExample; the instrument's
+     * English line stays the V1 data the freeze golden pins (tests/freeze, ui.mapping).
+     */
+    get topicExample() { return topicExampleShown(this); },
     learnToolOf(topicId) { return learnToolOf(topicId); },
     filterLabToggle() { return filterLabToggle(this.workspace); },
   };

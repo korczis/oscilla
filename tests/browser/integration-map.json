@@ -454,7 +454,7 @@
       "href": "#m=synth&yp=init",
       "template": null,
       "source": "learn",
-      "text": "Demo: Open the Synth panel",
+      "text": "Demo: Otevřít panel Synth",
       "studio": "patch",
       "id": "learn > learn.demo > synth&yp=init"
     },
@@ -468,7 +468,7 @@
       "href": "#m=synth&yt=engines&ye=fm&yp=fm-bell",
       "template": null,
       "source": "learn",
-      "text": "Demo: Open the FM bell",
+      "text": "Demo: Otevřít FM zvon",
       "studio": "patch",
       "id": "learn > learn.demo > synth&yt=engines&ye=fm&yp=fm-bell"
     },
@@ -482,7 +482,7 @@
       "href": "#m=studio&st=first-patch",
       "template": "first-patch",
       "source": "learn",
-      "text": "Open the First patch in Studio",
+      "text": "Otevřít šablonu First Patch ve Studiu",
       "studio": "template",
       "id": "learn > learn.link > studio&st=first-patch"
     },
@@ -1347,7 +1347,7 @@
       "template": null,
       "studio": "same",
       "source": "declared",
-      "text": "Demo: Hear 220",
+      "text": "Demo: Poslech 220",
       "sounds": true,
       "why": "a Learn demo without an href plays its sound in the Playground (runLearnDemo); one row stands for the demos of that one handler"
     },
@@ -1370,7 +1370,7 @@
         ]
       },
       "sounds": true,
-      "why": "the notice of a Learn demo carries Back to the lesson (ui/cross-links.js learnReturnAction); it exists only after a demo ran"
+      "why": "the notice of a Learn demo carries the way back to the lesson, \"Zpět na lekci\" (ui/cross-links.js learnReturnAction); it exists only after a demo ran"
     },
     {
       "id": "presets > alert.action > playground",

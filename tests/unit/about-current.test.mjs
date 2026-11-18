@@ -558,7 +558,8 @@ function descriptions(markup, rows = WORKSPACE_REGISTRY) {
  */
 export const CZECH_NAMES = {
   Frequency: 'frekvenc\\p{L}*',
-  'Signal path': 'signálov\\p{L}* cest\\p{L}*',
+  // The Signal path card's title is Czech itself since Czech pass 8 (U116); About declines it.
+  'Signálová cesta': 'signálov\\p{L}* cest\\p{L}*',
 };
 
 /**
