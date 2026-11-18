@@ -482,7 +482,7 @@ test('IR v2: a missing noise floor reads "not available", never a number', () =>
   const v = buildIrView({ algorithm: ALGORITHMS.ir, sampleRate: 48000, samples, peakIndex: 100,
     peakTimeS: 100 / 48000, captureOffsetS: 0, noiseFloorDb: null, window: null },
   { scale: 'db' });
-  assert.match(v.summary, /šumový dozvuk není k dispozici, /);
+  assert.match(v.summary, /šum na konci odezvy není k dispozici, /);
   assert.ok(v.notes.includes('Šumový dozvuk: není k dispozici.'));
   assert.ok(v.axes.y.range.every(Number.isFinite));
 });
