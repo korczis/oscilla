@@ -21,6 +21,7 @@ milestones:
   - "M069"
   - "M071"
   - "M072"
+  - "M111"
 satisfaction:
   - id: "parameter-contract"
     criterion: "Every registry parameter declares its unit, range, default, mapping, whether it is automatable and modulatable (or why not) and its deep-link address, and every instrument and mixer control is bound to exactly one declared parameter shown on its box face"
@@ -152,4 +153,4 @@ non_goals:
   - "A copy of any DAW's name, branding, layout or trade dress, and a feature-count contest: the full DAW the owner asked for is built on the Studio model in small slices after the playable core, each tied to a tested workflow"
   - "A wholesale visual redesign"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-18
