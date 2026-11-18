@@ -5,22 +5,22 @@
     {
       "id": "M011",
       "title": "Release engineering, provenance and product graph",
-      "done": 27,
-      "required": 53,
+      "done": 30,
+      "required": 54,
       "phase": "now"
     },
     {
       "id": "M045",
       "title": "MIDI jam companion: first usable version",
       "done": 8,
-      "required": 12,
-      "phase": "now"
+      "required": 8,
+      "phase": "next"
     },
     {
       "id": "M046",
       "title": "Engineering integrity: orchestration split, structural checks, measured costs",
-      "done": 40,
-      "required": 71,
+      "done": 41,
+      "required": 72,
       "phase": "now"
     },
     {
@@ -42,19 +42,19 @@
       "title": "Learn: three perception lessons of the adopted V1 specification",
       "done": 0,
       "required": 4,
-      "phase": "later"
+      "phase": "next"
     },
     {
       "id": "M055",
       "title": "The whole interface on Flowbite Pro",
       "done": 1,
-      "required": 14,
+      "required": 15,
       "phase": "now"
     },
     {
       "id": "M054",
       "title": "The whole interface shows the current product",
-      "done": 22,
+      "done": 24,
       "required": 79,
       "phase": "now"
     },
@@ -62,35 +62,35 @@
       "id": "M079",
       "title": "Coherence fixes that wait on no open plan: live Studio edits and honest restores",
       "done": 2,
-      "required": 5,
-      "phase": "now"
+      "required": 2,
+      "phase": "next"
     },
     {
       "id": "M058",
       "title": "Synth voice: audio-rate modulation, drive, macros, filters, templates, presets, mod matrix and one hash epoch",
       "done": 8,
-      "required": 10,
-      "phase": "now"
+      "required": 8,
+      "phase": "next"
     },
     {
       "id": "M060",
       "title": "Audio-band signal lab: readable spectrogram, linked scrolling spectrogram, analytic signal",
       "done": 2,
-      "required": 3,
-      "phase": "now"
+      "required": 2,
+      "phase": "next"
     },
     {
       "id": "M061",
       "title": "Interconnection: live analysis views, sequence exchange, workspace bridges and one keyboard",
       "done": 6,
-      "required": 8,
-      "phase": "now"
+      "required": 6,
+      "phase": "next"
     },
     {
       "id": "M062",
       "title": "Charts: modern, interactive, honest",
       "done": 1,
-      "required": 31,
+      "required": 32,
       "phase": "now"
     },
     {
@@ -118,7 +118,7 @@
       "id": "M067",
       "title": "Instrument wave 2: modulation everywhere, labs, probes, sequencer depth, follower and MEASURE",
       "done": 3,
-      "required": 25,
+      "required": 28,
       "phase": "now"
     },
     {
@@ -132,14 +132,14 @@
       "id": "M069",
       "title": "Instrument wave 3: the XY performance pad, notes clips, MIDI record and out, the session grid",
       "done": 8,
-      "required": 22,
+      "required": 26,
       "phase": "now"
     },
     {
       "id": "M071",
       "title": "Instrument wave 4a: the parameter contract, deep links, the mixer and the full piano",
       "done": 0,
-      "required": 8,
+      "required": 6,
       "phase": "later"
     },
     {
@@ -229,8 +229,8 @@
     {
       "id": "M090",
       "title": "One instrument, one coherent state",
-      "done": 34,
-      "required": 66,
+      "done": 36,
+      "required": 69,
       "phase": "now"
     },
     {
@@ -244,7 +244,7 @@
       "id": "M112",
       "title": "Parameters and controls, wave 2: the menu, the band, the automation hook and the reference, on the Pro shell",
       "done": 0,
-      "required": 4,
+      "required": 3,
       "phase": "later"
     },
     {
@@ -279,8 +279,8 @@
       "id": "M098",
       "title": "The public face: README front page, GitHub shell and a measured library decision",
       "done": 10,
-      "required": 11,
-      "phase": "now"
+      "required": 10,
+      "phase": "next"
     },
     {
       "id": "M099",
@@ -293,7 +293,7 @@
       "id": "M122",
       "title": "The live landing: /oscilla/ opens a playable, derived first workspace on the one engine",
       "done": 1,
-      "required": 3,
+      "required": 4,
       "phase": "now"
     },
     {
@@ -316,13 +316,6 @@
       "done": 0,
       "required": 10,
       "phase": "next"
-    },
-    {
-      "id": "M005",
-      "title": "Specification tail",
-      "done": 7,
-      "required": 13,
-      "phase": "now"
     }
   ]
 }
