@@ -47,9 +47,9 @@ export const NOTE = 'The open milestones of the plan (.ai/repo/project) in its d
 
 /**
  * How long `majordomus plan roadmap --json` may run. On the shared Mac it took 36-86 s at a
- * 1-minute load of 50-110 (2026-11-18), so the old 60 s bound cut it and failed v3.41.4's
- * release:prepare three times; the bound is the measured worst case with twice its headroom,
- * the same as scripts/facts.mjs gives the same command.
+ * 1-minute load of 50-110 (2026-11-18), so the old 60 s bound cut it and failed the next
+ * release's release:prepare three times. The bound is the measured worst case with twice its
+ * headroom, the same as scripts/facts.mjs gives the same command.
  */
 export const ROADMAP_SPAWN_TIMEOUT_MS = 180_000;
 
