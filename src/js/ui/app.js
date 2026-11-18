@@ -13,7 +13,7 @@
 import { shortcutHelp } from './shortcuts.js';
 import { counterpartOf, showsCounterparts } from './counterparts.js';
 import {
-  createShell, GROUP_REGISTRY, NAV_GROUPS, navGroupOf, phonePrimaryOf, relatedHref,
+  createShell, groupCrumbOf, NAV_GROUPS, navGroupOf, phonePrimaryOf, relatedHref,
   WORKSPACE_IDS, WORKSPACE_LABELS, WORKSPACE_REGISTRY, workspaceLang, workspaceOf,
 } from './shell.js';
 import { pageRelatedOf, relatedLang, relatedText } from './cross-links.js';
@@ -452,9 +452,9 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
       const t = this.synth.tabs.find((x) => x.id === this.synth.tab);
       return t ? t.label : '';
     },
+    /** The page header's group crumb (the registry's, shell.js groupCrumbOf). */
     workspaceGroupLabel() {
-      const g = navGroupOf(this.workspace);
-      return g ? GROUP_REGISTRY[g].label : '';
+      return groupCrumbOf(this.workspace);
     },
     /** About's workspace list: every workspace of the registry, in navigation order. */
     aboutWorkspaces() {

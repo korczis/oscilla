@@ -26,4 +26,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-05
-updated_at: 2026-11-10
+updated_at: 2026-11-18T00:07:13Z
+started_at: 2026-11-17T23:56:56Z
+started_event: sha256:d0ac59b3e26505faef9e9913436ac0fb9d8691d02586b5bd4ff59917b02ccb54
+verified_at: 2026-11-18T00:01:42Z
+verified_event: sha256:51a6881491580d3b990777baf81bebc3e7d615bb2a382701f22019c1d6c0b4be
+completed_at: 2026-11-18T00:07:13Z
+completed_event: sha256:3ff59cfad6fa7cec05c444c8cddc41060dc2de30f9e0b98779a8caddfa2aba34
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/release-cadence.test.mjs tests/unit/release-analyze.test.mjs; node scripts/release-cadence.mjs"
+    result: "Audit-and-stamp train A (oscilla-d9, 2026-11-17), re-checked on main 4682eea4 (3abe35bb via T6, #523): 1 a tag with neither record nor Release exits non-zero naming both (fixture v40.10.3 per its current_state; the base main() exits 0 on the same fixture; the test file fails at import on 3abe35bb^); 2 a Release plus record clears, a young record PR clears, a 26 h one does not, naming #530; 3 release-analyze unchanged and lastReleaseTag the same; release-cadence 14/14, release-analyze 25/25, a live run rc 0. 4 the verdict is 523.yaml by oscilla-c3 for oscilla-c1, met under Q111. C3-523-3 (P3) is filed as R056."
+    artifact: ".ai/repo/reviews/523.yaml"
+    commit: 4682eea40739a7b37a7be04d3d19cd7be0dd5226
+    recorded_at: 2026-11-18T00:05:17Z
