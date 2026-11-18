@@ -18,12 +18,14 @@ const PRIMARY = ['seq.toDrums', '#m=synth&amp;yt=drums', 'Krokový sekvencer a p
 const SEQ_MENU = [
   ['seq.toStepBass', '#m=studio&amp;st=step-bass', 'Krokový modulátor ve Studiu'],
   ['seq.toStudio', '#m=studio', 'Otevřít tuto sekvenci ve Studiu'],
-  ['seq.toStudioTemplate', '#m=studio&amp;st=sweep-sequence', 'Šablona Sweep Sequence ve Studiu'],
+  ['seq.toStudioTemplate', '#m=studio&amp;st=sweep-sequence',
+    'Otevřít šablonu Sweep Sequence ve Studiu'],
   ['seq.toSynth', '#m=synth', 'Otevřít Synth'],
 ];
 const FILTER_MENU = [
-  ['filter.toStudio', '#m=studio&amp;st=filter-automation', 'Open Filter Automation in Studio'],
-  ['filter.toSynth', '#m=synth', 'Open the Synth'],
+  ['filter.toStudio', '#m=studio&amp;st=filter-automation',
+    'Otevřít šablonu Filter Automation ve Studiu'],
+  ['filter.toSynth', '#m=synth', 'Otevřít Synth'],
 ];
 
 /** The markup of the element whose start tag carries `attr`, up to its closing tag. */

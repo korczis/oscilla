@@ -19,7 +19,7 @@ import { PATTERN_BY_ID } from '../audio/patterns.js';
 
 // Copy derived from the constants it states (the text is V1's, byte for byte): the lowest sample
 // rate whose safe maximum is above 20 kHz, in kHz with one decimal ('42.1').
-const RATE_FOR_20K_KHZ = ((2 * 20000) / SAFE_NYQUIST_FACTOR / 1000).toFixed(1);
+export const RATE_FOR_20K_KHZ = ((2 * 20000) / SAFE_NYQUIST_FACTOR / 1000).toFixed(1);
 
 // V1: PRESET_CATEGORIES, REFERENCE_NOTES, refPreset (index.html@a7b7a23)
 export const PRESET_CATEGORIES = [

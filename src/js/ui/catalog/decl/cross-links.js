@@ -44,7 +44,7 @@ export default [
   defineComponent({
     id: 'measure.toStudio',
     kind: 'open',
-    label: 'Open Measurement Sweep in Studio',
+    label: 'Otevřít šablonu Measurement Sweep ve Studiu',
     docs: 'Opens the Studio on its Measurement Sweep template.',
     state: 'studio.model',
     effect: { route: 'studio, template measurement-sweep' },
@@ -52,7 +52,7 @@ export default [
   defineComponent({
     id: 'seq.toStudioTemplate',
     kind: 'open',
-    label: 'Šablona Sweep Sequence ve Studiu',
+    label: 'Otevřít šablonu Sweep Sequence ve Studiu',
     docs: 'Opens the Studio on its Sweep Sequence template.',
     state: 'studio.model',
     effect: { route: 'studio, template sweep-sequence' },
@@ -68,7 +68,7 @@ export default [
   defineComponent({
     id: 'filter.toStudio',
     kind: 'open',
-    label: 'Open Filter Automation in Studio',
+    label: 'Otevřít šablonu Filter Automation ve Studiu',
     docs: 'Opens the Studio on its Filter Automation template.',
     state: 'studio.model',
     effect: { route: 'studio, template filter-automation' },
@@ -76,7 +76,7 @@ export default [
   defineComponent({
     id: 'envelope.toStudio',
     kind: 'open',
-    label: 'Open Subtractive Synth in Studio',
+    label: 'Otevřít šablonu Subtractive Synth ve Studiu',
     docs: 'Opens the Studio on its Subtractive Synth template.',
     state: 'studio.model',
     effect: { route: 'studio, template subtractive-synth' },
@@ -84,7 +84,7 @@ export default [
   defineComponent({
     id: 'dual.toStudio',
     kind: 'open',
-    label: 'Open Stereo Beat in Studio',
+    label: 'Otevřít šablonu Stereo Beat ve Studiu',
     docs: 'Opens the Studio on its Stereo Beat template.',
     state: 'studio.model',
     effect: { route: 'studio, template stereo-beat' },
@@ -132,7 +132,7 @@ export default [
   defineComponent({
     id: 'learn.link',
     kind: 'open',
-    label: 'Open the First patch in Studio',
+    label: 'Otevřít šablonu First Patch ve Studiu',
     docs: 'Opens the Studio template a lesson card links to, such as the First patch.',
     state: 'studio.model',
     effect: { route: 'studio, the template of the lesson card' },
@@ -180,7 +180,7 @@ export default [
   defineComponent({
     id: 'filter.toSynth',
     kind: 'open',
-    label: 'Open the Synth',
+    label: 'Otevřít Synth',
     docs: 'Opens the Synth from Filtry to hear a filter shape a voice.',
     state: 'ui.workspace',
     effect: { route: 'synth' },
@@ -188,7 +188,7 @@ export default [
   defineComponent({
     id: 'dual.toSynth',
     kind: 'open',
-    label: 'Open the Synth',
+    label: 'Otevřít Synth',
     docs: 'Opens the Synth from the dual-oscillator lab to play two detuned oscillators.',
     state: 'ui.workspace',
     effect: { route: 'synth' },
@@ -196,7 +196,7 @@ export default [
   defineComponent({
     id: 'presets.toSynth',
     kind: 'open',
-    label: 'Open the Synth',
+    label: 'Otevřít Synth',
     docs: 'Opens the Synth from Předvolby, where the voice has presets of its own.',
     state: 'ui.workspace',
     effect: { route: 'synth' },

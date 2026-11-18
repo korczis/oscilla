@@ -4644,7 +4644,7 @@ function defineChecks() {
           await H.workspace(page, 'playground');
         } else {
           await H.workspace(page, 'learn');
-          await page.locator('[data-osc="learn.demo"]', { hasText: 'Octave steps 125 Hz' }).click();
+          await page.locator('[data-osc="learn.demo"]', { hasText: 'Oktávové kroky 125 Hz' }).click();
           await page.waitForFunction(() => window.OSCILLA.app.workspace === 'playground', null,
             { timeout: 8000 });
         }
