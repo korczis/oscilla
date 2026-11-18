@@ -192,13 +192,20 @@ test('the per-release charts and tables show the newest releases, so grafy/ stay
     assert.ok(Math.abs(size(b[name]) - size(a[name])) <= size(a[name]) * 0.03,
       `${name}: ${size(a[name])} B, ${size(b[name])} B with twice the releases`);
   }
-  // Every windowed chart says so, and the releases chart counts the releases it does not show.
-  if (datedCount(FACTS) > RELEASE_WINDOW) {
-    for (const name of PER_RELEASE) {
-      assert.match(a[name], /posledních \d+ vydání; \d+ starších je ve Změnách\./,
-        name);
-    }
+  // A chart says it is windowed exactly when its series was cut (a tree without history has no
+  // per-release code inventory, so its growth chart is empty and says nothing of a window).
+  const w = windowFacts(FACTS);
+  const omitted = { releases: w.releases?.omitted, size: w.releases?.omitted,
+    growth: w.codeInventory?.omitted, 'claims-trend': w.claimsPerRelease?.omitted,
+    ratchets: w.ratchets?.items?.[0]?.omitted, cadence: w.releaseCadence?.omitted };
+  for (const name of PER_RELEASE) {
+    const said = /posledních \d+ vydání; \d+ starších je ve Změnách\./.test(a[name]);
+    assert.equal(said, (omitted[name] || 0) > 0, `${name}: says its window when cut`);
+  }
+  if ((w.releaseCadence?.omitted || 0) > 0) {
     assert.match(a.cadence, /medián ukázaných intervalů /, 'the median says it is of the shown');
+  }
+  if (datedCount(FACTS) > RELEASE_WINDOW) {
     assert.match(a.releases, new RegExp(`${fmtInt(datedCount(FACTS))}\\. vydání`),
       'the newest point carries its true position');
   }
