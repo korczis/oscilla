@@ -4,6 +4,7 @@ slug: engineering-integrity-orchestration-split-structural-checks
 order: 46
 priority: p2
 problem: "The owner asked for less orchestration entropy and for no hard-coding, mockups or placeholders (conversation 6ac1beb8, 2026-10-04T03:01:41Z). Since then the hotspots grew: on main at 044f98a (before #197) src/js/ui/measure.js is 115 572 B (about 77 kB then), ui/studio/workspace.js 75 076 B, ui/studio/inspector.js 69 711 B and src/index.html 255 020 B, and the V272 final review #197, merged into main as d4bd97f on 2026-10-18, grew the Studio ones further (78 124, 73 184 and 255 382 B on main at d4bd97f, identical to its head 55ae40d); the experiments schema and definition modules import each other; no rule bans placeholders or inert controls; and nothing reports a pull request's size change or a check that passed only on a re-run."
+current_state: "Paused on 2026-11-18 by the plan triage the owner approved in bulk (Q112: 'schvaluji vse', 2026-11-18T02:27Z, Claude Code session 980e22ee-d9d4-4dd0-8318-8b727f127ce9, oscilla-e5; triage derived from origin/main 4682eea4): 24 READY issues with low reach (E004 34, E052 11); only E073 (in progress) and E052 continue, and the hold applies to everything else once E073 lands. The milestone schema stores no status, so the pause is this recorded hold, not a field: no new slice of it is started until a later plan change lifts the hold; work already in flight lands, and landed issues are still stamped."
 outcome: "Every source file stays under a cap with stated headroom that only falls, the three orchestration hotspots and the shell are split with no behaviour change, the import graph is acyclic, the no-placeholder rule is in force with mutation-proven checks, the remaining costs are measured for the owner, and E015 points the intent's criteria at registered claims."
 acceptance_criteria:
   - "Every issue of M046 is done with its evidence; npm run release-gate passes at the last one."
@@ -19,4 +20,4 @@ risks:
   - "M047 and M048 grow files this milestone caps but does not split (src/js/measurement/engine.js, quality.js, src/js/studio/actions.js, validate.js, transport.js): the 10 % headroom of E001 absorbs ordinary growth, and beyond it the feature splits the file first or declares the raise in the baseline's raises ledger."
   - "tests/README.md is a shared index every test-adding issue appends one row to; parallel issues that both append rebase on it, which is a merge, not a design conflict."
 created_at: 2026-10-18
-updated_at: 2026-10-18
+updated_at: 2026-11-18

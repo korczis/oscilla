@@ -3,7 +3,9 @@ title: "Synth voice: audio-rate modulation, drive, macros, filters, templates, p
 slug: synth-voice-audio-rate-modulation-drive-macros-filters-templ
 order: 58
 priority: p1
+superseded_by: "M067"
 problem: "The LFO stops at 100 Hz (src/js/studio/nodes/modulation.js), so FM and AM Playground voices with an audio-rate modulator do not validate; there is no drive, macro, shelf or allpass filter, no unison and no slope; and the templates do not show what the graph can do. The Envelope already has a CONTROL output, so a filter envelope needs only a template."
+current_state: "Merged into M067 on 2026-11-18 by the plan triage the owner approved in bulk (Q112: 'schvaluji vse', 2026-11-18T02:27Z, Claude Code session 980e22ee-d9d4-4dd0-8318-8b727f127ce9, oscilla-e5; triage derived from origin/main 4682eea4): 8 done, 2 blocked and none ready: the tail belongs with instrument wave 2. Its open issues (K021, K245) moved to M067, its done and cancelled issues stay here as history, and intent playable-instrument now names M067 as well, so their serves entries still hold. M067's acceptance criteria carry what is left of this outcome. Undo: remove superseded_by, move the issues back and drop M067 from the intent."
 outcome: "Nodes: audio-rate LFO, Drive, Macro, filter types and brown noise; a hash epoch for unison, slope, sync, quantize and bypass; a template pack and node presets, a mod-matrix table and, in Wave 3, an instrument panel as projections of the model; everything bounded by the output ceiling with a node census of 0 after stop."
 acceptance_criteria:
   - "K010 to K014 and K020 to K022 are done with their evidence; npm run release-gate passes at the last one."
@@ -18,4 +20,4 @@ risks:
   - "The instrument view (sv=instrument) is Wave 3 and not issued: it waits on D3, D4, D8, E003 and E004."
   - "ADR 0058 line 37: OSCILLA is not to become a copy of a commercial synthesizer; D1 reads \"Arturia-like\" as front-panel ergonomics only, so no product name, trade dress or analog-modelling claim appears in any string."
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-18
