@@ -76,8 +76,8 @@ test('T019 F4: the tail level estimate bounds the noise, with the window it was 
   const level = fixedText(Math.ceil(IR.noiseFloorDb), 0);
   assert.ok(v.summary.includes(`odhad úrovně dozvuku ≤ ${level} dB vůči špičce `
     + '(šum nebo nedokončený dozvuk), '), v.summary);
-  assert.doesNotMatch(v.summary, /šumový dozvuk −?\d/);
-  const note = v.notes.find((n) => n.startsWith('Odhad šumového dozvuku: full-overlap-tail'));
+  assert.doesNotMatch(v.summary, /šum na konci odezvy −?\d/);
+  const note = v.notes.find((n) => n.startsWith('Odhad šumu na konci odezvy: full-overlap-tail'));
   assert.ok(note, v.notes.join(' | '));
   assert.ok(note.includes(WINDOW_TEXT), note);
   assert.match(note, /Dozvuk, který tam ještě běží, se počítá jako šum/);
@@ -112,7 +112,7 @@ test('T019: without the stimulus length the window is described, not invented', 
   const v = buildIrView(IR, {});
   assert.match(v.summary,
     /odhad úrovně dozvuku ≤ -?−?\d+ dB vůči špičce \(šum nebo nedokončený dozvuk\)/);
-  const note = v.notes.find((n) => n.startsWith('Odhad šumového dozvuku: full-overlap-tail'));
+  const note = v.notes.find((n) => n.startsWith('Odhad šumu na konci odezvy: full-overlap-tail'));
   assert.match(note, /posledních 10 % zpoždění, při nichž celý stimul leží uvnitř záznamu/);
   assert.doesNotMatch(note, /\d ms až /);
   assert.match(note, /prodlužte post-roll/);
@@ -127,7 +127,7 @@ test('T019: a capped IR states the window of the full IR it was read on', () => 
   assert.ok(capped.truncation);
   assert.deepEqual(irNoiseFloorWindow(capped, FRAMES), irNoiseFloorWindow(IR, FRAMES));
   const note = buildIrView(capped, { stimulusFrames: FRAMES }).notes
-    .find((n) => n.startsWith('Odhad šumového dozvuku'));
+    .find((n) => n.startsWith('Odhad šumu na konci odezvy'));
   assert.ok(note.includes(WINDOW_TEXT), note);
 });
 
@@ -142,7 +142,7 @@ test('T019 R1: the bound is stated as an estimate with its scatter, never uncond
     ['no stimulus length', IR, {}], ['capped', capIrLength(IR, 4096), { stimulusFrames: FRAMES }],
     ['dB, normalized', IR, { stimulusFrames: FRAMES, scale: 'db', normalize: true }]]) {
     const v = buildIrView(ir, opts);
-    const note = v.notes.find((n) => n.startsWith('Odhad šumového dozvuku: full-overlap-tail'));
+    const note = v.notes.find((n) => n.startsWith('Odhad šumu na konci odezvy: full-overlap-tail'));
     assert.ok(note && note.includes(SCATTER), `${name}: ${note}`);
     const text = `${v.summary} ${v.notes.join(' ')}`;
     assert.doesNotMatch(text, /so the level is an upper bound/, name);
@@ -173,7 +173,7 @@ function assertTailStated(name, ir) {
   const v = buildIrView(ir, { scale: 'db', stimulusFrames: FRAMES });
   const ms = (t) => msText(t * 1000, 1000 / SR);
   const where = `${ms(w[0])} až ${ms(w[1])} po špičce`;
-  const note = v.notes.find((n) => n.startsWith('Odhad šumového dozvuku: full-overlap-tail'));
+  const note = v.notes.find((n) => n.startsWith('Odhad šumu na konci odezvy: full-overlap-tail'));
   assert.ok(note && note.includes(where) && note.includes(SCATTER), `${name}: ${note}`);
   const level = fixedText(Math.ceil(ir.noiseFloorDb) || 0, 0);
   assert.ok(v.summary.includes(`odhad úrovně dozvuku ≤ ${level} dB vůči špičce `
@@ -196,7 +196,7 @@ test('T019 R3: a clipped capture states the same window as the unclipped one', (
   const w = assertTailStated('clipped', ir);
   assert.deepEqual(w, irNoiseFloorWindow(computeImpulseResponse(deltaCapture()), FRAMES));
   const note = buildIrView(ir, { stimulusFrames: FRAMES }).notes
-    .find((n) => n.startsWith('Odhad šumového dozvuku'));
+    .find((n) => n.startsWith('Odhad šumu na konci odezvy'));
   assert.ok(note.includes(WINDOW_TEXT), note);
 });
 
@@ -210,7 +210,7 @@ test('T019 R3: the minimum window is IR_NOISE_MIN_SAMPLES lags; one fewer reads 
   const none = computeImpulseResponse(deltaCapture({ post: MIN - 1 }));
   assert.equal(none.noiseFloorMethod, 'none');
   assert.equal(irNoiseFloorWindow(none, FRAMES), null);
-  assert.match(buildIrView(none, { stimulusFrames: FRAMES }).summary, /šumový dozvuk není k dispozici/);
+  assert.match(buildIrView(none, { stimulusFrames: FRAMES }).summary, /šum na konci odezvy není k dispozici/);
 });
 
 test('T019 negative: a null floor still reads "not available", with no bound and no window',
@@ -221,8 +221,8 @@ test('T019 negative: a null floor still reads "not available", with no bound and
     assert.equal(none.noiseFloorMethod, 'none');
     assert.equal(irNoiseFloorWindow(none, FRAMES), null);
     const v = buildIrView(none, { scale: 'db', stimulusFrames: FRAMES });
-    assert.match(v.summary, /šumový dozvuk není k dispozici, /);
-    assert.ok(v.notes.includes('Šumový dozvuk: není k dispozici.'));
+    assert.match(v.summary, /šum na konci odezvy není k dispozici, /);
+    assert.ok(v.notes.includes('Šum na konci odezvy: není k dispozici.'));
     assert.doesNotMatch(v.summary + v.notes.join(' '), /≤|horní mez|ms až /);
   });
 
@@ -248,7 +248,7 @@ test('T019 negative: stored IR results are unchanged (no new field, same floor)'
   assert.ok(!('noiseFloorMethod' in v1));
   assert.equal(irNoiseFloorWindow(v1, FRAMES), null);
   const v = buildIrView(v1, { stimulusFrames: FRAMES });
-  assert.ok(v.summary.includes(`šumový dozvuk ${fixedText(v1.noiseFloorDb, 0)} dB vůči špičce, `),
+  assert.ok(v.summary.includes(`šum na konci odezvy ${fixedText(v1.noiseFloorDb, 0)} dB vůči špičce, `),
     v.summary);
   assert.doesNotMatch(v.summary, /≤/);
 });
@@ -278,7 +278,7 @@ const windowText48 = (frames) => {
   const w = irNoiseFloorWindow(IR48, frames);
   return w ? `${ms48(w[0])} až ${ms48(w[1])} po špičce` : null;
 };
-const tailNote = (notes) => notes.find((n) => n.startsWith('Odhad šumového dozvuku: full-overlap-tail'));
+const tailNote = (notes) => notes.find((n) => n.startsWith('Odhad šumu na konci odezvy: full-overlap-tail'));
 
 /** The IR panel the MEASURE adapter builds for a shown source (views.js rebuildIr). */
 function irPanelOf(src) {

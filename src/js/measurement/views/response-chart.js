@@ -64,7 +64,7 @@ import {
 /** Y-axis title of a raw (not normalized) response. */
 export const RESPONSE_Y_LABEL = 'Velikost · dB relativně';
 /** Y-axis title of a normalized response. */
-export const RESPONSE_Y_LABEL_NORMALIZED = 'NORMALIZED velikost · dB vůči referenci';
+export const RESPONSE_Y_LABEL_NORMALIZED = 'NORMALIZOVANÁ velikost · dB vůči referenci';
 /** Shown when a valid level calibration exists: it does not turn a ratio into dB SPL. */
 /** A curve's kind in a Czech sentence (the kinds stay the data values, QUANTITY_KINDS). */
 const KIND_WORDS = Object.freeze({ OBSERVED: 'naměřená', CALIBRATED: 'kalibrovaná',
@@ -212,7 +212,7 @@ export function responseSource(src, { profile = null, useCalibration = true } = 
           name: ref.name || profile.name || null, algorithm: c.algorithm };
       } else {
         correctionNote = `Frekvenční profil „${ref.name || UNAVAILABLE.UNKNOWN}“ není načten: `
-          + `křivka CALIBRATED je ${UNAVAILABLE.UNAVAILABLE}; zobrazeno RAW.`;
+          + 'kalibrovaná křivka není k dispozici; zobrazena surová křivka.';
       }
     }
   }
@@ -570,7 +570,7 @@ function noCoverageText(f, s) {
   return `Frekvenční profil "${c.name || UNAVAILABLE.UNKNOWN}"${pts} nepokrývá žádný z `
     + `${f.length} měřených bodů (${gridFrequencyText(f, 0, s.binHz)}–`
     + `${gridFrequencyText(f, f.length - 1, s.binHz)}): žádný bod není korigován (bez `
-    + 'extrapolace); zobrazeno RAW, nekalibrováno.';
+    + 'extrapolace); zobrazena surová křivka, nekalibrováno.';
 }
 
 /**
