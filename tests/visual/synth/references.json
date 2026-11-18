@@ -430,6 +430,21 @@
           "runs": 10,
           "px": 0,
           "faint": 0
+        },
+        "desktop-engines-light": {
+          "runs": 10,
+          "px": 0,
+          "faint": 50
+        },
+        "desktop-xy-dark": {
+          "runs": 10,
+          "px": 0,
+          "faint": 0
+        },
+        "desktop-xy-light": {
+          "runs": 10,
+          "px": 0,
+          "faint": 43
         }
       },
       "seeds": {
