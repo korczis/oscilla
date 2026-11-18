@@ -23,4 +23,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-12'
-updated_at: '2026-11-12'
+updated_at: 2026-11-18T06:22:48Z
+started_at: 2026-11-18T06:18:09Z
+started_event: sha256:8cb5a60229ebc1c78bc8cb71cdcf1ebe9812d296efd49b0c98099cc2dc4622a4
+verified_at: 2026-11-18T06:18:53Z
+verified_event: sha256:17d83e23794b154aaa8aef6bee1ffc4b7f9c3caaa6737fb2ba38366f23a38bc5
+completed_at: 2026-11-18T06:22:48Z
+completed_event: sha256:40e4f04d723e66f49f8a5813ef7e5dea6ee8c83ac0d6b386870b33caa500ede8
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/shell-lang.test.mjs tests/unit/czech-prose-short.test.mjs tests/unit/workspace-registry.test.mjs; npm run test:browser (link-integrity)"
+    result: "Audit-and-stamp train B (oscilla-43, 2026-11-18), criteria re-checked on main f525fff0: 1 src/index.html:2 lang=cs, shell-lang.test.mjs:194/211/251 (every English node in the shell regions derived from decl/shell.js carries lang=en, with a mutation), 6/6 on trunk, 4 fail on 474ce9c3's src, #558 fail-first passed; 2 Czech workspace labels with Studio, Synth and Playground kept as names, hashes unchanged, link-integrity green in Main checks 44238297451 (Browser gate chromium/firefox/webkit), short-English ratchet 1763 -> 1713, czech-prose-short 4/4, workspace-registry 14/14; 3 verdict merge by oscilla-c3 judging every screen's first impression (558.yaml), visual re-accept 8cd09f5a states its reason per gate, Visual regression passed on #558."
+    artifact: ".ai/repo/reviews/558.yaml"
+    commit: f525fff055b02e648ad4acedf5f45366f2fff380
+    recorded_at: 2026-11-18T06:22:20Z
