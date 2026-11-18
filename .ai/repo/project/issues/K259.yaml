@@ -1,0 +1,28 @@
+id: K259
+milestone: M064
+serves:
+  - "connected-instrument#synth-panel"
+title: "The Synth's module plates leave empty bands at three or more columns: auto-fill rows grow to the tallest plate"
+slug: synth-plate-grid-empty-bands
+priority: p3
+profile: implementation
+objective: "The Synth panel's module plates stand in one CSS grid, PLATE_GRID of src/js/synth/ui.js (grid-cols-[repeat(auto-fill,minmax(min(100%,16.5rem),1fr))]): every row is as tall as its tallest plate, so a short plate beside a tall one leaves an empty band below it. At two columns the bands are small; at three or more they add up: the desktop bay capture of scripts/visual-synth.mjs grows from 1536x2394 to 1536x2950 px when the content becomes 1248 px wide (PR #601, F002 shell:main), and main already shows it at 1920 px. Pack the plates without the empty bands (grid-auto-flow dense with plates that span rows by height, a column flow such as CSS columns or a masonry-like layout, or another arrangement), keeping the plates' reading order a user can follow, the keyboard order, the section nav's scroll targets and the bay beside them, and re-accept the SYN references with the reason."
+why: "oscilla-c3's review of PR #601 (2026-11-18): the three-column grid at 1536 px is the intended outcome of the Pro page frame (2 columns there was an accident of 1228 px of content), but its empty bands make the bay page 556 px taller than its plates need; a follow-up, not #601's."
+current_state: "Filed 2026-11-18 by the F002 shell:main builder (session 980e22ee-d9d4-4dd0-8318-8b727f127ce9) on feat/f002-pro-page-frame from oscilla-c3's condition; the SYN linux-x64 references were re-accepted with three columns there."
+scope:
+  - "src/js/synth/ui.js"
+  - "tests/visual/synth"
+  - "tests/browser/synth.cjs"
+depends_on: []
+acceptance_criteria:
+  - "At 1536 and 1920 px the Synth panel face shows no empty band taller than the grid gap below any plate, and the plates keep a reading and keyboard order that follows the section nav."
+  - "The section nav still scrolls each module plate into view below it (synth.cjs), and the Synth's phone layout is unchanged."
+  - "The SYN visual references are re-accepted with the reason, in CI's linux-x64 environment."
+validation:
+  - "npm test"
+  - "node tests/browser/synth.cjs"
+  - "node scripts/visual-synth.mjs dist"
+evidence_required:
+  - "verified"
+created_at: '2026-11-18'
+updated_at: '2026-11-18'
