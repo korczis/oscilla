@@ -460,6 +460,16 @@
           "runs": 10,
           "px": 0,
           "faint": 11
+        },
+        "phone-xy-light": {
+          "runs": 10,
+          "px": 0,
+          "faint": 6
+        },
+        "desktop-bay-dark": {
+          "runs": 10,
+          "px": 0,
+          "faint": 19
         }
       },
       "seeds": {
