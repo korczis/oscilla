@@ -965,10 +965,10 @@
          option A): the same panel and state, not a copy; the measurement runs here
          (measureRunPrimary opens MEASURE first). It stands between the Playground's rows, so
          reading and Tab order follow them. -->
-    <section class="osc-view osc-view--measure px-4 pt-6 pb-6" id="osc-view-measure" data-osc="measure-view"
+    <section class="osc-view osc-view--measure" id="osc-view-measure" data-osc="measure-view"
       data-osc-modes="measure" hidden
       :hidden="workspace !== 'measure' && workspace !== 'playground'"
-      :class="workspace !== 'measure' && '!p-0'"
+      :class="[PRO.pageView, workspace !== 'measure' && '!p-0']"
       aria-labelledby="osc-measure-title" tabindex="-1">
       <h2 class="osc-sr-only" id="osc-measure-title">Měření</h2>
       <p class="osc-sr-only" role="status" aria-live="polite" aria-atomic="true"
@@ -2191,7 +2191,7 @@
 
     <!-- Full-width workspace views -->
     <!-- EXPERIMENTS (V3): local experiment management -->
-    <section class="osc-view osc-view--experiments px-4 pt-6 pb-6" id="osc-view-experiments" data-osc="experiments-view"
+    <section class="osc-view osc-view--experiments" :class="PRO.pageView" id="osc-view-experiments" data-osc="experiments-view"
       data-osc-modes="experiments" hidden :hidden="workspace !== 'experiments'"
       aria-labelledby="osc-exp-title" tabindex="-1">
       <h2 class="osc-sr-only" id="osc-exp-title">Experimenty</h2>
@@ -2581,7 +2581,7 @@
         </section>
       </div>
     </section>
-    <section class="px-4 pt-6 pb-6" id="osc-view-learn" data-osc="learn-view"
+    <section :class="PRO.pageView" id="osc-view-learn" data-osc="learn-view"
       data-osc-modes="learn" hidden :hidden="mode !== 'learn'" aria-labelledby="osc-learn-title"
       tabindex="-1">
       <h2 class="sr-only" id="osc-learn-title">Výuka</h2>
@@ -2621,7 +2621,7 @@
         </ul>
       </div>
     </section>
-    <section class="px-4 pt-6 pb-6" id="osc-view-presets" data-osc="presets-view"
+    <section :class="PRO.pageView" id="osc-view-presets" data-osc="presets-view"
       data-osc-modes="presets" hidden :hidden="mode !== 'presets'"
       aria-labelledby="osc-presets-title" tabindex="-1">
       <h2 class="sr-only" id="osc-presets-title">Předvolby</h2>
@@ -2726,7 +2726,7 @@
          src/js/ui/studio/workspace.js): every module plate, knob, switch and jack is generated
          from src/js/synth/panels/semi-mono.js and the registry's node descriptors. The keyboard
          docks at the bottom here and plays the panel. -->
-    <section class="px-4 pt-6 pb-[max(1.5rem,var(--osc-dock-h,20rem))]" id="osc-view-synth" data-osc="synth-view"
+    <section class="pb-[max(1.5rem,var(--osc-dock-h,20rem))]" :class="PRO.page" id="osc-view-synth" data-osc="synth-view"
       data-osc-modes="synth" hidden :hidden="workspace !== 'synth'"
       aria-labelledby="osc-synth-title" tabindex="-1">
       <!-- U108: below md the insert alert comes first (order), clear of the dock. -->
@@ -2819,7 +2819,7 @@
          editor, node library, Inspector and compact widget are rendered by their modules from
          the ONE Studio store; the timeline region belongs to src/js/ui/studio/timeline-editor.js
          (spec §131-§136). Below 768 px one of GRAPH / TIMELINE / INSPECTOR is shown at a time. -->
-    <section class="osc-view osc-view--studio box-border px-4 pt-6 !pb-[max(0px,calc(var(--osc-dock-h,0px)_-_var(--osc-statusbar-h)))]" id="osc-view-studio" data-osc="studio-view"
+    <section class="osc-view osc-view--studio box-border !pb-[max(0px,calc(var(--osc-dock-h,0px)_-_var(--osc-statusbar-h)))]" :class="PRO.pageView" id="osc-view-studio" data-osc="studio-view"
       data-osc-modes="studio" hidden :hidden="workspace !== 'studio'" :data-subview="studio.subview"
       aria-labelledby="osc-studio-title" tabindex="-1">
       <h2 class="osc-sr-only" id="osc-studio-title">Studio</h2>
@@ -2983,7 +2983,7 @@
     <!-- ---------- About: the instrument explaining itself ----------
          Static, semantic copy (no text lives in canvas or script). The provenance times are
          commit timestamps; tests/unit/about-provenance.test.mjs checks them against git. -->
-    <section class="osc-view osc-view--about osc-about px-4 pt-6 pb-6" id="osc-view-about" data-osc="about-view"
+    <section class="osc-view osc-view--about osc-about" :class="PRO.pageView" id="osc-view-about" data-osc="about-view"
       data-osc-modes="about" hidden :hidden="workspace !== 'about'"
       aria-labelledby="osc-about-title" tabindex="-1">
 

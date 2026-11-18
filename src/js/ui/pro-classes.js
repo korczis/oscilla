@@ -10,6 +10,8 @@ const BTN = 'inline-flex items-center justify-center px-3 text-sm font-medium ro
 const BTN_XS = 'inline-flex items-center justify-center px-2 text-xs font-medium rounded-lg '
   + 'min-h-6 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11 '
   + 'focus:outline-none focus:ring-4';
+// The one Pro page frame (PRO_STRUCTURE.page of scripts/ui-flowbite-pro-measure.mjs).
+const PAGE = 'px-4 pt-6';
 const SECONDARY = 'text-gray-900 bg-white border border-gray-200 hover:bg-gray-100 '
   + 'hover:text-primary-700 focus:ring-gray-100 dark:bg-gray-800 dark:text-gray-400 '
   + 'dark:border-gray-600 dark:hover:text-white dark:hover:bg-gray-700 dark:focus:ring-gray-700';
@@ -51,11 +53,14 @@ export const PRO = Object.freeze({
   tabOn: 'text-primary-700 border-primary-700 dark:text-primary-500 dark:border-primary-500',
   tabOff: 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 '
     + 'dark:text-gray-400 dark:hover:text-gray-300',
-  /** The one Pro page frame every workspace stands in (PRO_STRUCTURE.page of
-   *  scripts/ui-flowbite-pro-measure.mjs, owner decision Q110): a view of its own carries it in
-   *  its class, <main> carries it for a workspace whose panels stand in its grid (shell.js
-   *  mainFrameOf). The page's visible title is the page header's alone. */
-  page: 'px-4 pt-6',
+  /** The one Pro page frame every workspace stands in (owner decision Q110): a view of its own
+   *  binds PRO.pageView on its root through :class, where the Pro measure reads it; <main> carries
+   *  it for a workspace whose panels stand in its grid (shell.js mainFrameOf). The page's
+   *  visible title is the page header's alone. */
+  page: PAGE,
+  /** The frame with its bottom gutter: what every view of its own binds (the Synth, whose
+   *  bottom keeps the docked keys' band, binds PRO.page). */
+  pageView: `${PAGE} pb-6`,
 });
 
 /** The Alpine part: PRO for the markup's :class bindings. */

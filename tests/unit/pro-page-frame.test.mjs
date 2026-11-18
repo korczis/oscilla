@@ -10,7 +10,9 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { mainFrameOf, ownsViewOf, WORKSPACE_IDS } from '../../src/js/ui/shell.js';
 import { PRO } from '../../src/js/ui/pro-classes.js';
-import { PRO_STRUCTURE } from '../../scripts/ui-flowbite-pro-measure.mjs';
+import {
+  boundProClasses, openingTags, PRO_STRUCTURE,
+} from '../../scripts/ui-flowbite-pro-measure.mjs';
 
 const ROOT = new URL('../..', import.meta.url).pathname;
 const read = (p) => readFileSync(join(ROOT, p), 'utf8');
@@ -22,6 +24,10 @@ const classesOf = (tag) => new Set(((tag.match(/\sclass="([^"]*)"/) || [])[1] ||
 /** id -> the opening tag of <section id="osc-view-<id>">, for every view of the markup. */
 const VIEWS = new Map([...HTML.matchAll(/<section\b[^>]*\bid="osc-view-([\w-]+)"[^>]*>/g)]
   .map((m) => [m[1], m[0]]));
+/** A view's attributes, as the Pro measure reads them. */
+const attrsOf = (tag) => openingTags(tag)[0].attrs;
+/** A view's frame classes: what it binds through PRO, as the Pro measure resolves it. */
+const frameOf = (tag) => new Set(boundProClasses(attrsOf(tag)));
 const MAIN = HTML.match(/<main\b[^>]*\bid="osc-main"[^>]*>/)[0];
 
 /** The rules of every stylesheet under src/styles, comments removed: [{ file, sel, body }]. */
@@ -30,8 +36,10 @@ const RULES = readdirSync(join(ROOT, 'src/styles')).filter((f) => f.endsWith('.c
     .matchAll(/([^{}@;]+)\{([^{}]*)\}/g)]
     .map((m) => ({ file, sel: m[1].trim(), body: m[2] })));
 // What frames a box: its padding, margin, border, background and, for a view, its least height.
-const MAIN_FRAME = /(^|;)\s*(padding|padding-[a-z]+|margin|margin-[a-z]+|border|border-[a-z-]+|background|background-color)\s*:/;
-const VIEW_FRAME = /(^|;)\s*(padding|padding-[a-z]+|margin|margin-[a-z]+|border|border-[a-z-]+|background|background-color|min-height)\s*:/;
+const FRAME_PROPS = 'padding|padding-[a-z]+|margin|margin-[a-z]+|border|border-[a-z-]+'
+  + '|background|background-color';
+const MAIN_FRAME = new RegExp(`(^|;)\\s*(${FRAME_PROPS})\\s*:`);
+const VIEW_FRAME = new RegExp(`(^|;)\\s*(${FRAME_PROPS}|min-height)\\s*:`);
 
 test('PRO.page is the Pro page structure the ratchet judges a page by', () => {
   assert.ok(PRO_STRUCTURE.page.some((set) => set.length === FRAME.length
@@ -43,14 +51,38 @@ test('every workspace of the registry stands in the one Pro page frame', () => {
     if (ownsViewOf(id)) {
       const tag = VIEWS.get(id);
       assert.ok(tag, `${id} is a view in the registry, so src/index.html has #osc-view-${id}`);
-      const cls = classesOf(tag);
-      for (const c of FRAME) assert.ok(cls.has(c), `#osc-view-${id} carries ${c} (PRO.page)`);
+      const cls = frameOf(tag);
+      for (const c of FRAME) assert.ok(cls.has(c), `#osc-view-${id} binds ${c} (PRO.page)`);
       assert.equal(mainFrameOf(id), '', `${id}: <main> adds no second frame around its view`);
     } else {
       assert.ok(!VIEWS.has(id), `${id} has a view in the markup: mark it view: true`);
       const frame = mainFrameOf(id).split(/\s+/);
-      for (const c of FRAME) assert.ok(frame.includes(c), `${id}: <main> carries ${c}`);
+      for (const c of PRO.pageView.split(/\s+/)) {
+        assert.ok(frame.includes(c), `${id}: <main> carries ${c} (PRO.pageView)`);
+      }
     }
+  }
+});
+
+test('the frame has one source: every view binds a PRO token, none repeats its classes', () => {
+  // The review of 2c0fcf43 (P1 DRY): the frame's classes are written once, in
+  // src/js/ui/pro-classes.js; a view binds PRO.pageView (the Synth PRO.page: its bottom keeps
+  // the docked keys' band) unconditionally on its root, where the Pro measure reads it.
+  assert.equal(PRO.pageView, `${PRO.page} pb-6`);
+  for (const [id, tag] of VIEWS) {
+    const attrs = attrsOf(tag);
+    const own = classesOf(tag);
+    for (const c of [...FRAME, 'pb-6']) {
+      assert.ok(!own.has(c), `#osc-view-${id} repeats the frame class ${c} literally`);
+    }
+    const via = /PRO\.(pageView|page)\b/.exec(attrs[':class'] || '');
+    assert.ok(via, `#osc-view-${id} binds PRO.pageView or PRO.page`);
+    assert.deepEqual(boundProClasses(attrs), PRO[via[1]].split(/\s+/),
+      `#osc-view-${id} binds PRO.${via[1]} unconditionally (the measure resolves it)`);
+  }
+  const literal = /\bpx-4 pt-6\b/;
+  for (const m of HTML.matchAll(/<section\b[^>]*\bid="osc-view-[\w-]+"[^>]*>/g)) {
+    assert.doesNotMatch(m[0], literal, 'no view writes the frame literally');
   }
 });
 
@@ -102,7 +134,7 @@ test('the measure view, shown on the Playground too, drops its frame there', () 
   // Its :hidden lets it show on another workspace; there it stands in <main>'s frame.
   const tag = VIEWS.get('measure');
   assert.match(tag, /:hidden="workspace !== 'measure' && workspace !== 'playground'"/);
-  assert.match(tag, /:class="workspace !== 'measure' && '!p-0'"/);
+  assert.match(tag, /:class="\[PRO\.pageView, workspace !== 'measure' && '!p-0'\]"/);
   for (const [id, t] of VIEWS) {
     if (id === 'measure') continue;
     const hidden = (t.match(/:hidden="([^"]*)"/) || [])[1] || '';
@@ -128,6 +160,7 @@ test('the visible page title is the page header\'s alone', () => {
   // The Synth's tab, once an in-view "Synth / <tab>", is the page header's last crumb.
   const header = HTML.slice(HTML.indexOf('data-osc="page.header"'),
     HTML.indexOf('data-osc="page.summary"'));
-  assert.match(header, /aria-current="page" x-show="workspaceTabLabel\(\)"[\s\S]*?x-text="workspaceTabLabel\(\)"/);
+  assert.match(header,
+    /aria-current="page" x-show="workspaceTabLabel\(\)"[\s\S]*?x-text="workspaceTabLabel\(\)"/);
   assert.match(read('src/js/ui/app.js'), /workspaceTabLabel\(\) \{[\s\S]*?synth\.tabs\.find/);
 });

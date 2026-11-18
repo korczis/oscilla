@@ -247,7 +247,7 @@ export function ownsViewOf(id) {
  * view of its own, which carries the frame (Q110: one frame, never two nested).
  */
 export function mainFrameOf(id) {
-  return ownsViewOf(id) ? '' : `${PRO.page} pb-6 scroll-pt-6`;
+  return ownsViewOf(id) ? '' : `${PRO.pageView} scroll-pt-6`;
 }
 
 /**
