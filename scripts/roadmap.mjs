@@ -45,10 +45,19 @@ export const NOTE = 'The open milestones of the plan (.ai/repo/project) in its d
   + 'Written by scripts/roadmap.mjs, which release:prepare runs before its build; About '
   + 'renders it from the bundle. Do not edit by hand.';
 
+/**
+ * How long `majordomus plan roadmap --json` may run. On the shared Mac it took 36-86 s at a
+ * 1-minute load of 50-110 (2026-11-18), so the old 60 s bound cut it and failed the next
+ * release's release:prepare three times. The bound is the measured worst case with twice its
+ * headroom, the same as scripts/facts.mjs gives the same command.
+ */
+export const ROADMAP_SPAWN_TIMEOUT_MS = 180_000;
+
 /** The plan as Majordomus derives it: `majordomus plan roadmap --json` run in `root`. */
 export function planRoadmap(root = ROOT) {
   const r = spawnSync('majordomus', ['plan', 'roadmap', '--json'],
-    { cwd: root, encoding: 'utf8', timeout: 60_000, maxBuffer: 64 * 1024 * 1024 });
+    { cwd: root, encoding: 'utf8', timeout: ROADMAP_SPAWN_TIMEOUT_MS,
+      maxBuffer: 64 * 1024 * 1024 });
   if (r.error) throw new Error(`majordomus plan roadmap --json: ${r.error.message}`);
   if (r.status !== 0) {
     throw new Error(`majordomus plan roadmap --json exited ${r.status}: `
