@@ -1,0 +1,33 @@
+id: K257
+milestone: M064
+serves:
+- "connected-instrument#synth-panel"
+- "connected-instrument#piano-keyboard"
+- "connected-instrument#one-transport"
+title: "Blur, a page hide and Escape released as real events through the playback bus in one Keys unit test"
+slug: blur-hide-escape-real-events-through-the-bus
+priority: p2
+profile: implementation
+objective: "Lands as fix(synth) or test(synth). The page-hide listener pair inline in src/js/main.js (:706-709 on 8e087873) moves into an importable binder next to the bus (for example bindPageStops({ win, doc, bus }) in src/js/core/output-bus.js), called by main.js with no change in behaviour. synth-keys's AC4 case then dispatches a window blur, a document visibilitychange with hidden true and an Escape keydown through bindPageKeys and createKeyDispatcher, with the Synth armed; each leaves no held note in live-notes.js, the Keys gate closed and a census of 0 after stop. The test fails when the binder or the Escape binding is cut."
+why: "Split from K060 (criteria 4, copied verbatim) by the audit-and-stamp follow-up train of 2026-11-18 (oscilla-d9, under the triage the owner approved on 2026-11-18, relayed by oscilla-e5, Q112). Re-run on main 8e087873: only blur is an event in synth-keys (:345); hide and Escape call bus.stopAll directly (:346-347), and visibilitychange is checked only by a regex over main.js (stop-path:110-111). Found by the audit of 2026-11-11 and confirmed here."
+current_state: "Filed 2026-11-18 by oscilla-d9 in the audit-and-stamp follow-up train; not started."
+scope:
+- src/js/main.js
+- src/js/core/output-bus.js
+- tests/unit/synth-keys.test.mjs
+- tests/unit/stop-path.test.mjs
+- tests/README.md
+- dist
+depends_on: []
+acceptance_criteria:
+- "Releasing on blur, visibilitychange to hidden and Escape leaves no held note in src/js/studio/live-notes.js and a node census of 0 after stop, in the same unit test, which injects those window events into the shipped release path (src/js/midi/ui.js, src/js/synth/ui.js) with the Synth armed."
+- "(added) Since C050 the shipped release path is the playback bus (src/js/core/output-bus.js stopAll and onStop, reached from the page binder and the key registry's page.escape); the test injects the three events there, and a mutation that drops the binder or the Escape binding fails it."
+- "(added) tests/unit/stop-path.test.mjs still proves that no page-level Escape, pagehide or visibilitychange listener stops sound off the bus."
+- "(added) Fail-first: the event cases fail on the merge base; the tests/README.md synth-keys row is corrected (no Chord, which K116 owns; the three events through the bus); dist is rebuilt and build:check passes."
+validation:
+- node --test tests/unit/synth-keys.test.mjs tests/unit/stop-path.test.mjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-11-18'
+updated_at: '2026-11-18'

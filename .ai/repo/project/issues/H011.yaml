@@ -1,0 +1,25 @@
+id: H011
+milestone: M079
+serves:
+- "v31-studio#click-free-live-edit"
+title: "The Inspector waveform edit's negative cases: a Level edit leaves the voice alone and an edit while stopped schedules nothing"
+slug: inspector-waveform-edit-negative-cases
+priority: p2
+profile: implementation
+objective: "Lands as test(studio). Fake-context unit cases next to H001's in tests/unit/v31-studio-transport.test.mjs: a Level edit causes no node replacement and changes only the level; a waveform edit while stopped schedules no voice and builds no node. Census 0 (v31-studio-transport.test.mjs:618-623) and the click bound (waveform-live noClick, CLICK_MAX 3) are already proven and are cited, not rebuilt."
+why: "Split from H001 (criteria 3, copied verbatim) by the audit-and-stamp follow-up train of 2026-11-18 (oscilla-d9, under the triage the owner approved on 2026-11-18, relayed by oscilla-e5, Q112). Re-run on main 8e087873: two of criterion 3's four negatives (census 0, no click) are proven; the Level edit and the stopped edit have no test."
+current_state: "Filed 2026-11-18 by oscilla-d9 in the audit-and-stamp follow-up train; not started."
+scope:
+- tests/unit/v31-studio-transport.test.mjs
+- tests/README.md
+depends_on: []
+acceptance_criteria:
+- "Negative cases, each asserted: a non-structural edit (Level) is unchanged; an edit while stopped schedules nothing; after stop the engine node census is 0 (project.audio-engine-discipline v2); the edit adds no click beyond the threshold of the existing waveformReplace check."
+- "(added) Each new case names the mutation it catches (a Level edit that rebuilds the node; a stopped edit that starts a voice) and fails under it."
+validation:
+- node --test tests/unit/v31-studio-transport.test.mjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-11-18'
+updated_at: '2026-11-18'

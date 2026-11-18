@@ -8,7 +8,7 @@ priority: p3
 profile: implementation
 objective: "midi.cjs's focusOffEditors takes the focus out of the editors by force-clicking keyboard.readout; on the Playground at 1280x720 that readout sits about 2000 px down #osc-app (2706..2721, inside the static keyboard 2646..2869), so the click depends on Playwright scrolling it into view. #547's run 43646763226 attempt 1 failed [firefox/file] midi-run with 'locator.click: Element is outside of the viewport' (scrolling into view if needed / done scrolling), attempt 2 passed. oscilla-c3's classification (2026-11-15), verbatim: \"midi-run [firefox/file], 'Element is outside of the viewport', is undetermined and not attributed to T20: Linux container, CI's null audio sink, midi.cjs --browsers firefox --origins file, alternating: T20 14/14 ALL PASS and main 14/14 ALL PASS. That's 6 rounds quiet (load ~1.5) and 8 with the 6-CPU VM saturated (load ~9-10). The readout's geometry is the same on both trees on the Mac. On CI it's seen once in 7 firefox legs that ran midi. No control failed in any round, so by my own rule this doesn't prove a pre-existing race either.\" Its flake ledger row: run 43646763226, Browser leg 1 (firefox), 1: failure, 2: success; its cause is this issue."
 why: "A required firefox leg failed once on a click that depends on scrolling an off-screen readout into view; the function already has a blur branch that needs no scroll."
-current_state: "Open. Filed 2026-11-15 by oscilla-43 from oscilla-c3's classification on #547; the midi suite's owner builds it, not train T20. Built by oscilla-ff (session cae276ab-2d90-45d2-babb-a1f8023668d2) on fix/e073-midi-focus-off-editors from #560's head, on the owner's order of 2026-11-15, verbatim: \"pokracuj s implementaci dalsich nedokoncenych veci - trains/prs/issuessession-contexts\": focusOffEditors clicks the readout only where it is wholly inside the viewport and blurs otherwise, and throws if a click scrolled the page; midi.cjs in chromium, firefox and webkit, file and http, 733 checks passed, the 3 failures the hardware ones on the Mac (as on main)."
+current_state: "Re-checked on main 8e087873 in the audit-and-stamp follow-up train (oscilla-d9, 2026-11-18). Stamped done in this train; the evidence names what was re-run and which criteria moved to which follow-up issue. Before this audit: Open. Filed 2026-11-15 by oscilla-43 from oscilla-c3's classification on #547; the midi suite's owner builds it, not train T20. Built by oscilla-ff (session cae276ab-2d90-45d2-babb-a1f8023668d2) on fix/e073-midi-focus-off-editors from #560's head, on the owner's order of 2026-11-15, verbatim: \"pokracuj s implementaci dalsich nedokoncenych veci - trains/prs/issuessession-contexts\": focusOffEditors clicks the readout only where it is wholly inside the viewport and blurs otherwise, and throws if a click scrolled the page; midi.cjs in chromium, firefox and webkit, file and http, 733 checks passed, the 3 failures the hardware ones on the Mac (as on main)."
 scope:
   - "tests/browser/midi.cjs"
 depends_on: []
@@ -20,6 +20,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-15'
-updated_at: 2026-11-15T15:59:11Z
+updated_at: 2026-11-18T03:13:22Z
 started_at: 2026-11-15T15:59:11Z
 started_event: sha256:7c5cb48747589011dd753df3cf09098baac2195da9900df11d056c88c9484592
+verified_at: 2026-11-18T03:08:45Z
+verified_event: sha256:f464c186f470bcdf580cc56a9d8915d1c2f3a0077592a302766bce8c05652a2a
+completed_at: 2026-11-18T03:13:22Z
+completed_event: sha256:aa96c92789f6bba02c68f1fb168759499a28cba42ab3499079cd9bd382e2dd8b
+evidence:
+  - covers: "verified"
+    type: test
+    command: "gh run view 44135531351 --repo korczis/oscilla"
+    result: "Audit-and-stamp follow-up train (oscilla-d9, 2026-11-18), re-run on main 8e087873: focusOffEditors (tests/browser/midi.cjs:176-200) clicks the readout only when it is wholly on screen, refuses a click that scrolls, and blurs otherwise. midi.cjs passed in CI run 44135531351, whose src, tests and dist equal 8e087873: chromium file 159 and http 159 PASS, webkit 147 and 147, firefox 150 and 154, no FAIL, every leg 'all N suites passed'. Verdict 567.yaml (oscilla-c3 rev-seat-2, built none; oscilla-ff built it): merge. Landed by #561 into train T24 #567 (eb3f0438), released in v3.39.0. Both criteria met."
+    artifact: ".ai/repo/reviews/567.yaml"
+    commit: 8e087873968df0438165b474684d6dee7ac7e5ff
+    recorded_at: 2026-11-18T03:11:49Z

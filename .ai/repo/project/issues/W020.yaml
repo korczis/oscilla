@@ -1,0 +1,32 @@
+id: W020
+milestone: M102
+serves:
+- "instrument-kinds#sequencer-surfaces"
+title: "Step-grid playhead without a per-frame allocation: the Inspector reads the playing step into reused state"
+slug: step-grid-playhead-without-per-frame-allocation
+priority: p2
+profile: implementation
+objective: "Lands as fix(studio-ui). The step grid's frame callback (src/js/ui/kinds/step-grid.js onFrame, playhead.tick(opts.playStep())) allocates nothing per frame on any consumer. Today inspector-steps.js playStep calls transport.playhead(), which returns a new {position, pass, playing} object each call (transport.js playhead, timeline-compiler.js, timeline.js positionAt). Add a caller-owned read (for example transport.playheadInto(out) filled in place, or a playing-step read that returns a number) and use it in src/js/ui/studio/inspector-steps.js; the Drums view (K222) and the Synth strip (K221) use the same read where they mount playStep. Negative case: the test catches a consumer playStep that allocates. Rollback: revert; playhead() stays for its other readers."
+why: "Split from W008 (criteria 9, copied verbatim) by the audit-and-stamp follow-up train of 2026-11-18 (oscilla-d9, under the triage the owner approved on 2026-11-18, relayed by oscilla-e5, Q112). Re-run on main 8e087873: the kind's own scan is clean and frameSubscriberCount is restored (ui-kind-step-grid :272, :339), but its first mounted consumer allocates per frame (inspector-steps.js:89-90 to transport.js:1795-1801 to timeline.js:753-766) and no test measures it. The oscilla-d9 audit of 2026-11-11 found the same."
+current_state: "Filed 2026-11-18 by oscilla-d9 in the audit-and-stamp follow-up train; not started."
+scope:
+- src/js/studio/transport.js
+- src/js/studio/timeline.js
+- src/js/ui/studio/inspector-steps.js
+- src/js/ui/kinds/step-grid.js
+- tests/unit/ui-kind-step-grid.test.mjs
+- tests/README.md
+- dist
+depends_on: []
+acceptance_criteria:
+- "The kind's modules pass W001's static scan: no import of src/js/studio/actions.js, a store, sources.js or a lab module; no dispatch or owner writer called; no AudioContext, AudioNode or worklet created (project.audio-engine-discipline v2: one AudioEngine); no requestAnimationFrame, setInterval or setTimeout outside src/js/charts/frame-loop.js; no allocation in a frame callback (1000 ticks keep the same typed arrays) and frameSubscriberCount() returns to its value after destroy()."
+- "(added) tests/unit/ui-kind-step-grid.test.mjs drives the Inspector's playStep (inspector-steps.js) for 1000 frames against a playing fake transport and asserts every read returns or fills the same object (no new object per frame), and the playing step still advances; it fails on the merge base."
+- "(added) It changes guarded paths (src/js/studio/transport.js), so it merges only with a reviewer's .ai/repo/reviews/<pr>.yaml verdict covering them (project.review-verdict); as a fix change its unit test fails on the merge base (project.fail-first)."
+validation:
+- node --test tests/unit/ui-kind-step-grid.test.mjs
+- node tests/browser/step-grid.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-11-18'
+updated_at: '2026-11-18'

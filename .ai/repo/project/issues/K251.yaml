@@ -1,0 +1,31 @@
+id: K251
+milestone: M067
+serves:
+- "connected-instrument#step-sequencer"
+- "connected-instrument#modulation-everywhere"
+- "connected-instrument#one-transport"
+title: "Step-voltage sequencer's card and clocked-rate sentence in Czech, and the README row of its DSP checks"
+slug: step-voltage-sequencer-card-and-rate-sentence-in-czech
+priority: p2
+profile: implementation
+objective: "Lands as fix(studio). The node card (registry.summarize, ui/studio graph-view) names playback by the enum's Czech labels (Vpřed, Tam a zpět, Jednou) instead of the ids forward, pingpong, once; SVS_CLOCKED_RATE_TEXT (src/js/studio/adapters/modulation.js) names the rate by its label Rychlost instead of 'Rate'; both are asserted fail-first in the unit file; the tests/README.md instrument-dsp row names s-steps and s-pitch; dist is rebuilt. Size, Flowbite and synth-wording are already met and are re-run."
+why: "Split from K226 (criteria 6, copied verbatim) by the audit-and-stamp follow-up train of 2026-11-18 (oscilla-d9, under the triage the owner approved on 2026-11-18, relayed by oscilla-e5, Q112). Re-run on main 8e087873: the card shows '8 kroků · forward · 4 Hz' (pingpong and once raw too) and SVS_CLOCKED_RATE_TEXT still says '…Rate nemá vliv.' after the label became Rychlost (2bcbc123); the czech-prose scanners catch neither. The other parts of criterion 6 hold (synth-wording 2/2, czech-prose 4/4, ui-flowbite-pro 31/31, about +3393 B gzip, verdicts 522/533/567)."
+current_state: "Filed 2026-11-18 by oscilla-d9 in the audit-and-stamp follow-up train; not started."
+scope:
+- src/js/studio/nodes/modulation.js
+- src/js/studio/adapters/modulation.js
+- tests/unit/studio-step-voltage-sequencer.test.mjs
+- tests/README.md
+- dist
+depends_on: []
+acceptance_criteria:
+- "Every string it adds is Czech (project.czech-prose) and passes tests/unit/synth-wording.test.mjs (no product, brand or model name); the UI is Flowbite Pro and the D11 knob (project.ui-uses-flowbite-pro); scripts/size-report.mjs shows at most 4 KB gzip added (3 KB before the amendment of 2026-11-09 added the row roles, the skip and the manual step; measured +3 303 B against 0f9403d8); a reviewer's verdict for the guarded paths (project.review-verdict); tests/README.md has a row for each new test; dist is rebuilt."
+- "(added) fail-first: the card summary contains each playback's Czech label and none of the ids, and SVS_CLOCKED_RATE_TEXT contains the registry label of rate and not 'Rate'; both fail on the merge base."
+validation:
+- node --test tests/unit/studio-step-voltage-sequencer.test.mjs
+- node --test tests/unit/synth-wording.test.mjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-11-18'
+updated_at: '2026-11-18'

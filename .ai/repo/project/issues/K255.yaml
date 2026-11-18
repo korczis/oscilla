@@ -1,0 +1,24 @@
+id: K255
+milestone: M064
+serves:
+- "connected-instrument#performance-pad"
+title: "The two performance pads have their control-census rows"
+slug: performance-pads-control-census-rows
+priority: p2
+profile: implementation
+objective: "Lands as test(synth). tests/browser/control-census.cjs gains synth.pads.* rows: the pad surfaces and axes, the scale picker, the L/R toggle and Přidat PAD L; the pending-Synth count falls by exactly those controls. C062 is not widened."
+why: "Split from K220 (criteria 3, copied verbatim) by the audit-and-stamp follow-up train of 2026-11-18 (oscilla-d9, under the triage the owner approved on 2026-11-18, relayed by oscilla-e5, Q112). Re-run on main 8e087873: one pad implementation (xy.js) serves both pads (synth-dual-pads tests 1 and 9), but there is no synth.pads row; CENSUS_PENDING keeps the Synth pending under C062 and CI shows '155 synth control(s) without a row' (run 44135531351)."
+current_state: "Filed 2026-11-18 by oscilla-d9 in the audit-and-stamp follow-up train; not started."
+scope:
+- tests/browser/control-census.cjs
+- tests/README.md
+depends_on: []
+acceptance_criteria:
+- "One pad implementation (xy.js) serves both; the census rows exist (C062 is not widened)."
+- "(added) The census run in chromium, firefox and webkit lists each synth.pads control as covered and the pending-Synth count is lower than 155 by exactly those controls."
+validation:
+- node tests/browser/control-census.cjs
+evidence_required:
+- verified
+created_at: '2026-11-18'
+updated_at: '2026-11-18'
