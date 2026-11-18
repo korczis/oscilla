@@ -8,6 +8,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fingerprint } from './flowbite-pro-fingerprints.mjs';
+import { PRO } from '../src/js/ui/pro-classes.js';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const BASELINE_REL = 'tests/unit/ui-flowbite-pro-baseline.json';
@@ -246,6 +247,38 @@ export function openingTags(html) {
     re.lastIndex = i;
   }
   return out;
+}
+
+/**
+ * The classes a surface root binds unconditionally through the named Pro class lists of
+ * src/js/ui/pro-classes.js (PRO, the markup's :class="PRO.<name>"): its :class (or
+ * x-bind:class) is `PRO.<name>`, or an array literal one of whose top-level elements is exactly
+ * `PRO.<name>`. Nothing else binds a class here: a conditional element (`x && PRO.y`, a ternary,
+ * an object key), a call or any other expression adds none, and a name PRO does not have fails
+ * closed: no class, and the name is pushed to `unknown` (recordProblems reports it). `tokens` is
+ * PRO unless a fixture passes its own.
+ */
+export function boundProClasses(attrs, tokens = PRO, unknown = []) {
+  const value = Object.entries(attrs).find(([n]) => n === ':class' || n === 'x-bind:class');
+  if (!value) return [];
+  const expr = value[1].trim();
+  let elements = [expr];
+  if (expr.startsWith('[') && expr.endsWith(']')) {
+    const inner = expr.slice(1, -1);
+    elements = [];
+    for (let i = 0; i <= inner.length;) {
+      const end = expressionEnd(inner, i, true);
+      elements.push(inner.slice(i, end).trim());
+      i = end + 1;
+    }
+  }
+  return elements.flatMap((e) => {
+    const m = /^PRO\.([A-Za-z_$][\w$]*)$/.exec(e);
+    if (!m) return [];
+    const list = Object.hasOwn(tokens, m[1]) ? tokens[m[1]] : null;
+    if (typeof list !== 'string') { unknown.push(m[1]); return []; }
+    return list.split(/\s+/).filter(Boolean);
+  });
 }
 
 const bound = (name) => name.replace(/^(?::|x-bind:)/, '');
@@ -506,7 +539,7 @@ const STUDIO_NODE_ID = /^osc-\d+$/;
  * where build is { compiles, defines(class) } (NO_BUILD without Tailwind) and tailwind is
  * { path: text } of the Tailwind configuration and local plugin files (tailwindFiles).
  */
-export function measure({ html, js, css = {}, build = NO_BUILD, tailwind = {} }) {
+export function measure({ html, js, css = {}, build = NO_BUILD, tailwind = {}, tokens = PRO }) {
   const tags = openingTags(stripComments(html));
   const surfaces = [];
   const classPositions = new Set();
@@ -520,8 +553,10 @@ export function measure({ html, js, css = {}, build = NO_BUILD, tailwind = {} })
     if (tag === 'style') styleElements += 1;
     const s = surfaceOf(tag, attrs);
     if (s) {
-      surfaces.push({ kind: s[0], key: s[1], classes: new Set((attrs.class || '').split(/\s+/)
-        .filter(Boolean)) });
+      const unknownPro = [];
+      const proBound = boundProClasses(attrs, tokens, unknownPro);
+      surfaces.push({ kind: s[0], key: s[1], unknownPro, classes: new Set([
+        ...(attrs.class || '').split(/\s+/), ...proBound].filter(Boolean)) });
     }
     for (const [name, value] of Object.entries(attrs)) {
       if (isStyle(name)) inlineStyles += 1;
@@ -656,6 +691,11 @@ export function recordProblems(measured, baseline) {
     if (!keys.has(shell)) {
       problems.push(`${shell}: not found; the shell keeps its landmark (see the header of this `
         + 'test), or the definition changes with the rule');
+    }
+  }
+  for (const s of measured.surfaces) {
+    for (const name of s.unknownPro || []) {
+      problems.push(`${s.key}: binds PRO.${name}, which src/js/ui/pro-classes.js does not define`);
     }
   }
   const pending = new Set(baseline.surfaces?.pending || []);
