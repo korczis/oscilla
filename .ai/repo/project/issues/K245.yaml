@@ -8,7 +8,7 @@ priority: p1
 profile: implementation
 objective: "oscilla-d9's stamp audit of 45db334e (K060 criteria 3 and 11, verified by probe): #447 (v3.28.0) gave the released Keys node keyLow and keyHigh with no hash epoch, so every Studio project, patch and experiment Studio block saved with a Keys node in v3.15.0-v3.27.x matched no epoch's hash: loadProject throws 'its content does not match its stored studioHash' and verifyExperimentStudio refuses the block. After: such a record matches its epoch's hash with the unepoched keys left out while the model holds them at their defaults (schema.js UNEPOCHED_PARAMS, closed to the Keys key range at epoch 1), and opens migrated with its original hash kept; v3.28+ records verify as before."
 why: "Owner-visible data loss outranks stamping (oscilla-43, 2026-11-11): saved work must open (project.studio-model-is-canonical, D2 of K022)."
-current_state: "Built by oscilla-d9 in task t-20261111095329-dfc9 on fix/k245-keys-legacy-hash from origin/main 45db334e (assigned by oscilla-43, 2026-11-11, option: hashEpochOf also tries the epoch hash without keyLow/keyHigh at their defaults); judged by oscilla-c3 (guarded studio and storage paths); rides the train after T9 publishes."
+current_state: "Re-checked on main 4682eea4 in audit-and-stamp train A (oscilla-d9, 2026-11-18); left open. Criteria 1, 2 and 4 met. Criterion 3 is half met: UNEPOCHED_PARAMS is closed, but no test makes a new parameter on a released type go into a hash epoch; the template epoch pins cover 22 of 39 node types, so a parameter added to Keys (or 16 other types) without an epoch still passes npm test. Close it with a pin of every released type's parameter keys per epoch, or amend away the second clause. Before this audit: Built by oscilla-d9 in task t-20261111095329-dfc9 on fix/k245-keys-legacy-hash from origin/main 45db334e (assigned by oscilla-43, 2026-11-11, option: hashEpochOf also tries the epoch hash without keyLow/keyHigh at their defaults); judged by oscilla-c3 (guarded studio and storage paths); rides the train after T9 publishes."
 scope:
   - "src/js/studio/schema.js"
   - "src/js/studio/provenance.js"
@@ -29,4 +29,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-11'
-updated_at: '2026-11-11'
+updated_at: '2026-11-18'

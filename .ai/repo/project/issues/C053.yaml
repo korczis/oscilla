@@ -9,6 +9,7 @@ priority: p1
 profile: implementation
 objective: "Lands as fix(bus). Split from C037 by af's critique of 96daa67b (BLOCKING 5), and the coverage gap 'the leave-workspace policy and the acceptance of ADR 0063 have no issue'. Line numbers at origin/main a19f1ff6. Refusal sentences are written where they are raised: the riff audition's own text (src/js/studio/riffs/audition.js:72-81, 'A measurement is running: the riff plays after it.'), the MIDI refusal (src/js/midi/ui.js:51-57 ownedBy and its refused), and the output owner's notices (src/js/ui/output-owner.js). What happens to sound when the user leaves a workspace is decided per site: a measurement aborts (src/js/main.js:739-742), an armed-only Synth run disarms on leaving the Studio (src/js/synth/studio-sink.js:78-83), the lab microphone is not released (C040), and the instrument, the sequencer and the Studio transport keep sounding with no stated rule. After: every refusal the bus raises is the sentence of the refusing owner's row in C036's table (no copy at the raise site), and the bus holds one leave-workspace policy, a row per owner (keep, stop or disarm, with the sentence the status bar shows), applied on every workspace change; ADR 0063's open questions are answered in its resolution notes from what C002 (Q-a, newest action wins) and C018 (Q-b, presets and History) decided, and its status is left to the owner (.ai/repo/adrs/README.md says which ADRs the owner accepted)."
 why: "af's critique of 96daa67b (BLOCKING 5 'refusal text plus the leave policy'; coverage gap 'every screen reviewed: the leave-workspace policy and the acceptance of ADR 0063 have no issue'). ADR 0063 (proposed, 2026-10-29) carries two open questions for the owner."
+current_state: "Re-checked on main 4682eea4 in audit-and-stamp train A (oscilla-d9, 2026-11-18); left open. AC3 not met: navigation.cjs leave-policy asserts only the instrument, sequencer, notes and synth rows; it needs a leave case with the row's effect and status-bar sentence for the measurement, reference, studio, audition and lab-microphone rows (or a recorded restatement). AC1's sentence-scan half was already satisfied by C036 6c722b7a, so its fail-first is moot. The criterion naming prismatic-majordomus-98 is met under Q111 (verdict 515.yaml by oscilla-c1 with oscilla-c3, who built none of it)."
 scope:
   - "src/js/core/output-bus.js"
   - "src/js/ui/output-owner.js"
@@ -38,4 +39,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-05
-updated_at: 2026-11-05
+updated_at: 2026-11-18

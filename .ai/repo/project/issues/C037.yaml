@@ -43,4 +43,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-05
-updated_at: 2026-11-05
+updated_at: 2026-11-17T23:36:52Z
+started_at: 2026-11-17T23:22:51Z
+started_event: sha256:6bcea195b8d0b16631dc576daeb82456b3f9559d1c5c8edfbe2d7978767b74d9
+verified_at: 2026-11-17T23:28:50Z
+verified_event: sha256:83e1b24f2ed61270f666076560a98ac9e8cc098ae4ec82eb3ff566cc9fcd8cfa
+completed_at: 2026-11-17T23:36:52Z
+completed_event: sha256:6442a6ca2b0a19bce1a9b6f9be927e4c5485d94505d6391f7342e7d9bf8dd408
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "node --test tests/unit/output-claims.test.mjs; tests/browser/app.cjs (bus-names-each-player) and touch-audio.cjs in CI run 44135531351"
+    result: "Audit-and-stamp train A (oscilla-d9, 2026-11-17), re-checked on main 4682eea4 (700f4e3c via #515): 1 on the parent 577acf41 output-claims is 6/7, the noteOn and audition cases failing by assertion as specified; 2, 3, 5 the claim-before-sound scan and its mutation, one newest-wins and one refusal case per player, the K178/K184 order; output-claims 13/0 on main. 4 app.cjs (bus-names-each-player, no skip entry) and touch-audio.cjs passed in chromium, firefox and webkit in CI run 44135531351 (PR #595, tree identical to 4682eea4 but for .ai/repo/releases/v3.41.3.yaml; local reruns refused by the load gate at load 63-86). 6 the verdict over studio/riffs/* is 515.yaml (oscilla-c1 rev-seat with oscilla-c3, built none of it), met under Q111."
+    artifact: ".ai/repo/reviews/515.yaml"
+    commit: 4682eea40739a7b37a7be04d3d19cd7be0dd5226
+    recorded_at: 2026-11-17T23:33:52Z

@@ -38,4 +38,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-05
-updated_at: 2026-11-05
+updated_at: 2026-11-17T23:17:47Z
+started_at: 2026-11-17T23:08:28Z
+started_event: sha256:67049689e80c1714ce0f34632658b571a7344e4a7fbc3bdd1c309fe7936f909d
+verified_at: 2026-11-17T23:11:47Z
+verified_event: sha256:c41cc5ad3fb2a880c3e316febd8a5fa789b5f2961a0732dfc4b103aa884b6eef
+completed_at: 2026-11-17T23:17:47Z
+completed_event: sha256:7bc33664690bd57e7803d1b20061ebeeeb32157f542355df8314267feb806c5a
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/output-owner-one-table.test.mjs tests/unit/output-owner.test.mjs tests/unit/keys-registry.test.mjs"
+    result: "Audit-and-stamp train A (oscilla-d9, 2026-11-17), criteria re-checked on main 4682eea4: 1 the reference capture refuses claimOutput('instrument') and the audition reports as 'audition' (landed by f0598f0d, judged in #444), 0/6 on the named merge base 68b117f3; 2-5 the second-table scan and its mutations, every former site derived from the one table (6c722b7a, then core/output-bus.js via 700f4e3c), the C002 cases unchanged, loopback vs microphone; units 13/0, 17/0, 9/0. 6: the guarded part was judged in #509 by oscilla-c1 rev-seat with oscilla-c3 (509.yaml, built none of it), met under Q111 (a named seat is met by any seat passing review-verdict v2's non-builder separate-session test)."
+    artifact: ".ai/repo/reviews/509.yaml"
+    commit: 4682eea40739a7b37a7be04d3d19cd7be0dd5226
+    recorded_at: 2026-11-17T23:15:32Z
