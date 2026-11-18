@@ -194,12 +194,16 @@ test('the per-release charts and tables show the newest releases, so grafy/ stay
   }
   // Every windowed chart says so, and the releases chart counts the releases it does not show.
   if (datedCount(FACTS) > RELEASE_WINDOW) {
-    for (const name of PER_RELEASE) assert.match(a[name], /posledních \d+ vydání/, name);
+    for (const name of PER_RELEASE) {
+      assert.match(a[name], /posledních \d+ vydání; \d+ starších je ve Změnách\./,
+        name);
+    }
+    assert.match(a.cadence, /medián ukázaných intervalů /, 'the median says it is of the shown');
     assert.match(a.releases, new RegExp(`${fmtInt(datedCount(FACTS))}\\. vydání`),
       'the newest point carries its true position');
   }
   assert.match(PAGES.get(pageOf('grafy')),
-    /ukazují posledních \d+ vydání[^<]*<a [^>]*href="\.\.\/zmeny\/"/);
+    /ukazují posledních \d+ vydání[^<]*jsou ve <a [^>]*href="\.\.\/zmeny\/">Změnách<\/a>/);
 });
 
 test('mutation: without the window the doubled series are longer than the window', () => {

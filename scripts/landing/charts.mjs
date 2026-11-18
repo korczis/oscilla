@@ -172,7 +172,7 @@ export function windowFacts(facts, n = RELEASE_WINDOW) {
 
 /** The note a windowed chart adds to its description, or ''. */
 const windowNote = (omitted) => (omitted > 0
-  ? ` Graf ukazuje posledních ${RELEASE_WINDOW} vydání; ${omitted} starších je v Změnách.` : '');
+  ? ` Graf ukazuje posledních ${RELEASE_WINDOW} vydání; ${omitted} starších je ve Změnách.` : '');
 
 function dateTicks(t0, t1) {
   const ticks = [];
@@ -944,7 +944,8 @@ function cadenceChart(facts) {
   body += `<text x="${r1(lx - 8)}" y="${r1(ly(longest.hours) + 4)}" fill="${T.text2}" `
     + `font-size="12" text-anchor="end">${esc(fmtHours(longest.hours))}</text>`;
   return frame('cadence', title, sub, `${fmtInt(items.length)} intervalů mezi `
-    + `${fmtInt(c.releases)} vydáními; medián ${fmtHours(c.median)}, nejdelší `
+    + `${fmtInt(c.releases)} vydáními; medián ${c.omitted ? 'ukázaných intervalů ' : ''}`
+    + `${fmtHours(c.median)}, nejdelší `
     + `${fmtHours(longest.hours)} (před v${longest.version}).`
     + windowNote(c.omitted || 0), body);
 }
