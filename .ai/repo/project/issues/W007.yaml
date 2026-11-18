@@ -8,6 +8,7 @@ priority: p1
 profile: implementation
 objective: "Lands as feat(midi). The piano kind over K026's src/js/midi/keyboard.js and keyboard-view.js (one key map, one layout; no copy): range A0-C8 (MIDI 21-108); the visible range computed from the width so a white key is at least 44 px (8 white keys at 390 px portrait, two octaves at 844 px landscape, four at 1536 px); an octave scroll (two buttons and a role=slider for the lowest visible note) and a zoom; velocity by the pointer's position on the key (lower is louder, stated) or MIDI velocity; orientation horizontal or vertical (for the piano roll, W011); the scale highlight as a shape mark; lights per source; and DOM keys instead of K026's canvas drawing: one button per visible key, white keys in a flex row and each black key an absolutely positioned child of the white key before it, all with literal Tailwind utilities (no canvas, no el.style; K026's canvas.style writes leave), named 'C sharp 4', aria-pressed while held, the group named 'Keyboard: plays <target>'. Its sizing uses Tailwind utilities, not canvas.style writes. First consumer: K026's Playground and Studio keyboard; K065, K115, K142, K070 and W011 then mount it. Before: INFERRED from the K026 worktree, a canvas of a few octaves with one list for assistive technology. After: 88 keys, each a named button. Negative cases: a key outside 21-108 (none drawn); a field or dialog focused (no key plays); blur, hide and Escape (every note released, ADR 0062); Space (never a key, ADR 0050). Rollback: revert; no saved state depends on it. Merged plan of the component follow-up (2026-10-30): Wave 1: it needs F001 and K026 (#299). K065 and K115 depend on W007 and keep only their placement; K142 plays the generator through the same kind."
 why: "Owner direction of 2026-10-29, in Czech, relayed by the coordinator: improve the components, their interfaces, ADRs, knowledge and interlinking, and add more; add p5.js, WebGL and interactivity, and deploy; a full DAW, a full sequencer and a full piano, everything interlinked, clickable, parameterized and joined; knobs, sliders and control panels done one generic way, integrated with Majordomus; the landing easy to use, easy to extend and open to hack; mobile first. The architecture still binds: one AudioEngine, the Studio model canonical, typed ports, one offline file under the 1.2 MB gzip budget, the cockpit identity, no fake science, Flowbite Pro (ADR 0061). Design: the instrument-kinds design of 2026-10-29 (scratchpad components-followup/components-new.md), on the component-system design (G001-G019) and the synth and studio-siggen drafts of the same day, facts checked against origin/main cdda563c."
+current_state: "2026-11-18: K115 (the 88 keys placed in the Synth workspace) merged into this issue by the plan triage the owner approved in bulk (Q112: 'schvaluji vse', 2026-11-18T02:27Z, Claude Code session 980e22ee-d9d4-4dd0-8318-8b727f127ce9, oscilla-e5; triage derived from origin/main 4682eea4); its criteria are the acceptance criteria that start 'From K115', nothing dropped, and K116 now depends on this issue."
 scope:
 - src/js/midi/keyboard.js
 - src/js/midi/keyboard-view.js
@@ -20,6 +21,9 @@ scope:
 - tests/unit/ui-flowbite-pro-baseline.json
 - tests/README.md
 - dist
+- "src/js/ui/piano"
+- "tests/unit/piano-88.test.mjs"
+- "tests/browser/piano.cjs"
 depends_on:
 - W001
 - K026
@@ -40,6 +44,11 @@ acceptance_criteria:
 - "Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed unless its scope widens to one; as a feat change it carries a unit test that fails on the merge base (project.fail-first)."
 - "scripts/size-report.mjs shows at most 3 KB gzip added, compiled CSS included, with the base and head figures in the pull request body, inside the component line's cap Q037 records, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
 - "Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+- "From K115 (merged by Q112): the piano kind is placed in the Synth workspace where K065 docks the keyboard, as well as in K026's Playground and Studio keyboard; there it spans A0-C8 (MIDI 21-108) with the octave scroll and the zoom, and at 390 px it scrolls by octave (K115 said two octaves; this issue's 44 px minimum white key, 8 white keys at 390 px, governs)."
+- "From K115 (merged by Q112): tests/unit/piano-88.test.mjs, or this issue's tests/unit/ui-kind-piano.test.mjs where it already asserts the same, fails on the merge base: the key map spans notes 21-108 and draws none outside, velocity by position is monotonic and bounded, and scrolling keeps the focused key."
+- "From K115 (merged by Q112): a browser check in tests/browser/piano.cjs (or this issue's tests/browser/midi.cjs), wired into npm run test:synth so CI and the release gate run it, fails on the merge base and proves the Synth placement linked, real-time and interactive. Linked: the lowest and highest keys play the armed instrument and light in the Studio's note view. Real-time: a key pressed low on its face gives a higher runtime velocity than high on it, each within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: scroll and zoom work by pointer, keyboard and touch; every key is a named button. It runs inside tests/browser/lib/suite.cjs, assumes no sample rate and adds nothing to tests/browser/timing-baseline.json (project.suite-harness, project.bounded-test-timing)."
+- "From K115 (merged by Q112): every link the placement adds (open in, send to, a modulation route, a probe or a jump between views) is a row of tests/browser/integration-map.json walked by tests/browser/integration-map.cjs (pointer and keyboard, the same Studio revision, focus on the target heading, Back, Forward and reload keep the state), and every string it adds passes tests/unit/synth-wording.test.mjs (project.no-fake-science)."
+- "From K115 (merged by Q112): the Synth placement adds at most 1 KB gzip on top of this issue's figure, within the cap Q023 records for the instrument line, with base and head figures in the pull request body (project.single-file-deliverable)."
 validation:
 - node --test tests/unit/ui-kind-piano.test.mjs
 - node tests/browser/midi.cjs
@@ -47,4 +56,4 @@ validation:
 evidence_required:
 - verified
 created_at: '2026-10-29'
-updated_at: '2026-10-30'
+updated_at: 2026-11-18

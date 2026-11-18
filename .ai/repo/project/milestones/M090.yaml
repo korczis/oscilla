@@ -9,6 +9,7 @@ acceptance_criteria:
   - "C001 to C026 are done with their evidence; npm run release-gate passes at the last one."
   - "C027, C028, C035 to C038, C040 to C048 and C050 to C055 are done with their evidence, the bus slices C037, C050, C051, C052 and C053 among them, so the milestone cannot close without the bus; added on resolving af's critique of 96daa67b, which found no criterion reaching C027-C039."
   - "tests/browser/journeys.cjs (J1 to J6) and the control-drive ratchet run in CI and are green in Chromium, Firefox and WebKit."
+  - "From M079 (merged by Q112): H001, H007, H009 are done with their evidence."
 validation:
   - "npm run release-gate"
 evidence_required:
@@ -21,4 +22,4 @@ risks:
   - "The bus (C036, then C037, then C050, C051 and C052, then C053; C055 after C037; split by af's critique of 96daa67b so each slice is re-checkable, and the slices C034 expects) changes the shared note path that K184 (a minimum gate, origin/chore/plan-nav-folds) and K178 (one Keys node, origin/feat/k178-*) also change, in src/js/midi/* and src/js/midi/keyboard-ui.js: K184 sits beside K178, whichever of the three lands second rebases onto the first and records a criterion the first already met as evidence, and one lane (dev-53) owns src/js/midi/* while they are open."
   - "C035-C038, C050-C055 and Q093 come from the Total Coherence pack audit of main 68b117f3 (2026-11-05); C030-C034 (origin/chore/plan-nav-folds, Play on every workspace) are cross-referenced, not re-derived."
 created_at: 2026-10-29
-updated_at: 2026-11-05
+updated_at: 2026-11-18

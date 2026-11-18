@@ -6,6 +6,8 @@ title: "Keyboard and sequencer notes in the note view beside the spectrum"
 slug: keyboard-and-sequencer-notes-in-the-note-view-beside-the-spe
 priority: p2
 profile: implementation
+cancelled: true
+current_state: "Cancelled on 2026-11-18: merged into V504 by the plan triage the owner approved in bulk (Q112: 'schvaluji vse', 2026-11-18T02:27Z, Claude Code session 980e22ee-d9d4-4dd0-8318-8b727f127ce9, oscilla-e5; triage derived from origin/main 4682eea4). K085 extends V504's note view to the Keys node's sources, and since the one-Keys-source work (K178 and K183 done) V504's incoming and generated notes are read from that same source: one note view, one issue. Each of its criteria is now a 'From K085' criterion of V504 and V504 serves connected-instrument#probes-and-views as well. K085 had no dependants. Undo: remove cancelled: true and drop V504's 'From K085' criteria, scope paths and serves entry."
 objective: "Lands as feat(midi). V504's note view (incoming and generated notes beside the spectrum and waveform) shows the Keys node's notes from every source (piano, computer keys, MIDI, sequencer) with their names and velocities. Before: the note view shows MIDI notes only. After: it shows every source's notes. User-value tier 3 of 4 (synth-design.md section 17). Rollback: revert the pull request; no saved state depends on it."
 why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
 scope:
@@ -36,4 +38,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-18

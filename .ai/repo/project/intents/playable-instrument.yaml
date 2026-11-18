@@ -16,6 +16,7 @@ milestones:
   - "M059"
   - "M061"
   - "M062"
+  - "M067"
 satisfaction:
   - id: "patching-gestures"
     criterion: "Replace on an occupied input, dragging a cable end to re-route it or onto empty canvas to delete it, delete-and-bridge, tidy and edge mute are each one history entry, and every connection they make goes through canConnect; a refused gesture leaves model, history and runtime unchanged and shows the validator's sentence; a wheel or two-finger scroll pans the view and Ctrl/Cmd + wheel zooms it at the pointer, as view state outside history; the shortcut list is generated from STUDIO_SHORTCUTS"
@@ -119,4 +120,4 @@ non_goals:
   - "Studio polyphony before groups and a polyphony ADR (D4)"
   - "RF reception, SDR hardware and device I/Q: the signal-lab line is intent audio-band-signal-lab (D6)"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-18
