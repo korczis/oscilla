@@ -8,6 +8,7 @@ priority: p0
 profile: implementation
 objective: "Lands as fix(bus). Split from C037 by af's critique of 96daa67b (BLOCKING 5). Line numbers at origin/main a19f1ff6. Stop handlers live in many places: src/js/main.js:672 (blur releases Hold), :674-681 (hide: measureAbort('pagehide') then cmp.stop(), on visibilitychange and pagehide); src/js/ui/studio/workspace.js:487 (a window keydown) and :531-532 (visibilitychange and pagehide hide); src/js/midi/ui.js:111-116 (visibilitychange, blur, pagehide and an Escape keydown silence MIDI notes); src/js/midi/keyboard-ui.js:174-192 (keydown, blur, pagehide and visibilitychange release the on-screen keys); src/js/synth/ui.js:834-835 (a window Escape while on Synth); src/js/ui/keys/dispatcher.js:96-99 and src/js/ui/keys/clients.js:20-24 (page.escape calls measureAbort('escape')); src/js/ui/measure/run.js:143-164 (the user's Stop); src/js/measurement/capture.js:368-376 (the capture's own pagehide and visibility abort). Listeners that are not stops stay and are allow-listed with their reason: src/js/ui/experiments.js:514 (a visibility refresh of the list), src/js/ui/app.js:293-298 (Escape closes the nav and menus), src/js/charts/frame-loop.js:21 and src/js/visualization/p5-host.js:156 (render pauses). After: the bus exposes stopAll(reason); Escape is one key-registry binding, page hide one listener pair, and the status-bar stop one action, each calling stopAll, which stops every owner from its live state in the same event; the capture still aborts on pagehide by itself (spec §169, capture.js:368-376 stays), and the MIDI and on-screen-key releases become owners' release callbacks the bus calls."
 why: "af's critique of 96daa67b (BLOCKING 5): the stop scan of 96daa67b would fail on handlers outside its scope; its list is completed here with the non-stop listeners named. coherent-state#stops-are-immediate; C034 expects 'one Stop/Escape/hide path' as its own slice."
+current_state: "Re-checked on main 4682eea4 in audit-and-stamp train A (oscilla-d9, 2026-11-18); left open. Criteria 1-3 met (cbd956e2). Criterion 4 waits on app.cjs stop-path-one-stopall and touch-audio.cjs in three browsers (the status-bar stop is exercised for the instrument and sequencer only). Criterion 5 lacks a test that main.js hands one trace to both the bus and the Studio workspace. Criterion 6 waits on G026 (the one app shell). The criterion naming prismatic-majordomus-98 is met under Q111 (verdict 515.yaml by oscilla-c1 with oscilla-c3, who built none of it)."
 scope:
   - "src/js/core/output-bus.js"
   - "src/js/main.js"
@@ -42,4 +43,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-05
-updated_at: 2026-11-05
+updated_at: 2026-11-18

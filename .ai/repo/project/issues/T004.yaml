@@ -8,6 +8,7 @@ priority: p2
 profile: implementation
 objective: "Truth-table rows GEN-05 (scratchpad p05/truth-table.md). beatText branches on dual.stereo and dual.binaural: mono keeps the V1 text; split says one tone per channel, no beat in the signal, may beat acoustically over speakers depending on position, perceptual over headphones; binaural describes only the perceptual beat. sig(d, 3) and formatPeriod stay."
 why: "P05 audit of origin/main b67d1e58 (v3.13.0): With Output = Stereo split (one steady tone per channel, leakage < -40 dB) and in binaural mode the readout still says \"amplitude beats at about 2 Hz\"; the V1 freeze golden pins that text for dual/stereo-6Hz, dual/stereo-40Hz and dual/stereo-binaural-6Hz. Claim dual-oscillator-beats scopes beating to the mono mix, and project.no-fake-science says binaural content is described as perceptual only."
+current_state: "Re-checked on main 4682eea4 in audit-and-stamp train A (oscilla-d9, 2026-11-18); left open. All 5 criteria met; not stampable while BLOCKED on T003, which stays open (see T003)."
 scope:
   - "src/js/core/instrument.js"
   - "tests/unit/readout-labels-dual-beat.test.mjs"
@@ -28,4 +29,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-18

@@ -8,6 +8,7 @@ priority: p2
 profile: implementation
 objective: "Resolves docs/ui-audit.md A05, A07, A09. Built on Flowbite Pro (intent ui-flowbite-pro, owner 2026-10-28): the layout is the Pro grid of chart and stat cards F006 lands, the links are Pro buttons in the page header's actions, and nothing adds a surface off Pro or a legacy primitive (the ratchet of tests/unit/ui-flowbite-pro.test.mjs refuses either). Lay out the Analyzer and Compare workspaces so their panels use the viewport at 1536x1024 and stack at 390x844, and link each analysis to its calibrated counterpart: the live spectrum to MEASURE's RTA, Compare to comparing saved experiments. Introduce tests/browser/ui-current.cjs (through tests/browser/lib/suite.cjs, bounded waits) with the definition of an empty area: a fixed grid of points sampled with elementFromPoint, a point empty when it hits only the workspace container or the page background; U003, U004, U006, U007 and U008 extend this suite."
 why: "Audit 2026-10-28: Compare leaves the lower half of the viewport empty; neither view says where the trustworthy measurement lives."
+current_state: "Re-checked on main 4682eea4 in audit-and-stamp train A (oscilla-d9, 2026-11-18); left open. Criteria met; its browser check is green in CI run 44135531351 on this tree. Not stampable while BLOCKED on F006, and the objective's Pro buttons in the page header are not delivered."
 scope:
   - "src/index.html"
   - "src/styles"
@@ -27,4 +28,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-28
-updated_at: 2026-10-28
+updated_at: 2026-11-18
