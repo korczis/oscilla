@@ -231,7 +231,7 @@ test('M6: a normalization outside the measured grid is not applied and never thr
     assert.doesNotThrow(() => { v = buildResponseView(src, { normalization: spec }); });
     assert.equal(v.normalizationApplied, false);
     assert.ok(v.badges.includes('NORMALIZATION NOT APPLIED'));
-    assert.ok(v.notes.some((n) => /^NORMALIZATION not applied: .*outside|no measured point/
+    assert.ok(v.notes.some((n) => /^Normalizace nepoužita: .*mimo|neleží žádný změřený bod/
       .test(n)));
     assert.ok(!v.badges.includes('NORMALIZED'));
   }
@@ -242,7 +242,7 @@ test('M6: a normalization outside the measured grid is not applied and never thr
 
 test('M9: the response view states the master gain included in every magnitude', () => {
   const v = buildResponseView(transferSource());
-  assert.ok(v.notes.some((n) => /master output gain 0\.08 \(−21\.9 dB = 20·log10 gain\)/
+  assert.ok(v.notes.some((n) => /hlavní výstupní zisk 0\.08 \(−21\.9 dB = 20·log10 zisku\)/
     .test(n)));
   assert.equal(v.masterGain, 0.08);
 });
@@ -252,17 +252,17 @@ test('m3: phase readout and phase view where present; the reason where absent', 
   const src = transferSource({ phaseDeg, phaseReason: null });
   const v = buildResponseView(src);
   assert.equal(v.phase.available, true);
-  assert.ok(v.readout(5).lines.some((l) => /^Phase [−+]?\d+\.\d°$/.test(l)));
+  assert.ok(v.readout(5).lines.some((l) => /^Fáze [−+]?\d+\.\d°$/.test(l)));
   const pv = buildPhaseView(src);
   assert.equal(pv.available, true);
   assert.deepEqual(pv.axes.y.range, [-180, 180]);
   assert.equal(pv.series[0].values.length, GRID.length);
-  assert.match(pv.readout(5).lines[1], /^Phase /);
+  assert.match(pv.readout(5).lines[1], /^Fáze /);
   const none = buildPhaseView(transferSource());
   assert.equal(none.available, false);
   assert.equal(none.series.length, 0);
-  assert.equal(none.reason, `Phase NOT MEASURED: ${PHASE_REASON_TEXT.NOT_REQUESTED}.`);
-  assert.match(buildResponseView(transferSource()).phase.text, /NOT MEASURED: phase was not/);
+  assert.equal(none.reason, `Fáze NOT MEASURED: ${PHASE_REASON_TEXT.NOT_REQUESTED}.`);
+  assert.match(buildResponseView(transferSource()).phase.text, /NOT MEASURED: fáze nebyla/);
   assert.ok(!buildResponseView(transferSource()).readout(5).lines.some((l) => /^Phase/.test(l)));
 });
 
@@ -482,8 +482,8 @@ test('IR v2: a missing noise floor reads "not available", never a number', () =>
   const v = buildIrView({ algorithm: ALGORITHMS.ir, sampleRate: 48000, samples, peakIndex: 100,
     peakTimeS: 100 / 48000, captureOffsetS: 0, noiseFloorDb: null, window: null },
   { scale: 'db' });
-  assert.match(v.summary, /noise tail not available, /);
-  assert.ok(v.notes.includes('Noise tail: not available.'));
+  assert.match(v.summary, /šum na konci odezvy není k dispozici, /);
+  assert.ok(v.notes.includes('Šum na konci odezvy: není k dispozici.'));
   assert.ok(v.axes.y.range.every(Number.isFinite));
 });
 

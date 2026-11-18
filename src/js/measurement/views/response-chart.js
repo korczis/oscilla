@@ -62,28 +62,36 @@ import {
 } from './common.js';
 
 /** Y-axis title of a raw (not normalized) response. */
-export const RESPONSE_Y_LABEL = 'Magnitude · dB relative';
+export const RESPONSE_Y_LABEL = 'Velikost · dB relativně';
 /** Y-axis title of a normalized response. */
-export const RESPONSE_Y_LABEL_NORMALIZED = 'NORMALIZED magnitude · dB re reference';
+export const RESPONSE_Y_LABEL_NORMALIZED = 'NORMALIZOVANÁ velikost · dB vůči referenci';
 /** Shown when a valid level calibration exists: it does not turn a ratio into dB SPL. */
-export const RATIO_NOT_LEVEL_NOTE = 'The response is a ratio (capture / stimulus): a level '
-  + 'calibration applies to levels, not to this curve.';
+/** A curve's kind in a Czech sentence (the kinds stay the data values, QUANTITY_KINDS). */
+const KIND_WORDS = Object.freeze({ OBSERVED: 'naměřená', CALIBRATED: 'kalibrovaná',
+  SMOOTHED: 'vyhlazená', NORMALIZED: 'normalizovaná', DIGITAL: 'digitální',
+  ESTIMATED: 'odhadnutá', REQUESTED: 'požadovaná', DELTA: 'rozdíl' });
+
+/** The aggregation method as shown (its id stays the data value). */
+const METHOD_WORDS = Object.freeze({ mean: 'průměr', median: 'medián' });
+
+export const RATIO_NOT_LEVEL_NOTE = 'Odezva je poměr (záznam / stimul): kalibrace úrovně '
+  + 'platí pro úrovně, ne pro tuto křivku.';
 
 const DISPERSION_WORDS = Object.freeze({
-  std: '±1 standard deviation of the run levels',
-  'p10-p90': '10th–90th percentile of the runs',
+  std: '±1 směrodatná odchylka úrovní běhů',
+  'p10-p90': '10.–90. percentil běhů',
 });
 
 const isExperiment = (s) => !!s && s.kind === 'oscilla-experiment';
 
 /** Why a transfer has no phase, in words (transfer.js PHASE_REASONS). */
 export const PHASE_REASON_TEXT = Object.freeze({
-  [PHASE_REASONS.NOT_REQUESTED]: 'phase was not requested (expert analysis setting "Phase")',
-  [PHASE_REASONS.NO_ALIGNMENT]: 'no alignment of capture and stimulus was available',
-  [PHASE_REASONS.ALIGNMENT_NOT_ROBUST]: 'the alignment was not robust enough for a meaningful '
-    + 'phase (peak correlation below 0.5)',
-  [PHASE_REASONS.AGGREGATED]: 'the aggregate of repeated runs has no phase (the phases of '
-    + 'separate runs are not averaged; each run keeps its own)',
+  [PHASE_REASONS.NOT_REQUESTED]: 'fáze nebyla vyžádána (expertní nastavení analýzy „Fáze“)',
+  [PHASE_REASONS.NO_ALIGNMENT]: 'zarovnání záznamu a stimulu nebylo k dispozici',
+  [PHASE_REASONS.ALIGNMENT_NOT_ROBUST]: 'zarovnání nebylo dost spolehlivé pro smysluplnou '
+    + 'fázi (vrchol korelace pod 0,5)',
+  [PHASE_REASONS.AGGREGATED]: 'souhrn opakovaných běhů nemá fázi (fáze jednotlivých '
+    + 'běhů se neprůměrují; každý běh si drží svou)',
 });
 
 /** The master output gain a source records (a linear gain > 0), or null. */
@@ -102,9 +110,9 @@ export function masterGainOf(src) {
 /** "Includes the master output gain 0.08 (−21.9 dB) …" */
 export function masterGainText(g) {
   const db = 20 * Math.log10(g);
-  return `Every magnitude includes the master output gain ${+g.toPrecision(3)} `
-    + `(${db < 0 ? '−' : '+'}${Math.abs(db).toFixed(1)} dB = 20·log10 gain) on top of the `
-    + 'playback / capture path.';
+  return `Každá velikost zahrnuje hlavní výstupní zisk ${+g.toPrecision(3)} `
+    + `(${db < 0 ? '−' : '+'}${Math.abs(db).toFixed(1)} dB = 20·log10 zisku) navíc k cestě `
+    + 'přehrávání / záznamu.';
 }
 
 /** A stated frequency (a profile point, a requested reference): "1 kHz", "12.5 kHz", "80 Hz". */
@@ -119,23 +127,23 @@ const hzText = (v) => (v >= 1000 ? `${+(v / 1000).toPrecision(4)} kHz` : `${+v.t
 export function normalizationAvailability(frequencies, spec) {
   if (!spec) return { ok: true, reason: null };
   const n = frequencies ? frequencies.length : 0;
-  if (!n) return { ok: false, reason: 'there is no response to normalize' };
+  if (!n) return { ok: false, reason: 'není žádná odezva k normalizaci' };
   const lo = frequencies[0];
   const hi = frequencies[n - 1];
   const hz = hzText;
-  const span = `the response covers ${hz(lo)}–${hz(hi)}`;
+  const span = `odezva pokrývá ${hz(lo)}–${hz(hi)}`;
   if (spec.mode === 'at-frequency') {
     return spec.hz >= lo && spec.hz <= hi ? { ok: true, reason: null }
-      : { ok: false, reason: `${hz(spec.hz)} is outside the measured range (${span})` };
+      : { ok: false, reason: `${hz(spec.hz)} je mimo změřený rozsah (${span})` };
   }
   if (spec.mode === 'band-mean') {
     for (let i = 0; i < n; i++) {
       if (frequencies[i] >= spec.lo && frequencies[i] <= spec.hi) return { ok: true, reason: null };
     }
-    return { ok: false, reason: `no measured point lies in ${hz(spec.lo)}–${hz(spec.hi)} `
+    return { ok: false, reason: `v ${hz(spec.lo)}–${hz(spec.hi)} neleží žádný změřený bod `
       + `(${span})` };
   }
-  return { ok: false, reason: 'unknown normalization' };
+  return { ok: false, reason: 'neznámá normalizace' };
 }
 
 /** The pieces of a response, from an engine result or an experiment. */
@@ -203,8 +211,8 @@ export function responseSource(src, { profile = null, useCalibration = true } = 
         correction = { correctedDb: c.correctedDb, covered: c.covered, coverage: c.coverage,
           name: ref.name || profile.name || null, algorithm: c.algorithm };
       } else {
-        correctionNote = `Frequency profile "${ref.name || UNAVAILABLE.UNKNOWN}" is not loaded: `
-          + `the CALIBRATED curve is ${UNAVAILABLE.UNAVAILABLE}; RAW is shown.`;
+        correctionNote = `Frekvenční profil „${ref.name || UNAVAILABLE.UNKNOWN}“ není načten: `
+          + 'kalibrovaná křivka není k dispozici; zobrazena surová křivka.';
       }
     }
   }
@@ -225,7 +233,7 @@ function reliabilityMask(s) {
   if (q && q.mask && q.mask.frequencies && q.mask.frequencies.length === n) {
     const m = maskOn(q.mask.reliable, n);
     if (m) {
-      return { mask: m, source: 'quality', label: `reliability from the quality assessment `
+      return { mask: m, source: 'quality', label: `spolehlivost z posouzení kvality `
         + `(${q.algorithm || UNAVAILABLE.UNKNOWN})` };
     }
   }
@@ -235,11 +243,11 @@ function reliabilityMask(s) {
       const f = s.frequencies[i];
       m[i] = f >= s.validRange[0] && f <= s.validRange[1] ? 1 : 0;
     }
-    return { mask: m, source: 'validRange', label: 'reliability from the valid range only '
-      + `(quality ${UNAVAILABLE.NOT_ASSESSED})` };
+    return { mask: m, source: 'validRange', label: 'spolehlivost jen z platného rozsahu '
+      + `(kvalita ${UNAVAILABLE.NOT_ASSESSED})` };
   }
-  return { mask: null, source: 'none', label: `reliability ${UNAVAILABLE.NOT_ASSESSED}: `
-    + 'every point is drawn as unreliable' };
+  return { mask: null, source: 'none', label: `spolehlivost ${UNAVAILABLE.NOT_ASSESSED}: `
+    + 'každý bod je vykreslen jako nespolehlivý' };
 }
 
 function series(id, label, kind, role, values, style, extra = {}) {
@@ -254,7 +262,7 @@ function series(id, label, kind, role, values, style, extra = {}) {
 function gridText(f) {
   if (!f || f.length < 2 || !(f[0] > 0) || !(f[1] > f[0])) return null;
   const ppo = Math.round(1 / Math.log2(f[1] / f[0]));
-  return ppo > 0 ? `1/${ppo}-octave bands` : null;
+  return ppo > 0 ? `pásma 1/${ppo} oktávy` : null;
 }
 
 /** Text of the smoothing / normalization applied to the primary curve. */
@@ -303,15 +311,15 @@ export function buildResponseView(source, options = {}) {
         normalized = normalizeResponse(f, base, normalization);
         if (!Number.isFinite(normalized.referenceDb)) {
           normalized = null;
-          avail.reason = 'the response has no finite level at the reference';
+          avail.reason = 'odezva nemá v referenci konečnou úroveň';
         }
       } catch (e) {
         avail.reason = e.message;
       }
     }
     if (!normalized) {
-      normalizationNote = `NORMALIZATION not applied: ${avail.reason}; the curve is shown `
-        + 'unnormalized.';
+      normalizationNote = `Normalizace nepoužita: ${avail.reason}; křivka je zobrazena `
+        + 'bez normalizace.';
     }
   }
   const offset = normalized ? -normalized.referenceDb : 0;
@@ -334,9 +342,9 @@ export function buildResponseView(source, options = {}) {
 
   const runs = s.runs;
   const rawName = runs > 1
-    ? `RAW · OBSERVED · ${s.method || 'mean'} of ${runs} runs`
+    ? `RAW · OBSERVED · ${METHOD_WORDS[s.method || 'mean'] || s.method} z ${runs} běhů`
     : `RAW · OBSERVED · ${gridText(s.frequencies) || 'unsmoothed'}`;
-  const calName = corr ? `CALIBRATED · profile "${corr.name || UNAVAILABLE.UNKNOWN}"` : null;
+  const calName = corr ? `CALIBRATED · profil „${corr.name || UNAVAILABLE.UNKNOWN}“` : null;
 
   const out = [];
   const bands = [];
@@ -353,11 +361,11 @@ export function buildResponseView(source, options = {}) {
       }
       return o;
     };
-    const what = DISPERSION_WORDS[s.aggregate.dispersion] || 'spread of the runs';
-    const label = suffix(`RUN SPREAD · ${what} (${runs} runs)`);
-    out.push(series('envelope-upper', `${label} · upper`, K.OBSERVED, 'observed',
+    const what = DISPERSION_WORDS[s.aggregate.dispersion] || 'rozptyl běhů';
+    const label = suffix(`ROZPTYL BĚHŮ · ${what} (${runs} běhů)`);
+    out.push(series('envelope-upper', `${label} · horní`, K.OBSERVED, 'observed',
       shift(s.aggregate.upperDb), { ...LINE_STYLES.envelope }));
-    out.push(series('envelope-lower', `${label} · lower`, K.OBSERVED, 'observed',
+    out.push(series('envelope-lower', `${label} · dolní`, K.OBSERVED, 'observed',
       shift(s.aggregate.lowerDb), { ...LINE_STYLES.envelope }));
     bands.push({ id: 'envelope', upper: 'envelope-upper', lower: 'envelope-lower',
       role: 'observed', alpha: LINE_STYLES.envelope.alpha, label });
@@ -408,7 +416,7 @@ export function buildResponseView(source, options = {}) {
   const axes = {
     x: frequencyAxis(lo, hi),
     y: { label: normalized ? RESPONSE_Y_LABEL_NORMALIZED : RESPONSE_Y_LABEL,
-      unit: normalized ? 'dB re reference (normalized)' : TRANSFER_RATIO_UNIT,
+      unit: normalized ? 'dB vůči referenci (normalizováno)' : TRANSFER_RATIO_UNIT,
       range: y.range, ticks: y.ticks, kind: normalized ? K.NORMALIZED : baseKind },
   };
 
@@ -435,21 +443,21 @@ export function buildResponseView(source, options = {}) {
   const badges = [corr ? FREQUENCY_BADGES.CALIBRATED : UNAVAILABLE.UNCALIBRATED];
   if (smoothed) badges.push(smoothed.label.split(':')[0]);
   if (normalized) badges.push('NORMALIZED');
-  if (!authoritative) badges.push('INVALID · not authoritative');
+  if (!authoritative) badges.push('INVALID · neautoritativní');
   if (normalizationNote) badges.push('NORMALIZATION NOT APPLIED');
   const notes = [];
   if (corr && calibratedRange) notes.push(markers.calibratedRange.label);
   if (s.correctionNote) notes.push(s.correctionNote);
   if (noCoverageNote) notes.push(noCoverageNote);
   if (normalizationNote) notes.push(normalizationNote);
-  if (dText) notes.push(`Derived view: ${dText}. RAW is kept and exported unchanged.`);
+  if (dText) notes.push(`Odvozený pohled: ${dText}. RAW se uchovává a exportuje beze změny.`);
   if (s.masterGain !== null) notes.push(masterGainText(s.masterGain));
   notes.push(capitalize(rel.label) + '.');
   if (unreliableRanges.length) {
-    notes.push(`Dashed, faded stretches are unreliable (low SNR, outside the valid range or `
-      + `above the output-chain limit): ${unreliableRanges.slice(0, 3)
+    notes.push(`Čárkované, vybledlé úseky jsou nespolehlivé (nízké SNR, mimo platný rozsah nebo `
+      + `nad mezí výstupního řetězce): ${unreliableRanges.slice(0, 3)
         .map((r) => rangeText(f, r[0], r[1], s.binHz)).join(', ')}`
-      + `${unreliableRanges.length > 3 ? ` (+${unreliableRanges.length - 3} more)` : ''}.`);
+      + `${unreliableRanges.length > 3 ? ` (+${unreliableRanges.length - 3} další)` : ''}.`);
   }
   if (isValidLevelCalibration(levelCalibration) || isValidLevelCalibration(s.levelCalibration))
     notes.push(RATIO_NOT_LEVEL_NOTE);
@@ -469,7 +477,7 @@ export function buildResponseView(source, options = {}) {
     normalizationNote,
     masterGain: s.masterGain,
     phase: { available: !!s.phaseDeg, reason: s.phaseDeg ? null : s.phaseReason,
-      text: s.phaseDeg ? 'Phase available (wrapped, degrees)' : phaseUnavailableText(s) },
+      text: s.phaseDeg ? 'Fáze k dispozici (zabalená, stupně)' : phaseUnavailableText(s) },
     quality: qualityStatusPresentation(status || 'NOT_ASSESSED'),
     summary: '',
     readout: null,
@@ -542,10 +550,10 @@ function calibratedSpan(f, covered, coverage) {
 function calibrationCoverageText(f, [lo, hi], s) {
   const at = (hz) => formatFrequencyWithResolution(hz,
     gridResolutionHz(f, nearestIndex(f, hz), s.binHz));
-  const parts = [`calibrated ${at(lo)}–${at(hi)}`];
-  if (lo > f[0] * 1.000001) parts.push(`uncalibrated below ${at(lo)}`);
-  if (hi < f[f.length - 1] * 0.999999) parts.push(`uncalibrated above ${at(hi)}`);
-  return `${parts.join(', ')} (no extrapolation)`;
+  const parts = [`kalibrováno ${at(lo)}–${at(hi)}`];
+  if (lo > f[0] * 1.000001) parts.push(`nekalibrováno pod ${at(lo)}`);
+  if (hi < f[f.length - 1] * 0.999999) parts.push(`nekalibrováno nad ${at(hi)}`);
+  return `${parts.join(', ')} (bez extrapolace)`;
 }
 
 /**
@@ -562,7 +570,7 @@ function noCoverageText(f, s) {
   return `Frekvenční profil "${c.name || UNAVAILABLE.UNKNOWN}"${pts} nepokrývá žádný z `
     + `${f.length} měřených bodů (${gridFrequencyText(f, 0, s.binHz)}–`
     + `${gridFrequencyText(f, f.length - 1, s.binHz)}): žádný bod není korigován (bez `
-    + 'extrapolace); zobrazeno RAW, nekalibrováno.';
+    + 'extrapolace); zobrazena surová křivka, nekalibrováno.';
 }
 
 /**
@@ -587,19 +595,20 @@ function responseSummary(view, s, { primaryValues, offset, include, mask }) {
   }
   const status = view.quality.word;
   const what = view.series.find((d) => d.id === view.primary);
-  const kindText = (what.kindText || what.kind).toLowerCase();
-  const head = `Frequency response (${kindText}${view.badges.includes(
-    UNAVAILABLE.UNCALIBRATED) ? ', uncalibrated' : ''})`;
-  if (lo < 0) return `${head}: no measured points; measurement quality: ${status}.`;
+  const kindText = (what.kindText || what.kind).split(' + ')
+    .map((k) => KIND_WORDS[k] || k.toLowerCase()).join(' + ');
+  const head = `Frekvenční odezva (${kindText}${view.badges.includes(
+    UNAVAILABLE.UNCALIBRATED) ? ', nekalibrováno' : ''})`;
+  if (lo < 0) return `${head}: žádné změřené body; kvalita měření: ${status}.`;
   const v = (i) => ratioDbText(primaryValues[i] + offset);
-  const where = anyReliable ? '' : ' (no reliable range: over all points)';
-  return `${head}: maximum ${v(hi)} at ${gridFrequencyText(f, hi, s.binHz)}, minimum ${v(lo)} `
-    + `at ${gridFrequencyText(f, lo, s.binHz)}${where}, measurement quality: ${status}.`;
+  const where = anyReliable ? '' : ' (žádný spolehlivý rozsah: přes všechny body)';
+  return `${head}: maximum ${v(hi)} na ${gridFrequencyText(f, hi, s.binHz)}, minimum ${v(lo)} `
+    + `na ${gridFrequencyText(f, lo, s.binHz)}${where}, kvalita měření: ${status}.`;
 }
 
 /**
  * CursorReadout = { index, frequency: { hz, text, resolutionHz }, raw: text, corrected: text,
- *   view: text|null, reliability: 'reliable'|'unreliable'|'NOT ASSESSED', snr: text,
+ *   view: text|null, reliability: 'spolehlivé'|'nespolehlivé'|'NOT ASSESSED', snr: text,
  *   spread: text|null, calibrated: bool, lines: [text] }
  * Frequency at the local resolution (§69, §97); RAW and CALIBRATED both (§36); SNR or
  * NOT MEASURED; derived value labelled.
@@ -616,11 +625,11 @@ function responseReadout(view, s, index, ctx) {
   if (s.correction) {
     calibrated = !!ctx.covered && ctx.covered[i] === 1;
     corrected = calibrated ? ratioDbText(s.correction.correctedDb[i] + ctx.offset)
-      : 'not covered by the profile (uncalibrated)';
+      : 'mimo profil (nekalibrováno)';
   } else if (s.correctionNote) corrected = UNAVAILABLE.UNAVAILABLE;
   const viewText = ctx.derived && (!ctx.include || ctx.include(i))
     ? ratioDbText(ctx.primaryValues[i] + ctx.offset) : null;
-  const reliability = ctx.mask ? (ctx.mask[i] ? 'reliable' : 'unreliable')
+  const reliability = ctx.mask ? (ctx.mask[i] ? 'spolehlivé' : 'nespolehlivé')
     : UNAVAILABLE.NOT_ASSESSED;
   const snr = s.snrDb && Number.isFinite(s.snrDb[i])
     ? ratioDbText(s.snrDb[i], { decimals: 0, sign: false }) : UNAVAILABLE.NOT_MEASURED;
@@ -628,9 +637,9 @@ function responseReadout(view, s, index, ctx) {
   let spread = null;
   const a = s.aggregate;
   if (a && a.spreadDb && Number.isFinite(a.spreadDb[i]))
-    spread = `±${ratioDbText(a.spreadDb[i], { sign: false })} (${a.runs} runs)`;
+    spread = `±${ratioDbText(a.spreadDb[i], { sign: false })} (${a.runs} běhů)`;
   const lines = [
-    `Frequency ${freqText}`,
+    `Frekvence ${freqText}`,
     `RAW ${raw}`,
     `CALIBRATED ${corrected}`,
   ];
@@ -639,9 +648,9 @@ function responseReadout(view, s, index, ctx) {
     lines.push(`${vs.kindText || vs.kind} ${viewText}`);
   }
   lines.push(`SNR ${snr}`);
-  if (phase) lines.push(`Phase ${phase}`);
-  if (spread) lines.push(`Run spread ${spread}`);
-  lines.push(`Reliability ${reliability}`);
+  if (phase) lines.push(`Fáze ${phase}`);
+  if (spread) lines.push(`Rozptyl běhů ${spread}`);
+  lines.push(`Spolehlivost ${reliability}`);
   if (ctx.normalized) lines.push(ctx.normalized.label);
   return {
     index: i,
@@ -666,11 +675,11 @@ function phaseText(deg) {
 /** "Phase NOT MEASURED: <reason>." for a source (responseSource) or a transfer without phase. */
 export function phaseUnavailableText(s) {
   const reason = s && s.phaseReason ? PHASE_REASON_TEXT[s.phaseReason] || s.phaseReason : null;
-  return `Phase ${UNAVAILABLE.NOT_MEASURED}${reason ? `: ${reason}` : ''}.`;
+  return `Fáze ${UNAVAILABLE.NOT_MEASURED}${reason ? `: ${reason}` : ''}.`;
 }
 
 /** Y axis of the phase view: wrapped degrees. */
-export const PHASE_Y_LABEL = 'Phase · degrees (wrapped, delay of the alignment removed)';
+export const PHASE_Y_LABEL = 'Fáze · stupně (zabalená, zpoždění zarovnání odečteno)';
 
 /**
  * buildPhaseView(source, options) → PhaseView | null
@@ -703,13 +712,13 @@ export function buildPhaseView(source) {
   const rel = reliabilityMask(s);
   const split = splitByMask(s.phaseDeg, rel.mask, 0);
   const authoritative = status !== 'INVALID';
-  const label = 'OBSERVED phase · wrapped (−180°, 180°]';
+  const label = 'OBSERVED fáze · zabalená (−180°, 180°]';
   const series = [
     { id: 'phase', label, kind: K.OBSERVED, role: 'observed', values: split.reliable,
       width: LINE_STYLES.primary.width, dash: LINE_STYLES.primary.dash,
       alpha: authoritative ? LINE_STYLES.primary.alpha : LINE_STYLES.unreliable.alpha,
       show: true, reliable: true, derivation: null },
-    { id: 'phase-unreliable', label: `${label} · UNRELIABLE (dashed)`, kind: K.OBSERVED,
+    { id: 'phase-unreliable', label: `${label} · NESPOLEHLIVÉ (čárkovaně)`, kind: K.OBSERVED,
       role: 'observed', values: split.unreliable, width: LINE_STYLES.unreliable.width,
       dash: LINE_STYLES.unreliable.dash, alpha: LINE_STYLES.unreliable.alpha, show: true,
       reliable: false, derivation: null },
@@ -724,15 +733,15 @@ export function buildPhaseView(source) {
   };
   let count = 0;
   for (let i = 0; i < n; i++) if (Number.isFinite(s.phaseDeg[i])) count++;
-  view.summary = `Phase response (observed, wrapped to ±180°): ${count} points from `
-    + `${gridFrequencyText(f, 0, s.binHz)} to ${gridFrequencyText(f, n - 1, s.binHz)}; `
-    + `measurement quality: ${view.quality.word}.`;
+  view.summary = `Fázová odezva (naměřená, zabalená do ±180°): ${count} bodů od `
+    + `${gridFrequencyText(f, 0, s.binHz)} do ${gridFrequencyText(f, n - 1, s.binHz)}; `
+    + `kvalita měření: ${view.quality.word}.`;
   view.readout = (index) => {
     if (!(index >= 0 && index < n)) return null;
     const res = gridResolutionHz(f, index, s.binHz);
-    const lines = [`Frequency ${formatFrequencyWithResolution(f[index], res)}`,
-      `Phase ${Number.isFinite(s.phaseDeg[index]) ? phaseText(s.phaseDeg[index]) : DASH}`,
-      `Reliability ${rel.mask ? (rel.mask[index] ? 'reliable' : 'unreliable')
+    const lines = [`Frekvence ${formatFrequencyWithResolution(f[index], res)}`,
+      `Fáze ${Number.isFinite(s.phaseDeg[index]) ? phaseText(s.phaseDeg[index]) : DASH}`,
+      `Spolehlivost ${rel.mask ? (rel.mask[index] ? 'spolehlivé' : 'nespolehlivé')
         : UNAVAILABLE.NOT_ASSESSED}`];
     return { index, lines, text: lines.join(' · ') };
   };

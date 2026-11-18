@@ -89,16 +89,16 @@ export function createSaving(ctx, svc, ops) {
       } catch (err) {
         lostRun = true;
         sv.stored = false;
-        cmp.notify('error', 'Experiment not stored', `"${name}" was no longer stored, and storing `
-          + `it again failed: ${err.message || String(err)}. The experiment is not stored; `
-          + 'save again.');
+        cmp.notify('error', 'Experiment není uložen', `„${name}“ už nebyl uložen a jeho nové uložení `
+          + `selhalo: ${err.message || String(err)}. Experiment není uložen; `
+          + 'uložte ho znovu.');
         return null;
       }
       sv.experiment = again;
       m.savedAnnotation = again.annotations && again.annotations.notes || null;
       m.savedName = again.name;
-      cmp.notify('success', 'Experiment saved again', `"${name}" was no longer stored; the `
-        + 'same experiment is stored again under its id.');
+      cmp.notify('success', 'Experiment znovu uložen', `„${name}“ už nebyl uložen; tentýž `
+        + 'experiment je znovu uložen pod svým id.');
       return sv.id;
     };
     try {
@@ -110,14 +110,14 @@ export function createSaving(ctx, svc, ops) {
       if (name !== stored.name) meta.name = name;
       if (notes !== null && notes !== storedNotes) meta.notes = notes;
       // A lost acknowledgement: the write reported an error, yet the run is stored.
-      const lost = confirmed ? ' (the write reported an error, but the experiment is stored)' : '';
+      const lost = confirmed ? ' (zápis ohlásil chybu, ale experiment je uložen)' : '';
       if (!Object.keys(meta).length) {
         m.savedAnnotation = storedNotes;
         m.savedName = stored.name;
-        if (confirmed) cmp.notify('success', 'Experiment saved', `"${stored.name}"${lost}.`);
+        if (confirmed) cmp.notify('success', 'Experiment uložen', `„${stored.name}“${lost}.`);
         else {
-          cmp.notify('info', 'Nothing to update', `"${stored.name}" already has this name and `
-            + 'these notes.');
+          cmp.notify('info', 'Není co aktualizovat', `„${stored.name}“ už má tento název `
+            + 'a tyto poznámky.');
         }
         return sv.id;
       }
@@ -130,14 +130,14 @@ export function createSaving(ctx, svc, ops) {
       }
       m.savedAnnotation = next.annotations && next.annotations.notes || null;
       m.savedName = next.name;
-      cmp.notify('success', confirmed ? 'Experiment saved' : 'Experiment updated',
-        `"${next.name}"${lost}: ${Object.keys(meta).map((k) => (k === 'name' ? 'name'
-          : 'annotation notes')).join(' and ')} updated; the measured experiment is stored `
-          + 'unchanged.');
+      cmp.notify('success', confirmed ? 'Experiment uložen' : 'Experiment aktualizován',
+        `„${next.name}“${lost}: ${Object.keys(meta).map((k) => (k === 'name' ? 'název'
+          : 'poznámky anotace')).join(' a ')} aktualizováno; naměřený experiment zůstává uložen `
+          + 'beze změny.');
       return sv.id;
     } catch (err) {
-      cmp.notify('error', 'Experiment name and notes not updated', 'The measured experiment is '
-        + `stored (${sv.id}); only the metadata change failed: ${err.message || String(err)}`);
+      cmp.notify('error', 'Název a poznámky experimentu nebyly aktualizovány', 'Naměřený experiment '
+        + `je uložen (${sv.id}); selhala jen změna metadat: ${err.message || String(err)}`);
       return sv.id;
     } finally {
       m.saving = false;
@@ -181,14 +181,14 @@ export function measureUnsavedPart(ctx, svc, ops) {
     measureWhatWouldBeLost() {
       const lost = [];
       if (this.measureUnsaved) {
-        lost.push({ domain: 'measure', label: 'A completed measurement that is not saved' });
+        lost.push({ domain: 'measure', label: 'Dokončené měření, které není uložené' });
       }
       if (this.measureMetadataPending) {
-        lost.push({ domain: 'measure', label: 'A name or notes not stored yet (Update name and '
-          + 'notes)' });
+        lost.push({ domain: 'measure', label: 'Název nebo poznámky, které ještě nejsou uložené (Aktualizovat '
+          + 'název a poznámky)' });
       }
       if (this.meas.cal.level) {
-        lost.push({ domain: 'measure', label: 'The level calibration (kept in page memory only)' });
+        lost.push({ domain: 'measure', label: 'Kalibrace úrovně (drží se jen v paměti stránky)' });
       }
       return lost;
     },
@@ -232,11 +232,11 @@ export function measureExperimentPart(ctx, svc, ops) {
         ops.markStored(this, e);
         ops.refresh();
         const d = ops.evidenceOf(result).definition;
-        const from = !d ? '' : e.definition.hash === d.hash ? `from definition ${definitionText(d,
-          d)}, ` : 'NOT from the loaded definition (the recipe that ran differs), ';
-        this.notify('success', 'Experiment saved', `"${e.name}" (${from}${this.exps.persistent
-          ? 'stored in this browser' : 'kept in memory for this page view only: export it to keep '
-          + 'it'}).`);
+        const from = !d ? '' : e.definition.hash === d.hash ? `z definice ${definitionText(d,
+          d)}, ` : 'NE z načtené definice (recept, který proběhl, se liší), ';
+        this.notify('success', 'Experiment uložen', `„${e.name}“ (${from}${this.exps.persistent
+          ? 'uložen v tomto prohlížeči' : 'drží se jen v paměti tohoto zobrazení stránky: pro '
+          + 'uchování ho exportujte'}).`);
         return id;
       } catch (err) {
         // The write may have been stored with its acknowledgement lost: read it back.
@@ -259,16 +259,16 @@ export function measureExperimentPart(ctx, svc, ops) {
         if (there) {
           ctx.save = null; // a retry stores this run under a new id, with the same decoration
           ops.saveOf(result).decorate = sv.decorate || null;
-          this.notify('error', 'Experiment not saved', `A different record is stored under this `
-            + `id (${sv.id}); this experiment was not saved. Save again to store it under a `
-            + 'new id.');
+          this.notify('error', 'Experiment nebyl uložen', `Pod tímto id (${sv.id}) je uložen jiný `
+            + 'záznam; tento experiment se neuložil. Uložte ho znovu, uloží se pod novým '
+            + 'id.');
           return null;
         }
         if (unread) {
-          this.notify('error', 'Experiment not confirmed', `${err.message || String(err)}. The `
-            + 'store could not be read back to see whether the experiment was stored; save again '
-            + '(a retry never stores a second copy).');
-        } else this.notify('error', 'Experiment not saved', err.message || String(err));
+          this.notify('error', 'Experiment nepotvrzen', `${err.message || String(err)}. Úložiště `
+            + 'nešlo zpětně přečíst, aby se ověřilo, zda je experiment uložen; uložte ho znovu '
+            + '(opakování nikdy neuloží druhou kopii).');
+        } else this.notify('error', 'Experiment nebyl uložen', err.message || String(err));
         return null;
       } finally {
         this.meas.saving = false;
@@ -276,8 +276,8 @@ export function measureExperimentPart(ctx, svc, ops) {
     },
     /** Show a saved experiment's result in the result panel (inspection, §75). */
     measureShowExperiment(e, title) {
-      ctx.shown = { kind: 'experiment', src: e, title: title || `Saved experiment "${e.name
-        || '(unnamed)'}"`, testContext: experimentTestContext(e) };
+      ctx.shown = { kind: 'experiment', src: e, title: title || `Uložený experiment „${e.name
+        || '(bez názvu)'}“`, testContext: experimentTestContext(e) };
       ops.resetInvalidViewOptions(e);
       ops.rebuildAll();
     },

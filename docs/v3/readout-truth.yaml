@@ -251,7 +251,9 @@ readouts:
       engine.analyser (fftSize 8192, smoothing 0.55) to per-column data; levelNear for the
       marker; chipLevelText; logTicks/linearTicks and maxFrequencyFor for the axis
     resolution: 5.86 Hz bins at 48 kHz; chips 3 significant digits and 1 dB
-    calibration: none, digital before the DAC; caption RELATIVE LEVEL (dBFS-like, uncalibrated)
+    calibration: >-
+      none, digital before the DAC; caption RELATIVNÍ ÚROVEŇ (obdoba dBFS, nekalibrováno), ADR
+      0017's RELATIVE LEVEL (dBFS-like, uncalibrated) in Czech since U115
     limitations: >-
       The -13.56 dB scale offset and the smoothing are not stated; up to about 1 dB
       scalloping; the marker takes the bin maximum without interpolation and its ±2-bin window

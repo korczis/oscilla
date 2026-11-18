@@ -257,7 +257,8 @@ Theme colours, fonts and axes come from `src/js/charts/chart-theme.js#chartTheme
 `src/js/charts/chart-theme.js#observeSize`, and ticks and log mapping from `src/js/charts/axes.js`
 (tested by `tests/unit/charts.test.mjs`). A chart computes nothing it does not show from its
 input, and it labels what a level is: the spectrum axis says
-`src/js/charts/spectrum-chart.js#SPECTRUM_Y_LABEL` ("RELATIVE LEVEL (dBFS-like, uncalibrated)").
+`src/js/charts/spectrum-chart.js#SPECTRUM_Y_LABEL` ("RELATIVNÍ ÚROVEŇ (obdoba dBFS,
+nekalibrováno)", ADR 0017's "RELATIVE LEVEL (dBFS-like, uncalibrated)" shown in Czech since U115).
 Charts keep OSCILLA's own visual language (rule `project.visual-identity-lock`).
 
 ## Add a browser check

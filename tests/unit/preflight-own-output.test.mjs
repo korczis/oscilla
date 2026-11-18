@@ -195,12 +195,12 @@ test('C016 R-1: the Noise item does not call a reading with the app\'s output th
     for (const output of [{ gain: 0.08, audibleVoices: 0, otherAudio: true },
       { gain: 0.08, audibleVoices: 1 }]) {
       const it = noiseItem(output);
-      assert.match(it.detail, /includes the app's own output/, JSON.stringify(output));
+      assert.match(it.detail, /obsahuje vlastní výstup aplikace/, JSON.stringify(output));
       assert.doesNotMatch(it.detail, /background [-\u2212]20/i, it.detail);
-      assert.match(it.detail, /^Preflight input [-\u2212]20\.0 dB relative/);
+      assert.match(it.detail, /^Předběžný vstup [-\u2212]20\.0 dB relative/);
     }
     const room = noiseItem({ gain: 0.08, audibleVoices: 0, otherAudio: false });
-    assert.match(room.detail, /^Preflight background [-\u2212]20\.0 dB relative/);
+    assert.match(room.detail, /^Předběžné pozadí [-\u2212]20\.0 dB relative/);
     assert.doesNotMatch(room.detail, /own output/);
     assert.equal(room.status, 'warn', 'a high background is still a warning');
   });
