@@ -212,7 +212,7 @@ export function responseSource(src, { profile = null, useCalibration = true } = 
           name: ref.name || profile.name || null, algorithm: c.algorithm };
       } else {
         correctionNote = `Frekvenční profil „${ref.name || UNAVAILABLE.UNKNOWN}“ není načten: `
-          + 'kalibrovaná křivka není k dispozici; zobrazeno RAW.';
+          + 'kalibrovaná křivka není k dispozici; zobrazena surová křivka.';
       }
     }
   }
@@ -570,7 +570,7 @@ function noCoverageText(f, s) {
   return `Frekvenční profil "${c.name || UNAVAILABLE.UNKNOWN}"${pts} nepokrývá žádný z `
     + `${f.length} měřených bodů (${gridFrequencyText(f, 0, s.binHz)}–`
     + `${gridFrequencyText(f, f.length - 1, s.binHz)}): žádný bod není korigován (bez `
-    + 'extrapolace); zobrazeno RAW, nekalibrováno.';
+    + 'extrapolace); zobrazena surová křivka, nekalibrováno.';
 }
 
 /**

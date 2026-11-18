@@ -208,7 +208,7 @@ export function buildIrView(ir, options = {}) {
   const notes = [origin.label + '.', `Metoda: ${ir.method || 'spectral'} (${ir.algorithm}).`];
   // T019: a full-overlap tail still holding the decay estimates an upper bound on the noise.
   const tailBound = Number.isFinite(ir.noiseFloorDb) && ir.noiseFloorMethod === 'full-overlap-tail';
-  if (!Number.isFinite(ir.noiseFloorDb)) notes.push('Šumový dozvuk: není k dispozici.');
+  if (!Number.isFinite(ir.noiseFloorDb)) notes.push('Šum na konci odezvy: není k dispozici.');
   else if (tailBound) notes.push(tailBoundNote(ir, stimulusFrames, msPerSample));
   else if (typeof ir.noiseFloorMethod === 'string' && ir.noiseFloorMethod) {
     notes.push(`Odhad šumu na konci odezvy: ${ir.noiseFloorMethod}.`);

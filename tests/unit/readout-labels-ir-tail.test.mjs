@@ -222,7 +222,7 @@ test('T019 negative: a null floor still reads "not available", with no bound and
     assert.equal(irNoiseFloorWindow(none, FRAMES), null);
     const v = buildIrView(none, { scale: 'db', stimulusFrames: FRAMES });
     assert.match(v.summary, /šum na konci odezvy není k dispozici, /);
-    assert.ok(v.notes.includes('Šumový dozvuk: není k dispozici.'));
+    assert.ok(v.notes.includes('Šum na konci odezvy: není k dispozici.'));
     assert.doesNotMatch(v.summary + v.notes.join(' '), /≤|horní mez|ms až /);
   });
 

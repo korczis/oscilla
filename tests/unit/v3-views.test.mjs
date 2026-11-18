@@ -506,7 +506,7 @@ test('response view from an experiment: profile needed for CALIBRATED, else UNAV
   const e = experimentOf(SYS, QUALITY, { id: 7, calibration: { frequency: PROFILE, level: null } });
   const without = buildResponseView(e);
   assert.equal(without.primary, 'raw');
-  assert.ok(without.notes.some((n) => /není načten: kalibrovaná křivka není k dispozici; zobrazeno RAW\./
+  assert.ok(without.notes.some((n) => /není načten: kalibrovaná křivka není k dispozici; zobrazena surová křivka\./
     .test(n)));
   const withProfile = buildResponseView(e, { profile: PROFILE });
   assert.equal(withProfile.primary, 'corrected');
