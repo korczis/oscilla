@@ -240,14 +240,26 @@ export function ownsViewOf(id) {
   return !!(w && w.view);
 }
 
+/** The workspaces whose <main> scroll padding is their own: the Synth keeps the height of its
+ *  sticky section nav (src/index.html, synth/nav-room.js). */
+const OWN_SCROLL_PADDING = Object.freeze(['synth']);
+
+/** <main>'s scroll padding: the frame's top padding (PRO.page's pt-6, a literal Tailwind can
+ *  see; tests/unit/page-frame.test.mjs holds the two equal), so a card scrolled into view keeps
+ *  the gap it has unscrolled, in a view of its own as on <main>'s grid (#598). */
+export const FRAME_SCROLL_PT = 'scroll-pt-6';
+
 /**
- * The classes <main> carries in a workspace: the Pro page frame (PRO.page), its bottom
- * gutter and a scroll padding equal to its top (a panel scrolled into view keeps the gap)
- * where the workspace's panels stand in <main>'s grid, none where the workspace has a
- * view of its own, which carries the frame (Q110: one frame, never two nested).
+ * The classes <main> carries in a workspace: the Pro page frame (PRO.pageView) where the
+ * workspace's panels stand in <main>'s grid, none where the workspace has a view of its own,
+ * which carries the frame (Q110: one frame, never two nested); and in every workspace but the
+ * Synth a scroll padding equal to the frame's top, so a card brought into view by
+ * scrollIntoView (Show in Measure, a Related link) keeps the frame's gap under the header.
  */
 export function mainFrameOf(id) {
-  return ownsViewOf(id) ? '' : `${PRO.pageView} scroll-pt-6`;
+  const frame = ownsViewOf(id) ? [] : [PRO.pageView];
+  if (!OWN_SCROLL_PADDING.includes(id)) frame.push(FRAME_SCROLL_PT);
+  return frame.join(' ');
 }
 
 /**

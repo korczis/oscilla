@@ -53,7 +53,10 @@ test('every workspace of the registry stands in the one Pro page frame', () => {
       assert.ok(tag, `${id} is a view in the registry, so src/index.html has #osc-view-${id}`);
       const cls = frameOf(tag);
       for (const c of FRAME) assert.ok(cls.has(c), `#osc-view-${id} binds ${c} (PRO.page)`);
-      assert.equal(mainFrameOf(id), '', `${id}: <main> adds no second frame around its view`);
+      for (const c of FRAME) {
+        assert.ok(!mainFrameOf(id).split(/\s+/).includes(c),
+          `${id}: <main> adds no second frame (${c}) around its view`);
+      }
     } else {
       assert.ok(!VIEWS.has(id), `${id} has a view in the markup: mark it view: true`);
       const frame = mainFrameOf(id).split(/\s+/);
@@ -102,7 +105,8 @@ test('<main> binds the frame and has no padding of its own', () => {
   for (const c of classesOf(MAIN)) {
     assert.doesNotMatch(c, /^!?(max-|min-|sm:|md:|lg:|xl:|2xl:)*p[xytrbl]?-/, `<main> ${c}`);
   }
-  // A panel scrolled into view keeps the frame's top gap: scroll padding = padding-top.
+  // A card scrolled into view keeps the frame's top gap: scroll padding = the frame's pt
+  // (tests/unit/page-frame.test.mjs holds it per workspace).
   const frame = mainFrameOf(WORKSPACE_IDS.find((id) => !ownsViewOf(id))).split(/\s+/);
   const pt = frame.find((c) => /^pt-/.test(c));
   assert.ok(frame.includes(`scroll-${pt}`), `<main>'s frame pairs ${pt} with scroll-${pt}`);
