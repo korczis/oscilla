@@ -368,7 +368,8 @@ test('response view: SMOOTHED and NORMALIZED labels whenever derived; RAW kept',
 
   const nm = buildResponseView(RESULT, { normalization: { mode: 'at-frequency', hz: 1000 } });
   assert.equal(nm.axes.y.kind, 'NORMALIZED');
-  assert.match(nm.axes.y.label, /NORMALIZED/);
+  // The kind stays the data value; the label is shown text (U115 7c, oscilla-c3's P3 on #597).
+  assert.match(nm.axes.y.label, /^NORMALIZOVANÁ velikost · dB vůči referenci$/);
   for (const s of nm.series) assert.match(s.label, /NORMALIZED/, s.id);
   assert.ok(nm.badges.includes('NORMALIZED'));
   // 0 dB at 1 kHz on the normalized curve (interpolated in log f at the reference).
@@ -505,7 +506,7 @@ test('response view from an experiment: profile needed for CALIBRATED, else UNAV
   const e = experimentOf(SYS, QUALITY, { id: 7, calibration: { frequency: PROFILE, level: null } });
   const without = buildResponseView(e);
   assert.equal(without.primary, 'raw');
-  assert.ok(without.notes.some((n) => /není načten: křivka CALIBRATED je UNAVAILABLE/
+  assert.ok(without.notes.some((n) => /není načten: kalibrovaná křivka není k dispozici; zobrazena surová křivka\./
     .test(n)));
   const withProfile = buildResponseView(e, { profile: PROFILE });
   assert.equal(withProfile.primary, 'corrected');
