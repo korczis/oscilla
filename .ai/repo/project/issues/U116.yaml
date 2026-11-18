@@ -8,7 +8,7 @@ priority: p2
 profile: implementation
 objective: "Lands as fix(ui). The JS data and display layer of the Výuka (#m=learn) and Předvolby (#m=presets) pages: the Learn card titles, bodies, demo and link labels, the live example line (topicExample), the way back to a lesson, the preset category labels, the 16 reference-note descriptions, the built-in preset names, descriptions and parameter lines, the Custom row (describeConfig and its saved date) and the History time, in cs-CZ. The frozen V1 data (LEARN_TOPICS, BUILTIN_PRESETS, PRESET_CATEGORIES, REFERENCE_NOTES, describeConfig, topicExample, pinned by tests/freeze/golden-a7b7a23.json) stays English: the page shows Czech display copies keyed by id (data/learn-display.js, data/presets-display.js), and a demo or a preset loads its data record by id. The literals of src/index.html (Relate to current settings, the Demo prefix, Load and its aria-label prefix, Reset to defaults, Clear history, Recall, Delete and Confirm, the Save preset dialog, Open the Synth and the History row label) are left for a markup slice, since two other branches rewrite that markup (F002, #597). Owner order 2026-11-17 (Výuka, Předvolby and Syntéza are half English), handed over by oscilla-0b, who owns the Czech passes U109-U115."
 why: "Q104 (the app's visible prose is Czech): a Playwright audit of v3.41.3 on 2026-11-17 listed at least 167 English strings on Výuka, Předvolby and Syntéza, 56 of them on the Learn cards and 44 on Předvolby."
-current_state: "Built by oscilla-e5's builder in task t-20261118014951-bb3b on fix/czech-pass-8."
+current_state: "Built by oscilla-e5's builder in task t-20261118014951-bb3b on fix/czech-pass-8. Landed by #600 (62873b29, c3's review and legs OK at 03072780) and released in v3.41.6 (0ecb7e33). Left open on the live check of v3.41.6 (oscilla-43, 2026-11-18): every Learn card still shows the English button 'Relate to current settings' (src/index.html:2592), so AC1's 'the Learn cards show Czech' does not hold yet; AC3 keeps src/index.html out of this pass, so the markup cut that follows U118 closes it, and then U116 is stamped done with the release that carries it."
 scope:
   - "src/js/data"
   - "src/js/core/instrument.js"
@@ -27,4 +27,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-18'
-updated_at: '2026-11-18'
+updated_at: 2026-11-18
