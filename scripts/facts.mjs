@@ -76,7 +76,8 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { gzipSync } from 'node:zlib';
 import { parseClaims, unquote } from '../tests/unit/claims-parse.mjs';
-import { CLOSED as ROADMAP_CLOSED, PHASE_OF, ROADMAP_REL } from './roadmap.mjs';
+import { CLOSED as ROADMAP_CLOSED, PHASE_OF, ROADMAP_REL, ROADMAP_SPAWN_TIMEOUT_MS }
+  from './roadmap.mjs';
 import { parseYaml } from './yaml-subset.mjs';
 
 export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -226,7 +227,7 @@ export const MAJORDOMUS_SOURCE = 'majordomus plan roadmap --json';
 const statusCache = new Map();
 
 function runTool(bin, args, root) {
-  const r = spawnSync(bin, args, { cwd: root, encoding: 'utf8', timeout: 180_000,
+  const r = spawnSync(bin, args, { cwd: root, encoding: 'utf8', timeout: ROADMAP_SPAWN_TIMEOUT_MS,
     maxBuffer: 64 * 1024 * 1024 });
   if (r.error) {
     return { error: r.error.code === 'ENOENT' ? `${bin} is not on PATH`
