@@ -1307,20 +1307,21 @@ export function assessQuality({
 }
 
 const STATUS_WORDS = Object.freeze({
-  GOOD: 'good',
-  USABLE: 'usable',
-  POOR: 'poor',
-  INVALID: 'invalid',
+  GOOD: 'dobrá',
+  USABLE: 'použitelná',
+  POOR: 'slabá',
+  INVALID: 'neplatná',
 });
 
 /**
- * summarizeQuality(assessment) → one or two short sentences for screen readers (§150), e.g.
- * "Measurement quality: usable. 27 dB median SNR; reliable 40.0 Hz-15.2 kHz; uncalibrated.
- *  Main issue: 3 runs differ by ±2.0 dB (…)." Never lists points; INVALID names its causes.
+ * summarizeQuality(assessment) → one or two short sentences for screen readers (§150), in Czech
+ * (U115; computed for display, never stored), e.g. "Kvalita měření: použitelná. Medián SNR 27 dB;
+ * spolehlivě 40.0 Hz-15.2 kHz; nekalibrováno. Hlavní problém: <the reason's own text>." Never
+ * lists points; INVALID names its causes. The reasons' texts are stored data and stay as they are.
  */
 export function summarizeQuality(assessment) {
   const { status, reasons, metrics, mask } = assessment;
-  const head = `Measurement quality: ${STATUS_WORDS[status]}.`;
+  const head = `Kvalita měření: ${STATUS_WORDS[status]}.`;
   if (status === 'INVALID') {
     const causes = reasons.filter((r) => r.severity === 'fail').slice(0, 2).map((r) => r.text);
     return `${head} ${causes.join('; ')}.`;
@@ -1329,33 +1330,33 @@ export function summarizeQuality(assessment) {
   const parts = [];
   const snr = metrics.snrMedianDb;
   const snrDecimals = snr !== null && snr >= QUALITY_THRESHOLDS.snrGoodDb ? 0 : 1;
-  parts.push(snr === null ? 'SNR not measured' : `${ratioDb(snr, snrDecimals)} dB median SNR`);
+  parts.push(snr === null ? 'SNR nezměřeno' : `medián SNR ${ratioDb(snr, snrDecimals)} dB`);
   if (mask.frequencies.length) {
     const ranges = metrics.reliableRanges;
-    if (!ranges.length) parts.push('no reliable range');
+    if (!ranges.length) parts.push('žádný spolehlivý rozsah');
     else {
-      const shown = ranges.slice(0, 2).map(([lo, hi]) => rangeText(fmt, lo, hi)).join(' and ');
-      const more = ranges.length > 2 ? ` (+${ranges.length - 2} more)` : '';
-      parts.push(`reliable ${shown}${more}`);
+      const shown = ranges.slice(0, 2).map(([lo, hi]) => rangeText(fmt, lo, hi)).join(' a ');
+      const more = ranges.length > 2 ? ` (+${ranges.length - 2} další)` : '';
+      parts.push(`spolehlivě ${shown}${more}`);
     }
   }
   const fullFreq = metrics.frequencyCalibrated;
-  if (fullFreq && metrics.levelCalibrated) parts.push('calibrated');
-  else if (!metrics.calibratedRange && !metrics.levelCalibrated) parts.push('uncalibrated');
+  if (fullFreq && metrics.levelCalibrated) parts.push('kalibrováno');
+  else if (!metrics.calibratedRange && !metrics.levelCalibrated) parts.push('nekalibrováno');
   else {
     const cal = [];
     if (metrics.calibratedRange) {
       cal.push(fullFreq
-        ? 'microphone calibrated'
-        : `microphone calibrated ${rangeText(fmt, ...metrics.calibratedRange)} only`);
-    } else cal.push('no microphone calibration');
-    cal.push(metrics.levelCalibrated ? 'level calibrated' : 'levels relative');
+        ? 'mikrofon kalibrován'
+        : `mikrofon kalibrován jen ${rangeText(fmt, ...metrics.calibratedRange)}`);
+    } else cal.push('bez kalibrace mikrofonu');
+    cal.push(metrics.levelCalibrated ? 'úroveň kalibrována' : 'úrovně relativní');
     parts.push(cal.join(', '));
   }
   let text = `${head} ${parts.join('; ')}.`;
   if (status !== 'GOOD') {
     const issue = reasons.find((r) => r.scope === Q && r.severity !== 'ok');
-    if (issue) text += ` Main issue: ${issue.text}.`;
+    if (issue) text += ` Hlavní problém: ${issue.text}.`;
   }
   return text;
 }

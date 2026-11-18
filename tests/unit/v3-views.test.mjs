@@ -347,7 +347,7 @@ test('response view: RAW primary, ratio axis, no SPL anywhere without level cali
     const ids = v.series.map((s) => s.id);
     assert.deepEqual(ids, ['envelope-upper', 'envelope-lower', 'raw', 'raw-unreliable']);
     assert.equal(v.bands.length, 1, 'three runs: a spread band');
-    assert.match(v.series.find((s) => s.id === 'raw').label, /RAW · OBSERVED · mean of 3 runs/);
+    assert.match(v.series.find((s) => s.id === 'raw').label, /RAW · OBSERVED · průměr z 3 běhů/);
     const readouts = Array.from({ length: 20 }, (_, k) => v.readout(Math.floor(k
       * (v.x.length - 1) / 19)));
     assert.doesNotMatch(allText(v, readouts), /SPL/);
@@ -413,7 +413,7 @@ test('response view: unreliable segments split exactly at the quality mask edges
   // Above the 12 kHz chain note nothing is drawn solid.
   v.x.forEach((f, i) => { if (f > 12000) assert.equal(rel.values[i], null); });
   assert.ok(v.markers.unreliableRanges.some(([lo, hi]) => lo <= 12100 && hi > 12000));
-  assert.ok(v.notes.some((n) => /Dashed, faded stretches are unreliable/.test(n)));
+  assert.ok(v.notes.some((n) => /Čárkované, vybledlé úseky jsou nespolehlivé/.test(n)));
   // splitByMask segments are the mask runs.
   const split = common.splitByMask(COMBINED.magnitudeDb, mask);
   assert.deepEqual(split.segments.filter((s) => s.reliable).map((s) => [s.from, s.to]), runs);
@@ -437,8 +437,8 @@ test('response view: cursor readout at the local resolution, RAW and CALIBRATED,
     assert.ok(Math.abs(value - v.x[i]) <= step / 2 + 1e-9, `${r.frequency.text} vs ${v.x[i]}`);
     assert.equal(r.corrected, 'UNCALIBRATED');
     assert.match(r.snr, /^−?\d+ dB$|^NOT MEASURED$/);
-    assert.match(r.spread, /^±[\d.]+ dB \(3 runs\)$/);
-    assert.equal(r.reliability, QUALITY.mask.reliable[i] ? 'reliable' : 'unreliable');
+    assert.match(r.spread, /^±[\d.]+ dB \(3 běhů\)$/);
+    assert.equal(r.reliability, QUALITY.mask.reliable[i] ? 'spolehlivé' : 'nespolehlivé');
   }
   // A coarser resolution prints fewer digits: 18437.238194 Hz at 5.86 Hz vs at 46.9 Hz.
   assert.equal(formatFrequencyWithResolution(18437.238194, 5.86), '18.437 kHz');
@@ -457,12 +457,13 @@ test('response view: the summary equals the extremes of the reliable data', () =
     if (hi < 0 || x > COMBINED.magnitudeDb[hi]) hi = i;
     if (lo < 0 || x < COMBINED.magnitudeDb[lo]) lo = i;
   });
-  const expected = `maximum ${common.ratioDbText(COMBINED.magnitudeDb[hi])} at `
+  const word = { GOOD: 'dobrá', USABLE: 'použitelná', POOR: 'slabá', INVALID: 'neplatná' };
+  const expected = `maximum ${common.ratioDbText(COMBINED.magnitudeDb[hi])} na `
     + `${common.gridFrequencyText(v.x, hi, COMBINED.binHz)}, minimum `
-    + `${common.ratioDbText(COMBINED.magnitudeDb[lo])} at `
-    + `${common.gridFrequencyText(v.x, lo, COMBINED.binHz)}, measurement quality: `
-    + `${QUALITY.status.toLowerCase()}.`;
-  assert.ok(v.summary.startsWith('Frequency response (observed, uncalibrated): '), v.summary);
+    + `${common.ratioDbText(COMBINED.magnitudeDb[lo])} na `
+    + `${common.gridFrequencyText(v.x, lo, COMBINED.binHz)}, kvalita měření: `
+    + `${word[QUALITY.status]}.`;
+  assert.ok(v.summary.startsWith('Frekvenční odezva (naměřená, nekalibrováno): '), v.summary);
   assert.ok(v.summary.endsWith(expected), `${v.summary}\n${expected}`);
   // The 4 kHz low-pass: the maximum is in the pass band, the minimum near the reliable top.
   assert.ok(v.x[hi] < FC && v.x[lo] > FC);
@@ -486,9 +487,9 @@ test('response view: CALIBRATED only where the profile covers; coverage stated (
   const raw = v.series.find((s) => s.id === 'raw');
   assert.ok(raw.values.some((x, i) => x !== null && !cov[i]), 'RAW still shows uncovered');
   assert.match(v.markers.calibratedRange.label,
-    /^calibrated 100 Hz–8\.0+ kHz, uncalibrated below 100 Hz, uncalibrated above 8\.0+ kHz/);
+    /^kalibrováno 100 Hz–8\.0+ kHz, nekalibrováno pod 100 Hz, nekalibrováno nad 8\.0+ kHz/);
   assert.ok(v.notes.includes(v.markers.calibratedRange.label));
-  assert.match(v.readoutAt(15000).corrected, /not covered/);
+  assert.match(v.readoutAt(15000).corrected, /mimo profil/);
   const inside = v.readoutAt(1000);
   assert.equal(inside.calibrated, true);
   assert.equal(inside.corrected, common.ratioDbText(r.calibrated.frequency.correctedDb[
@@ -504,7 +505,7 @@ test('response view from an experiment: profile needed for CALIBRATED, else UNAV
   const e = experimentOf(SYS, QUALITY, { id: 7, calibration: { frequency: PROFILE, level: null } });
   const without = buildResponseView(e);
   assert.equal(without.primary, 'raw');
-  assert.ok(without.notes.some((n) => /is not loaded: the CALIBRATED curve is UNAVAILABLE/
+  assert.ok(without.notes.some((n) => /není načten: křivka CALIBRATED je UNAVAILABLE/
     .test(n)));
   const withProfile = buildResponseView(e, { profile: PROFILE });
   assert.equal(withProfile.primary, 'corrected');
@@ -524,7 +525,7 @@ test('response view: INVALID is not authoritative; no quality → reliability no
   assert.ok(invalid.series.every((s) => s.alpha <= 0.45));
   const noQ = buildResponseView({ ...RESULT, quality: null });
   assert.equal(noQ.reliability.source, 'validRange');
-  assert.match(noQ.summary, /measurement quality: not assessed\.$/);
+  assert.match(noQ.summary, /kvalita měření: neposouzena\.$/);
   const bare = buildResponseView({ ...RESULT, quality: null,
     transfer: { ...COMBINED, validRange: null } });
   assert.equal(bare.reliability.source, 'none');
@@ -546,14 +547,14 @@ test('IR view: ms re the direct peak, absolute offset kept, window non-destructi
   assert.ok(Math.abs(v.origin.absolutePeakS * SR - (PRE + DELAY)) <= 4);
   assert.equal(v.axes.x.unit, 'ms');
   assert.equal(v.windowRegion.startIndex, Math.round((ir.peakTimeS - 0.001) * SR));
-  assert.match(v.windowRegion.label, /view only/);
+  assert.match(v.windowRegion.label, /jen zobrazení/);
   assert.deepEqual(ir.samples, copy, 'IR never cropped or modified');
   assert.ok(v.decimation.points <= 4000 + 1);
   // Decimation keeps the extremes.
   const max = Math.max(...v.series[0].values);
   assert.equal(max, Math.max(...ir.samples));
-  assert.match(v.summary, /^Impulse response: direct peak \d+\.\d{2} ms after the capture start/);
-  assert.match(v.summary, /original scale/);
+  assert.match(v.summary, /^Impulsní odezva: přímá špička \d+\.\d{2} ms po začátku záznamu/);
+  assert.match(v.summary, /původní měřítko/);
   assert.doesNotMatch(allText(v), /SPL|NORMALIZED/);
 });
 
@@ -568,7 +569,7 @@ test('IR view: dB and normalized views are labelled NORMALIZED', () => {
   const lin = buildIrView(ir, { normalize: true });
   assert.match(lin.axes.y.label, /NORMALIZED: relative amplitude \(peak = 1\.0\)/);
   assert.equal(Math.max(...lin.series[0].values.map(Math.abs)), 1);
-  assert.match(n.summary, /display NORMALIZED/);
+  assert.match(n.summary, /zobrazení NORMALIZED/);
   assert.equal(buildIrView(null), null);
 });
 
@@ -597,10 +598,10 @@ test('RTA view: bars are the band power over the band edges; relative unless cal
   assert.equal(v.axes.y.label, RELATIVE_SCALE_LABEL);
   assert.equal(v.axes.y.unit, RELATIVE_UNIT);
   assert.ok(v.badges.includes('UNCALIBRATED'));
-  assert.match(v.notes.join(' '), /not IEC-verified/);
+  assert.match(v.notes.join(' '), /neověřeno podle IEC/);
   let hi = v.bars[0];
   for (const b of v.bars) if (b.value > hi.value) hi = b;
-  assert.ok(v.summary.includes(`highest band ${hi.nominal >= 1000 ? `${hi.nominal / 1000}`
+  assert.ok(v.summary.includes(`nejvyšší pásmo ${hi.nominal >= 1000 ? `${hi.nominal / 1000}`
     : hi.nominal}`), v.summary);
   assert.ok(v.summary.includes(hi.text));
   assert.doesNotMatch(allText(v), /SPL/);
@@ -631,7 +632,7 @@ test('RTA view: peak hold, freeze, dB SPL only under a valid level calibration',
   const rta = rtaResult({ sampleRate: SR, resolution: 'third', bands, levelsDb: out.levelsDb });
   const v = buildRtaView({ rta, peakDb: out.peakDb, frozen: avg.frozen, averaging: avg });
   assert.ok(v.badges.includes('FROZEN'));
-  assert.match(v.summary, /; frozen\.$/);
+  assert.match(v.summary, /; zmrazeno\.$/);
   assert.equal(v.peaks.length, bands.length);
   v.peaks.forEach((pk) => assert.ok(pk.value >= v.bars[pk.index].value - 1e-9));
   assert.deepEqual(v.peaks[0].dash, [3, 3]);
@@ -648,7 +649,7 @@ test('RTA view: peak hold, freeze, dB SPL only under a valid level calibration',
   assert.ok(Math.abs(b1k.value - (b1k.rawDb + LEVEL.offsetDb)) < 0.05,
     'profile ~0 dB at 1 kHz; the offset makes it dB SPL');
   assert.equal(cal.bars[0].covered, false, '25 Hz outside the 100 Hz-8 kHz profile');
-  assert.match(cal.notes.join(' '), /no extrapolation/);
+  assert.match(cal.notes.join(' '), /bez extrapolace/);
   // An invalid level calibration is not applied.
   const bad = buildRtaView({ rta, levelCalibration: { ...LEVEL, offsetDb: LEVEL.offsetDb + 1 } });
   assert.doesNotMatch(allText(bad), /SPL/);

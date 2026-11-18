@@ -639,12 +639,12 @@ function defineChecks() {
     return { ...H.verdict({
       idleClean: idle.listeners === 0 && !idle.armed && !idleIndicator,
       completeArmed: done.listeners === 1 && done.armed && done.lost.length === 1
-        && /^measure: A completed measurement that is not saved$/.test(done.lost[0]),
+        && /^measure: Dokončené měření, které není uložené$/.test(done.lost[0]),
       indicator: indicator && /Zatím neuloženo/.test(hint),
       unsavedAsks: unsavedReload.dialog === 'beforeunload' && unsavedReload.stayed,
       savedDisarmed: saved.listeners === 0 && !saved.armed && !savedIndicator,
       calibrationArmed: calibrated === true && withCal.listeners === 1
-        && withCal.lost.some((x) => /^measure: The level calibration/.test(x)),
+        && withCal.lost.some((x) => /^measure: Kalibrace úrovně/.test(x)),
       clearedDisarmed: cleared.listeners === 0 && !cleared.armed,
     }), idle, done, hint, unsavedReload, saved, withCal: withCal.lost, cleared: cleared.lost };
   });
@@ -995,11 +995,11 @@ function defineChecks() {
     const has = (s, re) => s.lost.some((x) => re.test(x));
     return { ...H.verdict({
       savedClean: !saved.armed && saved.listeners === 0,
-      typedArmed: typed.armed && typed.listeners === 1 && has(typed, /^measure: A name or notes/)
+      typedArmed: typed.armed && typed.listeners === 1 && has(typed, /^measure: Název nebo poznámky/)
         && badge === 'neuložený název nebo poznámky',
       updatedClean: !updated.armed && updated.listeners === 0,
-      failedStaysArmed: failedUpdate.armed && has(failedUpdate, /^measure: A name or notes/)
-        && failedUpdate.alerts.includes('Experiment name and notes not updated'),
+      failedStaysArmed: failedUpdate.armed && has(failedUpdate, /^measure: Název nebo poznámky/)
+        && failedUpdate.alerts.includes('Název a poznámky experimentu nebyly aktualizovány'),
       droppedClean: !dropped.armed,
       renameArmed: renaming.armed && has(renaming, /^experiments: A rename being typed$/),
       renameCancelled: !cancelled.armed && cancelled.listeners === 0,

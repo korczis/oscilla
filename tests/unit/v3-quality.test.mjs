@@ -188,7 +188,9 @@ function assertWellFormed(q) {
   assert.equal(q.mask.reliable.length, q.mask.frequencies.length);
   assert.equal(q.mask.calibrated.length, q.mask.frequencies.length);
   const summary = summarizeQuality(q);
-  assert.ok(summary.startsWith(`Measurement quality: ${q.status.toLowerCase()}.`), summary);
+  // U115 7b: the summary speaks Czech; the reasons it quotes stay their stored English.
+  const word = { GOOD: 'dobrá', USABLE: 'použitelná', POOR: 'slabá', INVALID: 'neplatná' };
+  assert.ok(summary.startsWith(`Kvalita měření: ${word[q.status]}.`), summary);
   assert.doesNotMatch(summary, /confiden/i);
   if (!q.metrics.levelCalibrated) {
     assert.doesNotMatch(summary, /SPL/);
@@ -254,7 +256,7 @@ test('clean high-SNR repeated response is GOOD with matching reasons', () => {
   assert.equal(one(q, 'LEVEL_CALIBRATION').severity, 'warn');
   const s = summarizeQuality(q);
   assert.match(s,
-    /^Measurement quality: good\. \d+ dB median SNR; reliable 20\.0 Hz-.+ kHz; uncalibrated\.$/);
+    /^Kvalita měření: dobrá\. medián SNR \d+ dB; spolehlivě 20\.0 Hz-.+ kHz; nekalibrováno\.$/);
 });
 
 test('low-SNR response is USABLE and names the band lost in the noise', () => {
@@ -280,8 +282,8 @@ test('low-SNR response is USABLE and names the band lost in the noise', () => {
   assert.equal(one(q, 'COVERAGE').severity, 'warn');
   assert.equal(one(q, 'REPEATABILITY_NOT_MEASURED').value, 1);
   const s = summarizeQuality(q);
-  assert.match(s, /^Measurement quality: usable\. \d+\.\d dB median SNR; reliable /);
-  assert.match(s, /Main issue: /);
+  assert.match(s, /^Kvalita měření: použitelná\. medián SNR \d+\.\d dB; spolehlivě /);
+  assert.match(s, /Hlavní problém: /);
 });
 
 test('very low SNR is POOR with a failing SNR reason', () => {
@@ -309,7 +311,7 @@ test('severely clipped sine is INVALID with the clipping values of checkCapture'
   assert.equal(q.metrics.clippingRegions, check.clipping.regions.length);
   // No passing reason is offered for a meaningless result.
   assert.equal(byCode(q, 'SNR_MEDIAN').length, 0);
-  assert.match(summarizeQuality(q), /^Measurement quality: invalid\. severe clipping at /);
+  assert.match(summarizeQuality(q), /^Kvalita měření: neplatná\. severe clipping at /);
 });
 
 test('mild clipping warns, sustained clipping fails (POOR), each with its values', () => {
@@ -368,7 +370,7 @@ test('missing calibration: reasons say uncalibrated, levelCalibrated false, neve
   }
   assert.match(one(q, 'LEVEL_CALIBRATION').text, /dB relative/);
   const s = summarizeQuality(q);
-  assert.match(s, /uncalibrated\.$/);
+  assert.match(s, /nekalibrováno\.$/);
   assert.doesNotMatch(JSON.stringify(q.reasons) + s, /SPL/);
 });
 
@@ -384,7 +386,7 @@ test('valid level calibration is reported with its offset; only then may SPL app
   assert.equal(r.severity, 'ok');
   assert.equal(r.value, 124.5);
   assert.match(r.text, /offset \+124\.5 dB from a 94\.0 dB SPL reference at 1\.000 kHz/);
-  assert.match(summarizeQuality(q), /no microphone calibration, level calibrated/);
+  assert.match(summarizeQuality(q), /bez kalibrace mikrofonu, úroveň kalibrována/);
   // A tampered calibration is not valid and is not labelled SPL.
   const bad = assessQuality({ ...CLEAN, calibration: { level: { ...level, offsetDb: 99 } } });
   assert.equal(bad.metrics.levelCalibrated, false);
@@ -413,7 +415,7 @@ test('calibrated mask respects profile coverage (20 Hz-16 kHz: uncalibrated abov
   assert.equal(q.status, 'GOOD', 'calibration coverage never changes the status');
   // The calibrated range is stated on the grid: its last point at or below 16 kHz.
   assert.ok(summarizeQuality(q).endsWith(
-    `; microphone calibrated ${fmtAt(q, 20)}-${fmtAt(q, last)} only, levels relative.`));
+    `; mikrofon kalibrován jen ${fmtAt(q, 20)}-${fmtAt(q, last)}, úrovně relativní.`));
 
   // Same result from the coverage range alone (covered on another grid).
   const byRange = assessQuality({
@@ -497,7 +499,7 @@ test('empty capture, digital silence and missing capture checks are INVALID', ()
   assertWellFormed(missing);
   assert.equal(missing.status, 'INVALID');
   one(missing, 'CAPTURE_MISSING');
-  assert.match(summarizeQuality(missing), /^Measurement quality: invalid\. no capture checks/);
+  assert.match(summarizeQuality(missing), /^Kvalita měření: neplatná\. no capture checks/);
 });
 
 test('dropout inside the sweep invalidates; outside the sweep window it warns', () => {
@@ -551,7 +553,7 @@ test('without a noise capture SNR is NOT MEASURED and reliability is the valid r
   assert.equal(r.value, null);
   assert.equal(q.metrics.snrMedianDb, null);
   assert.deepEqual(q.metrics.reliableRanges, [NO_NOISE.transfer.validRange]);
-  assert.match(summarizeQuality(q), /SNR not measured/);
+  assert.match(summarizeQuality(q), /SNR nezměřeno/);
 });
 
 test('RTA-only assessment: no transfer, resolution judged against the requested range', () => {
