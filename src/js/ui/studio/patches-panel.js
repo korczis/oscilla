@@ -110,17 +110,17 @@ export function mountPatches(dialogs, svc) {
         h('div', { class: 'osc-sp-acts' }, r.kind === 'project' ? [
           h('button', { type: 'button', class: 'osc-btn osc-btn-secondary',
             'data-osc': 'studio.saved.open', onClick: () => openProject(r.id),
-            text: confirmOpen === r.id ? 'Replace unsaved changes' : 'Open',
+            text: confirmOpen === r.id ? 'Nahradit neuložené změny' : 'Otevřít',
             'aria-label': confirmOpen === r.id
-              ? `Replace the unsaved changes in Studio with ${r.name}` : `Open ${r.name}` }),
-          btn(confirmDelete === r.id ? 'Confirm delete' : 'Delete', 'studio.saved.delete',
+              ? `Nahradit neuložené změny ve Studiu projektem ${r.name}` : `Otevřít ${r.name}` }),
+          btn(confirmDelete === r.id ? 'Potvrdit smazání' : 'Smazat', 'studio.saved.delete',
             () => remove(r.id), r.name),
         ] : [
-          btn('Insert', 'studio.saved.insert', () => applyPatch(r.id, 'insert'), r.name),
-          btn('Replace graph', 'studio.saved.replace', () => applyPatch(r.id, 'replace'),
+          btn('Vložit', 'studio.saved.insert', () => applyPatch(r.id, 'insert'), r.name),
+          btn('Nahradit graf', 'studio.saved.replace', () => applyPatch(r.id, 'replace'),
             r.name),
-          btn('Export', 'studio.saved.export', () => exportPatch(r.id), r.name),
-          btn(confirmDelete === r.id ? 'Confirm delete' : 'Delete', 'studio.saved.delete',
+          btn('Exportovat', 'studio.saved.export', () => exportPatch(r.id), r.name),
+          btn(confirmDelete === r.id ? 'Potvrdit smazání' : 'Smazat', 'studio.saved.delete',
             () => remove(r.id), r.name),
         ]),
       ]))) : h('p', { class: 'osc-sl-empty', text: 'Nothing saved yet. Save the project from the '
@@ -206,9 +206,9 @@ export function mountPatches(dialogs, svc) {
     if (typeof svc.dirty === 'function' && svc.dirty() && confirmOpen !== id) {
       confirmOpen = id;
       await refresh();
-      status.textContent = 'Studio has unsaved changes. Opening this project replaces them: '
-        + 'press "Replace unsaved changes" to open it, or close this dialog and save or export '
-        + 'first.';
+      status.textContent = 'Studio má neuložené změny. Otevření tohoto projektu je nahradí: '
+        + 'otevřete ho tlačítkem „Nahradit neuložené změny“, nebo zavřete tento dialog a nejdřív '
+        + 'uložte či exportujte.';
       status.hidden = false;
       svc.announce(status.textContent, { assertive: true });
       const b = list.querySelector(`[data-id="${CSS.escape(id)}"] [data-osc="studio.saved.open"]`);
