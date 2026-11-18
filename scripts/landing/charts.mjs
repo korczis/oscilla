@@ -17,7 +17,7 @@
 //                            'claims-trend', ratchets, reviews, cadence }    (SVG strings)
 //   chartTable(name, facts) -> { caption, head: [..], rows: [[..]] }     (the table view)
 
-import { CHARTS } from '../facts.mjs';
+import { CHARTS, median } from '../facts.mjs';
 import { AUDIT_CLASS_COPY, RATCHET_COPY } from './copy.mjs';
 import { fmtInt } from './format.mjs';
 
@@ -122,6 +122,58 @@ const datedReleases = (facts) => (facts.releases?.items || [])
   .filter((r) => r.published_at).slice()
   .sort((a, b) => (a.published_at < b.published_at ? -1 : a.published_at > b.published_at ? 1 : 0));
 
+/**
+ * How many releases the per-release charts and their value tables show: the newest ones. Their
+ * series grew by a point and a table row per release in six charts (releases, size, growth,
+ * claims-trend, ratchets, cadence), about 2.4 KB of grafy/ a release, past P018's page ceiling;
+ * windowed, grafy/ stays the same size however many releases follow (landing-lab.test.mjs).
+ * The older releases stay in zmeny/, which lists every tag.
+ */
+export const RELEASE_WINDOW = 48;
+
+/**
+ * `facts` with each per-release series cut to its newest `n` entries, the number cut kept as
+ * `omitted` beside it. Each chart then derives its axes from the points it shows; the releases
+ * chart counts cumulatively, so it keeps its axis from 0 and numbers each release by its true
+ * position (omitted + index). The facts other pages read are not changed.
+ */
+export function windowFacts(facts, n = RELEASE_WINDOW) {
+  const last = (xs) => (Array.isArray(xs) && xs.length > n ? xs.slice(xs.length - n) : xs);
+  const cut = (xs) => (Array.isArray(xs) ? Math.max(0, xs.length - n) : 0);
+  const out = { ...facts };
+  if (facts.releases) {
+    const dated = datedReleases(facts);
+    out.releases = { ...facts.releases, items: last(dated), omitted: cut(dated) };
+  }
+  if (facts.codeInventory?.perRelease) {
+    out.codeInventory = { ...facts.codeInventory, perRelease: last(facts.codeInventory.perRelease),
+      omitted: cut(facts.codeInventory.perRelease) };
+  }
+  if (facts.claimsPerRelease?.items) {
+    out.claimsPerRelease = { ...facts.claimsPerRelease, items: last(facts.claimsPerRelease.items),
+      omitted: cut(facts.claimsPerRelease.items) };
+  }
+  if (facts.ratchets?.items) {
+    out.ratchets = { ...facts.ratchets, items: facts.ratchets.items.map((it) => ({ ...it,
+      perRelease: last(it.perRelease), omitted: cut(it.perRelease) })) };
+  }
+  if (facts.releaseCadence?.items) {
+    // The median line and the count are of the intervals shown, so the line stays inside the
+    // axis those intervals give (the median as scripts/facts.mjs computes it, to 0.01 h).
+    const items = last(facts.releaseCadence.items);
+    const m = median(items.map((x) => x.hours));
+    out.releaseCadence = { ...facts.releaseCadence, items,
+      omitted: cut(facts.releaseCadence.items),
+      releases: cut(facts.releaseCadence.items) ? items.length + 1 : facts.releaseCadence.releases,
+      median: m === null ? null : Math.round(m * 100) / 100 };
+  }
+  return out;
+}
+
+/** The note a windowed chart adds to its description, or ''. */
+const windowNote = (omitted) => (omitted > 0
+  ? ` Graf ukazuje posledních ${RELEASE_WINDOW} vydání; ${omitted} starších je v Změnách.` : '');
+
 function dateTicks(t0, t1) {
   const ticks = [];
   const d = new Date(t0);
@@ -148,8 +200,9 @@ function releasesChart(facts) {
   const t0 = ts[0] - span * 0.03;
   const t1 = ts[ts.length - 1] + span * 0.03;
   const x = (t) => PLOT.x0 + ((t - t0) / (t1 - t0)) * (PLOT.x1 - PLOT.x0);
-  const step = niceStep(rs.length);
-  const max = Math.ceil(rs.length / step) * step;
+  const off = facts.releases?.omitted || 0;
+  const step = niceStep(off + rs.length);
+  const max = Math.ceil((off + rs.length) / step) * step;
   const y = (n) => PLOT.y1 - (n / max) * (PLOT.y1 - PLOT.y0);
   let body = yAxis(max, step, fmtInt);
   for (const t of dateTicks(t0, t1)) {
@@ -157,27 +210,30 @@ function releasesChart(facts) {
     body += xLabel(x(t), d.getUTCDate() === 1 ? `${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`
       : fmtDate(new Date(t).toISOString(), false));
   }
-  let line = `M${r1(x(ts[0]))},${r1(y(0))}`;
-  rs.forEach((_, i) => { line += `V${r1(y(i + 1))}H${r1(x(ts[i + 1] ?? ts[i]))}`; });
+  let line = `M${r1(x(ts[0]))},${r1(y(off))}`;
+  rs.forEach((_, i) => { line += `V${r1(y(off + i + 1))}H${r1(x(ts[i + 1] ?? ts[i]))}`; });
   body += `<path d="${line}" fill="none" stroke="${T.blue}" stroke-width="2" `
     + 'stroke-linejoin="round"/>';
   rs.forEach((r, i) => {
     const cx = r1(x(ts[i]));
-    const cy = r1(y(i + 1));
-    body += mark(`v${r.version} · ${fmtDate(r.published_at)} · ${i + 1}. vydání`,
+    const cy = r1(y(off + i + 1));
+    body += mark(`v${r.version} · ${fmtDate(r.published_at)} · ${off + i + 1}. vydání`,
       `<circle cx="${cx}" cy="${cy}" r="9" fill="transparent"/>`
       + `<circle cx="${cx}" cy="${cy}" r="4" fill="${T.blue}" stroke="${T.ground}" `
       + 'stroke-width="2"/>');
   });
   const first = rs[0];
   const last = rs[rs.length - 1];
-  body += `<text x="${r1(x(ts[0]) + 8)}" y="${r1(y(1) - 8)}" fill="${T.text2}" font-size="12">`
+  body += `<text x="${r1(x(ts[0]) + 8)}" y="${r1(y(off + 1) - 8)}" fill="${T.text2}" `
+    + 'font-size="12">'
     + `v${esc(first.version)}</text>`
-    + `<text x="${r1(x(ts[ts.length - 1]) - 8)}" y="${r1(y(rs.length) - 10)}" fill="${T.text}" `
+    + `<text x="${r1(x(ts[ts.length - 1]) - 8)}" y="${r1(y(off + rs.length) - 10)}" `
+    + `fill="${T.text}" `
     + `font-size="12" font-weight="600" text-anchor="end">v${esc(last.version)} · `
-    + `${fmtInt(rs.length)} vydání</text>`;
-  return frame('releases', title, sub, `${fmtInt(rs.length)} vydání od v${first.version} `
-    + `(${fmtDate(first.published_at)}) po v${last.version} (${fmtDate(last.published_at)}).`,
+    + `${fmtInt(off + rs.length)} vydání</text>`;
+  return frame('releases', title, sub, `${fmtInt(off + rs.length)} vydání, ukázaná od `
+    + `v${first.version} (${fmtDate(first.published_at)}) po v${last.version} `
+    + `(${fmtDate(last.published_at)}).${windowNote(off)}`,
   body);
 }
 
@@ -212,7 +268,8 @@ function sizeChart(facts) {
     + `<text x="${r1(lx)}" y="${r1(y(last.size / MB) - 8)}" fill="${T.text}" font-size="12" `
     + `font-weight="600" text-anchor="end">${fmtDec(last.size / MB)} MB</text>`;
   return frame('size', title, sub, `Velikost publikovaného souboru aplikace u ${fmtInt(rs.length)} `
-    + `vydání; poslední v${last.version} má ${fmtDec(last.size / MB)} MB.`, body);
+    + `vydání; poslední v${last.version} má ${fmtDec(last.size / MB)} MB.`
+    + windowNote(facts.releases?.omitted || 0), body);
 }
 
 // ------------------------------------------------------------------------------- stacked rows
@@ -429,7 +486,8 @@ function growthChart(facts) {
   }
   return frame('growth', title, sub, `Od v${rs[0].version} po v${last.version}: unit testy `
     + `${fmtInt(rs[0].unit)} až ${fmtInt(last.unit)}, prohlížečové sady ${fmtInt(rs[0].browser)} `
-    + `až ${fmtInt(last.browser)} souborů.`, body, height);
+    + `až ${fmtInt(last.browser)} souborů.${windowNote(facts.codeInventory?.omitted || 0)}`,
+  body, height);
 }
 
 // ------------------------------------------------------------------------------- P016 trends
@@ -587,7 +645,8 @@ function claimsTrendChart(facts) {
   body += legendRow(shown, height);
   return frame('claims-trend', title, sub, `${fmtInt(items.length)} vydání; `
     + `${absent ? `${fmtInt(absent)} bez souboru docs/CLAIMS.yaml; ` : ''}ve v${last.version} `
-    + `${last.present ? `${fmtInt(last.total)} tvrzení` : 'soubor chybí'}.`, body, height);
+    + `${last.present ? `${fmtInt(last.total)} tvrzení` : 'soubor chybí'}.`
+    + windowNote(facts.claimsPerRelease?.omitted || 0), body, height);
 }
 
 const MAX_RATCHET_COLS = 2;
@@ -736,7 +795,8 @@ function ratchetsChart(facts, copy) {
   body += `<text x="${gx}" y="${height - 14}" fill="${T.dim}" font-size="11">Osa x: vydání `
     + `v${esc(firstTag?.version ?? '')} až nyní, stejná pro všechny panely.</text>`;
   return frame('ratchets', title, sub, items.map((it) => `${(copy[it.file] || {}).name || it.file} `
-    + `${ratchetValue(it, it.head.value)}`).join('; ') + '.', body, height);
+    + `${ratchetValue(it, it.head.value)}`).join('; ') + '.' + windowNote(items[0]?.omitted || 0),
+  body, height);
 }
 
 /** The ordinal ramp of review severities on the chart ground (validated, --ordinal, dark). */
@@ -885,7 +945,8 @@ function cadenceChart(facts) {
     + `font-size="12" text-anchor="end">${esc(fmtHours(longest.hours))}</text>`;
   return frame('cadence', title, sub, `${fmtInt(items.length)} intervalů mezi `
     + `${fmtInt(c.releases)} vydáními; medián ${fmtHours(c.median)}, nejdelší `
-    + `${fmtHours(longest.hours)} (před v${longest.version}).`, body);
+    + `${fmtHours(longest.hours)} (před v${longest.version}).`
+    + windowNote(c.omitted || 0), body);
 }
 
 const RENDERERS = Object.freeze({
@@ -896,7 +957,8 @@ const RENDERERS = Object.freeze({
 });
 
 /** Every chart of CHARTS, rendered: { <name>: svg }. Throws on a name without a renderer. */
-export function renderCharts(facts) {
+export function renderCharts(all) {
+  const facts = windowFacts(all);
   const out = {};
   for (const name of CHARTS) {
     if (!RENDERERS[name]) throw new Error(`charts: no renderer for chart "${name}"`);
@@ -906,7 +968,8 @@ export function renderCharts(facts) {
 }
 
 /** The table view of a chart: the values it draws, as rows. */
-export function chartTable(name, facts) {
+export function chartTable(name, all) {
+  const facts = windowFacts(all);
   if (name === 'releases' || name === 'size') {
     const rs = datedReleases(facts);
     return { head: ['Verze', 'Vydáno', 'Velikost'], rows: rs.slice().reverse().map((r) => [
