@@ -8,6 +8,7 @@ priority: p2
 profile: implementation
 objective: "Lands as fix(sequencer). Coverage gap of af's critique of 96daa67b ('nothing places the second scheduler, editor._pump against the Studio transport, the second tempo'). Line numbers at origin/main a19f1ff6. The sequencer runs its own lookahead pump (src/js/sequencer/editor.js:620-652, LOOKAHEAD_S at :105, re-armed at :431 and :453) beside the Studio transport's scheduler (src/js/studio/transport.js, TIMELINE_LOOKAHEAD_S), and two tempo values exist: the sequence's tempoBpm (src/js/sequencer/model.js:44-46, :357, :425) and the Studio transport's tempo, converted on import and export (src/js/studio/sequence-import.js:96, :215). Both read the shared stop anchor of src/js/audio/clock.js but not one schedule. After: the sequencer's loop passes are scheduled by the one transport clock the Studio uses (one lookahead, one timer), the sequence's tempo is the transport's tempo when the sequence plays in the Studio and is converted at one named seam otherwise, and both claim and stop through the bus (C037, C050)."
 why: "af's critique of 96daa67b, coverage gap 'one bus' (second scheduler and second tempo); af's Play audit (two schedulers)."
+current_state: "Re-checked on main 4682eea4 in audit-and-stamp train A (oscilla-d9, 2026-11-18); left open. Criteria 1, 2, 4 met (db3291d3; one-transport-clock 4/0, sequencer-editor 30/0, freeze 1144/0); criterion 3 met at 44.1 kHz in CI run 44135531351 (seq-loop-seams PASS in chromium, firefox, webkit) but the 48 kHz Mac run of sequencer.cjs in three browsers is missing. The local run was refused by the suite load gate (1-minute load 63-112, OSC_LOAD_MAX 36) on 2026-11-17/18, so it is still owed. The criterion naming prismatic-majordomus-98 is met under Q111 (verdict 515.yaml by oscilla-c1 with oscilla-c3, who built none of it)."
 scope:
   - "src/js/sequencer/editor.js"
   - "src/js/sequencer/model.js"
@@ -33,4 +34,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-05
-updated_at: 2026-11-05
+updated_at: 2026-11-18

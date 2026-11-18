@@ -8,6 +8,7 @@ priority: p2
 profile: implementation
 objective: "Truth-table rows GEN-04 (scratchpad p05/truth-table.md). Each sweep field has a role=alert error element with aria-invalid and aria-describedby, as the generic pattern parameters (index.html:409-414) already do. setSweepFreq appends \"(provisional until audio starts)\" while the rate is provisional, matching presetDisabledReason."
 why: "P05 audit of origin/main b67d1e58 (v3.13.0): Typing 30000 into End frequency silently becomes 20.95 kHz; paramErrors holds \"Limited to the digital limit 20.95 kHz.\" but only the Settings dialog renders it. Parse errors and the duration clamp are just as silent. V1 (v1.0.0 index.html:408-419) showed them inline. 20.95 kHz comes from the provisional 44.1 kHz rate but reads as the device limit."
+current_state: "Re-checked on main 4682eea4 in audit-and-stamp train A (oscilla-d9, 2026-11-18); left open. Criteria 1-5 met (701f2986); criterion 6 not met strictly: the sweep alert reuses the legacy osc-pp-error <p> of the shared template under the shrinking-only Flowbite ratchet (debt 3910 -> 3905), not a Flowbite Pro component. app.cjs --only sweep-field-errors-inline (three engines, both origins) and npm run visual are still owed on this tree."
 scope:
   - "src/index.html"
   - "src/js/core/instrument.js"
@@ -32,4 +33,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-18
