@@ -1,0 +1,26 @@
+id: E078
+milestone: M046
+serves:
+  - "engineering-integrity#browser-suites-harnessed"
+title: "link-integrity's cross-workspace controls check on CI: a control intermittently does not land where it says"
+slug: link-integrity-cross-workspace-intermittent
+priority: p2
+profile: implementation
+objective: "Pin and fix why, on CI's browser leg 1, link-integrity.cjs's actions check ('N cross-workspace controls land where they say') intermittently fails one control: the workspace H.at waits for (NAV_MS 10 000 ms, tests/browser/lib/link-walk.cjs) is not reached, or the control is not visible to press, while every other control passes."
+why: "Two reds on 2026-11-18, on two engines, on trees whose product code the failing navigation does not depend on. (1) #606 (fix/roadmap-spawn-bound, head 1f37a19d, a release script and its unit test only): run 44260937313 attempt 1, firefox leg 1 (job 134654238670), the sequencer's seq.toSynth control not visible, per oscilla-c3's legcheck, on main's own product; attempt 2 was green. (2) #607 (Czech pass 7c, head 48c1f610, Measure text only): run 44292556477, webkit leg 1 (job 134761326718), [webkit/http] 'synth Related -> studio: did not open studio', 1 failure and 41 checks passed; the same src/js, src/index.html and tests/browser at 1a319564 passed webkit leg 1 21/21 in run 44280190579. oscilla-c3 classified both as flakes of this check, not of either change, and asked for this issue so that a third red is judged against a known shape."
+current_state: "Open, cause not pinned. Filed 2026-11-18 by oscilla-0b on oscilla-c3's request. Two observations, firefox and webkit, both on leg 1 and both in the actions block (one page walks every ACTIONS entry in turn; a control inside a closed menu is pressed after its opener). Each was green on a re-run of the same head. Not yet known: whether the miss is the press (the control hidden or covered when clicked) or the landing (the router's workspace change later than NAV_MS under the runner's load), because the check records only 'did not open <to>' and not H.state at the deadline."
+scope:
+  - "tests/browser/link-integrity.cjs"
+  - "tests/browser/lib/link-walk.cjs"
+depends_on: []
+acceptance_criteria:
+  - "A failure of the actions check names what was observed at the deadline: the control's visibility and hit target when pressed, and H.state (workspace, hash, current nav item) when H.at gave up, so the next red pins press or landing."
+  - "The cause is stated in this issue's current_state from such a failure log, or from a reproduction under load."
+  - "The actions check passes 20 alternated rounds in firefox and webkit in a row with main failing at least once in the same window, or the fix is a product change with a test that fails on main."
+  - "A reviewer's verdict."
+validation:
+  - "node tests/browser/link-integrity.cjs --browsers firefox,webkit"
+evidence_required:
+  - "verified"
+created_at: '2026-11-18'
+updated_at: '2026-11-18'
