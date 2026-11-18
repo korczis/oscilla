@@ -438,6 +438,19 @@ test('A15: release:prepare refreshes the roadmap before its build and judges it'
     'the gate judges the committed roadmap against the plan');
 });
 
+test('A15: the roadmap spawn bound fits plan roadmap under load, as facts.mjs bounds it', async () => {
+  // Measured 2026-11-18: 36-86 s at load 50-110; a 60 s bound failed release:prepare 3 times.
+  const { ROADMAP_SPAWN_TIMEOUT_MS } = await import('../../scripts/roadmap.mjs');
+  assert.ok(Number.isFinite(ROADMAP_SPAWN_TIMEOUT_MS) && ROADMAP_SPAWN_TIMEOUT_MS >= 2 * 86_000,
+    `the bound covers twice the measured worst case: ${ROADMAP_SPAWN_TIMEOUT_MS}`);
+  const facts = read('scripts/facts.mjs').match(/timeout: ([0-9_]+)/);
+  assert.ok(facts, 'scripts/facts.mjs bounds the same command');
+  assert.equal(ROADMAP_SPAWN_TIMEOUT_MS, Number(facts[1].replaceAll('_', '')),
+    'one bound for one command');
+  assert.match(read('scripts/roadmap.mjs'), /timeout: ROADMAP_SPAWN_TIMEOUT_MS/,
+    'planRoadmap spawns with the named bound, not a literal');
+});
+
 test('A15: under release:prepare, the roadmap is the plan\'s open milestones', async (t) => {
   if (process.env.OSC_ROADMAP_CHECK !== '1') {
     t.skip('judged by release:prepare (OSC_ROADMAP_CHECK=1), not by every pull request');
