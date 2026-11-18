@@ -8,6 +8,7 @@ priority: p1
 profile: implementation
 objective: "Lands as fix(ui). E054's axe-core colour-contrast pass (tests/browser/qa-regressions.cjs contrast, run in chromium, firefox and webkit) flagged the Learn workspace's tool links (data-osc=\"learn.tool\") at 3.99:1 in the dark theme at 1536 px: PRO.link (src/js/ui/pro-classes.js) draws dark:text-primary-500 (#3b82f6) on a Pro card's dark:bg-gray-800 (#1f2937), under WCAG AA 4.5:1. After: PRO.link's dark text is primary-400 (#60a5fa), a step within the identity's blue scale (project.visual-identity-lock v4, the reason recorded beside the class), every Pro link meets 4.5:1 on a card and on the page in both themes, and E054's one known exception (AXE_KNOWN) is dropped in the same change, since a listed violation that no longer occurs fails that check."
 why: "Found on 2026-11-09 by oscilla-ce building E054 (Q097 answer 2, decided by oscilla-43, oscilla-c1 and oscilla-ce): the axe pass that never ran found a real AA failure. The id and the plan were approved by the integrator oscilla-43 the same day; it is built stacked on E054 and rides T6."
+current_state: "Re-checked on main 4682eea4 in audit-and-stamp train A (oscilla-d9, 2026-11-18); left open. Criteria met; its browser checks are green in CI run 44135531351 on this tree. Not stampable while BLOCKED on E054 (open, see E054), whose axe pass is the check this issue relies on."
 scope:
   - "src/js/ui/pro-classes.js"
   - "tests/unit/u103-link-contrast.test.mjs"
@@ -28,4 +29,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-09'
-updated_at: '2026-11-09'
+updated_at: '2026-11-18'

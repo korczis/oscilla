@@ -25,4 +25,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-05
-updated_at: 2026-11-10
+updated_at: 2026-11-17T23:51:59Z
+started_at: 2026-11-17T23:42:33Z
+started_event: sha256:5661335d2fe72291606ad40da2e3de68db42bda2ff484624f16ce86c2e4d1640
+verified_at: 2026-11-17T23:46:38Z
+verified_event: sha256:f819c031e6d92dc17c5ce997617d0ff546933ec864407c3c2939ce0b0e9102fe
+completed_at: 2026-11-17T23:51:59Z
+completed_event: sha256:1c1b34012ed3668d445e1fc55db1965f1f2e9c015f3731338685068a47cd2612
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/release-publish.test.mjs; node scripts/release-publish.mjs --help"
+    result: "Audit-and-stamp train A (oscilla-d9, 2026-11-17), re-checked on main 4682eea4 (effc3b20 via T6, #523): 1 a dist rewritten mid-publish is refused or the git-show bytes are uploaded (release-publish.test.mjs:670-698; 3 tests fail on effc3b20^); 2 a moved HEAD is refused before verify-deploy naming both commits, a clean tree publishes (:701-751); 3 verify-deploy is unchanged (not in the diff); release-publish 45/45, --help rc 0. 4 the verdict is 523.yaml by oscilla-c3 standing in for oscilla-c1 (a separate top-level session, built none of the guarded content), met under Q111."
+    artifact: ".ai/repo/reviews/523.yaml"
+    commit: 4682eea40739a7b37a7be04d3d19cd7be0dd5226
+    recorded_at: 2026-11-17T23:49:53Z
