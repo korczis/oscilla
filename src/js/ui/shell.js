@@ -252,7 +252,17 @@ export function navGroupOf(id) {
   return (w && w.group) || null;
 }
 
-const fold = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+/**
+ * The page header's group crumb of a workspace: its group's label, or '' for a top-level one
+ * and for one whose own label repeats the group's ("Syntéza > Syntéza" says nothing twice).
+ */
+export function groupCrumbOf(id) {
+  const g = navGroupOf(id);
+  const label = g ? GROUP_REGISTRY[g].label : '';
+  return label && label !== WORKSPACE_LABELS[id] ? label : '';
+}
+
+const fold =(s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
   .trim();
 
 /** Does workspace `id` match the search `query`? Every word must start a word of it. */

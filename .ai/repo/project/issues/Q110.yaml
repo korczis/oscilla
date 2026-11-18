@@ -1,0 +1,24 @@
+id: Q110
+milestone: M055
+serves:
+  - "ui-flowbite-pro#pro-shell"
+title: "Owner decisions 2026-11-17: one page frame with the title in the shared header, a backlog triage approved in bulk, stale agent worktrees rescued and removed"
+slug: owner-decisions-page-frame-backlog-triage-stale-worktrees
+priority: p1
+profile: routine
+owner: "repository owner"
+objective: "Record the owner's three answers of 2026-11-17 that steer the remaining shell:main part of F002, the triage of the plan backlog and the removal of stale agent worktrees."
+why: "2026-11-17 the owner wrote (verbatim, Czech): 'vzdyt to je otresny ... kazda stranka zrovnana jinak, zadny DRY, to je chyba, nedotazeny session contexts, obsolete; nedodrzuje to .ai/; ignoruje to flowbite pro llm; kazda stranka vypada jinak; shell neni constistentni; neni plne funkcni; nema 100 % coveratge; ui/ux vypada otresne; nakupene/nahromazene ukoly v .ai/ jsou nedotazene; hromadi se issues/mrs/prs/intents; zacina se duplikovat kod misto toho aby byly vyuzity a/nebo rozsireny mechanismy pro -> dynamic/generic/derived/infered/....' Measured the same day on v3.41.3 at 1536 px: five different content tops (162/169/192/209/240 px) and four text insets across the 13 workspaces, 'Syntéza > Syntéza' in the breadcrumb; the plan held 979 issues (163 READY, 333 BLOCKED), 26 milestones ACTIVE and 13 BLOCKED, F002 blocking 11 of M055's 14 issues since 2026-10-28; majordomus check failed no-stale-topology on six agent worktrees under .claude/worktrees/ (10 to 81 uncommitted paths, 44 to 46 days old, held by no task) and local backup/* branches on no remote."
+current_state: "Decided 2026-11-17 (21:44 UTC). Asked by peer p2 (Claude Code session 980e22ee-d9d4-4dd0-8318-8b727f127ce9) via AskUserQuestion. (1) Question (verbatim): 'Jeden rám stránky (dokončení F002 shell:main, směr Flowbite Pro): kde má být viditelný titulek stránky? Dnes ho Výuka a Předvolby mají v obsahu (H2 24 px), Syntéza, Měření a ostatní jen ve sdílené liště s drobečkovou navigací.' Options: 'Jen ve sdílené liště (Recommended)' (every workspace in one Pro container px-4 pt-6, <main> without the legacy padding, no second title in the content) / 'Pro hlavička v obsahu' (an H1, summary and actions block in every page's content, about 60 px each). Answer: 'Jen ve sdílené liště (Recommended)'. (2) Question (verbatim): 'Nahromaděný plán: 979 issues, z toho 163 READY a 333 BLOCKED, 26 milníků ACTIVE a 13 BLOCKED, 28 intentů; F002 blokuje 11 ze 14 issues M055 už od 28. 10. Jak naložit s hromadou?' Options: 'Triáž + hromadné schválení (Recommended)' (a triage artifact grouping BLOCKED by blocker, duplicates and stale items with cancel/merge proposals, approved in bulk, then batches led from the blockers, F002 first) / 'Zmrazit nové položky' / 'Obojí'. Answer: 'Triáž + hromadné schválení (Recommended)'. (3) Question (verbatim): '`majordomus check` selhává na no-stale-topology: 6 osiřelých agentních worktrees v .claude/worktrees/ (10 až 81 necommitnutých souborů, stáří 44 až 46 dní, nedrží je žádný úkol) a lokální větve backup/* bez remote. Co s nimi?' Options: 'Zachránit a odstranit (Recommended)' (commit each worktree's uncommitted work to a local rescue/<name> branch, remove the worktree, list what each held) / 'Nejdřív jen výpis' / 'Nechat být'. Answer: 'Zachránit a odstranit (Recommended)'."
+scope:
+  - ".ai/repo/project/issues/Q110.yaml"
+depends_on: []
+acceptance_criteria:
+  - "The owner's three answers are recorded quoting each question, its options and the answer with the date and session id."
+  - "F002's shell:main work puts every workspace in one Pro page container with the visible title only in the shared page header; the cancel/merge of plan items follows the owner's bulk approval of the triage, never before it; no rescued work is lost (each rescue/<name> branch holds its worktree's uncommitted paths before the worktree is removed)."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: '2026-11-17'
+updated_at: '2026-11-17'
