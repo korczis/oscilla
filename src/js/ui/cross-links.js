@@ -38,8 +38,9 @@ export const STUDIO_TEMPLATE_LINKS = Object.freeze(livePanelLinks()
     osc: l.osc, ...(l.text ? { text: l.text } : {}) })));
 
 /**
- * The text of a related entry's link in the page header: "Filter Automation in Studio" for a
- * Studio template, else the target workspace's label.
+ * The text of a related entry's link in the page header: "Šablona Filter Automation ve Studiu"
+ * for a Studio template, else the target workspace's label. A noun, not the verb of the action
+ * links (studioTemplateText): the header lists related things, it does not command (U118).
  */
 export function relatedText(r) {
   const t = templateOfRef(`${r.id}${r.hash || ''}`);
@@ -59,7 +60,7 @@ export function studioTemplateHref(template) {
 
 /** The visible text (and accessible name) of a lab's Studio link: its own, else the default. */
 export function studioTemplateText(link) {
-  return link.text || `Open ${link.title} in Studio`;
+  return link.text || `Otevřít šablonu ${link.title} ve Studiu`;
 }
 
 /**

@@ -100,14 +100,14 @@ const ACTION_NOTICE_MS = 15000;
 const INPUTS = ['pointer', 'keyboard', 'touch'];
 
 // [data-osc, the workspace that shows it, Studio template id, template title, Back label, the
-// link's text when it is not "Open <title> in Studio" (G013: the Sequencer's row is Czech)]
+// link's text when it is not "Otevřít šablonu <title> ve Studiu" (U118: one fallback)]
 const LAB_STUDIO = [
   ['filter.toStudio', 'filter', 'filter-automation', 'Filter Automation', 'Zpět na Filtry'],
   ['envelope.toStudio', 'synthesis', 'subtractive-synth', 'Subtractive Synth',
     'Zpět na Syntézu'],
   ['dual.toStudio', 'synthesis', 'stereo-beat', 'Stereo Beat', 'Zpět na Syntézu'],
   ['seq.toStudioTemplate', 'sequencer', 'sweep-sequence', 'Sweep Sequence',
-    'Zpět na Sekvencer', 'Šablona Sweep Sequence ve Studiu'],
+    'Zpět na Sekvencer'],
   ['measure.toStudio', 'measure', 'measurement-sweep', 'Measurement Sweep', 'Zpět na Měření'],
 ];
 
@@ -447,7 +447,7 @@ async function runLeg(name, origin) {
         await H.setWorkspace(page, from);
         const link = await H.name(page, sel);
         if (!link || link.href !== `#m=studio&st=${template}`
-          || link.text !== (text || `Open ${title} in Studio`)) {
+          || link.text !== (text || `Otevřít šablonu ${title} ve Studiu`)) {
           wrong.push(`${osc}: ${JSON.stringify(link)}`);
         }
         const s = await H.roundTrip(page, { label: osc, from, to: 'studio', selector: sel, input,
