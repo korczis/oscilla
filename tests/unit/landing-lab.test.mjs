@@ -158,8 +158,8 @@ const PAGE_CEILING = Object.freeze({
 
 // The six per-release charts and their tables show the newest RELEASE_WINDOW releases, so the
 // page stays the same size however many releases follow (P018's ceiling was passed at 360 295 B
-// on 2026-11-18's release record, about 2.4 KB a release). `doubled` appends a copy of every per-release
-// series, a later release for each, as if as many releases again had been published.
+// on 2026-11-18's release record, about 2.4 KB a release). `doubled` appends a copy of every
+// per-release series, a later release for each, as if as many releases again had been published.
 const PER_RELEASE = ['releases', 'size', 'growth', 'claims-trend', 'ratchets', 'cadence'];
 function doubled(f) {
   const later = (r, i) => ({ ...r, version: `9.${i}.0`, tag: `v9.${i}.0`, from: `9.${i}.0`,
