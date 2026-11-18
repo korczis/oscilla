@@ -113,7 +113,8 @@ test('a Learn demo and a Learn tool link carry the way back to the lesson (one-w
   const topic = LEARN_TOPICS.find((t) => t.id === 'harmonic');
   const back = learnReturnAction(topic);
   assert.equal(routeOfHash(back.href).workspace, 'learn');
-  assert.equal(back.text, 'Back to the lesson: Harmonics');
+  // U116: the way back names the lesson as the Výuka page shows it, in Czech.
+  assert.equal(back.text, 'Zpět na lekci: Harmonické');
   assert.match(PAGE, /<template x-if="a\.action">\s*<a :href="a\.action\.href" data-osc="alert\.action"/);
   const src = readFileSync(new URL('../../src/js/ui/workbench.js', import.meta.url), 'utf8');
   assert.match(src, /this\.runDemo\(topic, \{ action: learnReturnAction\(topic\) \}\)/);

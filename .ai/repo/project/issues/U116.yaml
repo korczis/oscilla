@@ -1,0 +1,30 @@
+id: U116
+milestone: M054
+serves:
+  - "ui-current#app-speaks-czech"
+title: "Czech pass 8: the Výuka and Předvolby display layer (Learn cards, live examples, preset categories, names, descriptions, Custom and History rows) in Czech over English data"
+slug: czech-pass-8-learn-presets-display
+priority: p2
+profile: implementation
+objective: "Lands as fix(ui). The JS data and display layer of the Výuka (#m=learn) and Předvolby (#m=presets) pages: the Learn card titles, bodies, demo and link labels, the live example line (topicExample), the way back to a lesson, the preset category labels, the 16 reference-note descriptions, the built-in preset names, descriptions and parameter lines, the Custom row (describeConfig and its saved date) and the History time, in cs-CZ. The frozen V1 data (LEARN_TOPICS, BUILTIN_PRESETS, PRESET_CATEGORIES, REFERENCE_NOTES, describeConfig, topicExample, pinned by tests/freeze/golden-a7b7a23.json) stays English: the page shows Czech display copies keyed by id (data/learn-display.js, data/presets-display.js), and a demo or a preset loads its data record by id. The literals of src/index.html (Relate to current settings, the Demo prefix, Load and its aria-label prefix, Reset to defaults, Clear history, Recall, Delete and Confirm, the Save preset dialog, Open the Synth and the History row label) are left for a markup slice, since two other branches rewrite that markup (F002, #597). Owner order 2026-11-17 (Výuka, Předvolby and Syntéza are half English), handed over by oscilla-0b, who owns the Czech passes U109-U115."
+why: "Q104 (the app's visible prose is Czech): a Playwright audit of v3.41.3 on 2026-11-17 listed at least 167 English strings on Výuka, Předvolby and Syntéza, 56 of them on the Learn cards and 44 on Předvolby."
+current_state: "Built by oscilla-e5's builder in task t-20261118014951-bb3b on fix/czech-pass-8."
+scope:
+  - "src/js/data"
+  - "src/js/core/instrument.js"
+  - "src/js/ui/workbench.js"
+  - "src/js/ui/cross-links.js"
+depends_on: [U115]
+acceptance_criteria:
+  - "The Learn cards, the live example, the preset categories, the built-in preset names, descriptions and parameter lines, and the Custom and History rows show Czech; dates and times use cs-CZ formats; ids, data-osc hooks, stored records, exports and the frozen V1 data are unchanged."
+  - "The czech-prose and czech-prose-short totals fall; no new English is shown."
+  - "Every unit and browser check that reads a changed text asserts its Czech form as a positive; src/index.html is not touched."
+  - "oscilla-c3's review verdict, routed by the lead."
+validation:
+  - "npm test"
+  - "node tests/browser/cross-links.cjs"
+  - "node tests/browser/app.cjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-18'
+updated_at: '2026-11-18'
