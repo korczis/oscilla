@@ -23,4 +23,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-19'
-updated_at: '2026-11-19'
+updated_at: 2026-11-19T17:09:33Z
+started_at: 2026-11-19T17:05:34Z
+started_event: sha256:2104373fb41ab5ace4a19f638112932060e236751d36a6165b1273f7eb46992b
+verified_at: 2026-11-19T17:07:02Z
+verified_event: sha256:ca294fd36ca64bf761d39815546ff8e4e16b6ea29e90c4d5ddf6c08956e74f60
+completed_at: 2026-11-19T17:09:33Z
+completed_event: sha256:39d47940841a0a18516de3a66b7a4c6ec8ac41991e5da2835b7eba716ed545f3
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "npm test; node tests/browser/navigation.cjs; node tests/browser/cross-links.cjs"
+    result: "Landed by PR 625 (c22e42f1, oscilla-c3's read and legs OK on run 44451322596), released in v3.41.9 (e6f50a0e). The brand link has no title; aria-describedby points to the hidden span 'Otevřít Playground' outside the lang='en' link (src/index.html on e6f50a0e); control-names and cross-links pin it and failed on the base; navigation and cross-links read it; the four visual gates passed; src/index.html 316 037 B under the 317 000 cap the raises entry for PR 625 set."
+    artifact: ".ai/repo/releases/v3.41.9.yaml"
+    commit: e6f50a0e8d2dcb96b5a3b00698ed800843aa7075
+    recorded_at: 2026-11-19T17:08:41Z

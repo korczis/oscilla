@@ -24,4 +24,18 @@ validation:
 evidence_required:
 - verified
 created_at: '2026-11-18'
-updated_at: '2026-11-18'
+updated_at: 2026-11-19T17:14:33Z
+started_at: 2026-11-19T17:11:21Z
+started_event: sha256:b1b45f395777c73cabdb5f6a3bd6c299e6002bbbf0782ab509d871948ba24414
+verified_at: 2026-11-19T17:12:51Z
+verified_event: sha256:6eff78c7356a6dbd56802b0c097615c9fca3aba264c2c4b3d2d78793cf105af9
+completed_at: 2026-11-19T17:14:33Z
+completed_event: sha256:1f6eec01589bb9aa379ab9fa478763b24a2efc966c96a5b6b01bb38e66083eb1
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "node --test tests/unit/positioning-consistency.test.mjs"
+    result: "Applied by PR 619 (c4b9a572, oscilla-c3's read and its green CI on run 44461705542), released in v3.41.9 (e6f50a0e). On e6f50a0e the Czech sentence stands verbatim on the first screen's h1, the About lede, the meta description and the generated og and twitter descriptions (og:locale cs_CZ), and README and package.json keep Q002's English; positioning-consistency holds each language to its own surfaces from one source each in scripts/social-assets.mjs and fails on a swap; the product-direction criterion names the language per surface."
+    artifact: ".ai/repo/releases/v3.41.9.yaml"
+    commit: e6f50a0e8d2dcb96b5a3b00698ed800843aa7075
+    recorded_at: 2026-11-19T17:13:49Z
