@@ -15,7 +15,7 @@
 import { createHash } from 'node:crypto';
 import {
   esc, fmtDate, fmtDec, fmtInt, MB, chartTable, ratchetCell, ratchetFiles, ratchetSpark,
-  ratchetValue,
+  ratchetValue, RELEASE_WINDOW,
 } from './charts.mjs';
 import { shownText } from './format.mjs';
 import {
@@ -328,6 +328,7 @@ ${source ? `<p class="lab-src">Zdroj: <code>${esc(source)}</code></p>` : ''}
 <div class="${WRAP}">
 ${pageHeading(m, 'grafy')}
 <p class="${LEAD}">Grafy se kreslí při každém nasazení z commitu, který se nasazuje: z release záznamů v <a class="${LINK}" href="${esc(m.tree(m.facts.releases.source))}">${esc(m.facts.releases.source)}</a>, z plánu, z <a class="${LINK}" href="${esc(m.blob(m.facts.claims.source))}">${esc(m.facts.claims.source)}</a>, ze záznamů revizí, z historie gitu a ze stromů značek vydání. Nic se neodhaduje, neinterpoluje ani nedopočítává: každé číslo je spočítané ze souboru nebo příkazu gitu, který karta grafu uvádí, a co v souboru chybí, graf ukazuje jako chybějící, ne jako nulu. Tytéž soubory SVG ukazuje README.</p>
+${(m.facts.releases?.items || []).length > RELEASE_WINDOW ? `<p class="${LEAD}">Grafy podle vydání (vydání, velikost, růst, tvrzení, ratchety a kadence) i jejich tabulky ukazují posledních ${fmtInt(RELEASE_WINDOW)} vydání, aby stránka s každým vydáním nerostla; všechna vydání jsou ve <a class="${LINK}" href="${m.up}zmeny/">Změnách</a>.</p>` : ''}
 <div class="relative grid gap-6 lg:grid-cols-2">
 ${cards}
 </div>

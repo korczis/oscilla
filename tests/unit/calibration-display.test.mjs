@@ -248,7 +248,8 @@ export function census(html, { getters, fields, props }) {
     // An item of such a list, through the x-for alias over it (the item or a field of it).
     for (const [a, coll] of aliases) {
       if (!viewPath(coll) || ![...props].some((p) => new RegExp(`\\.${p}\\b`).test(coll))) continue;
-      if (new RegExp(`(?<![.\\w])${a}(?![.\\w(])`).test(expr)) return true;
+      // A letter of any alphabet bounds a name: the b of a badge loop is not the b of "během".
+      if (new RegExp(`(?<![.\\w\\p{L}])${a}(?![.\\w\\p{L}(])`, 'u').test(expr)) return true;
     }
     return false;
   };

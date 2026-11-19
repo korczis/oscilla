@@ -667,6 +667,8 @@ test("a press on the dock's handle takes no focus, so a held pad keeps its gate 
     release: () => 0 });
   const handle = d.dock.children.find((c) => c.getAttribute('data-osc') === 'keyboard.handle');
   assert.ok(handle, 'the handle is made');
+  assert.match(handle.innerHTML, /^<span>Klávesnice<\/span>/,
+    'the handle is named in Czech (U119, Q104), not "Keyboard"');
   const status = d.dock.children.find((c) => c.getAttribute('data-osc')
     === 'keyboard.dock-status');
   assert.ok(status, 'the status line is made beside it');

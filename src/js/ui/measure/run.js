@@ -49,7 +49,7 @@ export function createRun(ctx, svc, ops) {
       await ctx.pending;
     } catch (e) {
       if (!(e && e.code === 'ABORTED')) {
-        cmp.notify('error', 'Setup check failed', e.message || String(e));
+        cmp.notify('error', 'Kontrola nastavení selhala', e.message || String(e));
       }
     } finally {
       ctx.pending = null;
@@ -89,8 +89,8 @@ export function createRun(ctx, svc, ops) {
     ctx.runDefinition = !given && ops.setupIsDefinition(recipe) ? ctx.definition : null;
     const definitionAtStart = ctx.runDefinition;
     if (!given && ctx.definition && !ctx.runDefinition) {
-      cmp.notify('warning', 'Not run from the definition', 'The setup differs from the loaded '
-        + 'definition, so this experiment records the definition derived from its own recipe.');
+      cmp.notify('warning', 'Neběží podle definice', 'Nastavení se liší od načtené definice, '
+        + 'takže tento experiment zaznamená definici odvozenou z vlastního receptu.');
     }
     let result = null;
     try {
@@ -106,7 +106,7 @@ export function createRun(ctx, svc, ops) {
       result = await ctx.pending;
     } catch (e) {
       if (!(e && e.code === 'ABORTED')) {
-        cmp.notify('error', 'Measurement failed', e.message || String(e));
+        cmp.notify('error', 'Měření selhalo', e.message || String(e));
       }
     } finally {
       ctx.pending = null;
@@ -177,7 +177,7 @@ export function measureFlowPart(ctx, svc, ops) {
     async measureRunRecipe(recipe, { decorate = null, startAt = null } = {}) {
       if (this.measureOwnsOutput() || ctx.pending) {
         return { ok: false, state: ctx.me ? ctx.me.state : S.IDLE,
-          reason: 'A measurement is already in progress.' };
+          reason: 'Měření už probíhá.' };
       }
       let result = null;
       try {
@@ -197,7 +197,7 @@ export function measureFlowPart(ctx, svc, ops) {
         return saved;
       } });
       return id ? { ok: true, state, experimentId: id, name: saved.name, experiment: saved }
-        : { ok: false, state, reason: 'The experiment was not saved.' };
+        : { ok: false, state, reason: 'Experiment nebyl uložen.' };
     },
     async measureStart() {
       await ops.runMeasure(this);

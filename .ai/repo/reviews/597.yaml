@@ -1,0 +1,97 @@
+# Review verdict for pull request #597 (fix/czech-pass-7b): Czech pass 7b (U115), the Measure
+# quality panel, result views, dialogs and notices shown in Czech over English data, and the
+# spectrum caption in Czech with ADR 0017's meaning. Built by oscilla-0b: 1f7515b5 fix(ui),
+# ec8b7093 fix(ui) caption, 89ca6f3d and be5f2b50 merges of main, adfd584e test(visual) MEASURE
+# references re-accepted, 48cd37e1 merge of main (adds only .ai/repo/releases/v3.41.3.yaml).
+# Judged at 48cd37e1 (dist, src and tests identical to adfd584e, where the reviewer ran them) on
+# base origin/main fc949955, 2026-11-17/18, in the reviewer's own detached worktree
+# ~/dev/oscilla-wt/review-526.
+#
+# Reviewer: rev-seat-2 (session oscilla-c3, claude-code c0f0687c), a separate top-level session
+# acting as rev-seat (Q108 A). It built none of this: oscilla-0b built every commit. The caption's
+# four conditions were set by the reviewer before the build; all four are met.
+#
+# The digest: origin/main's scripts/review-verdict.mjs --content --list at 48cd37e1:
+# 4cffbd08a31c... over 17 guarded paths (measurement/quality.js; measurement/views/common.js,
+# display.js, input-devices.js, ir-chart.js, measure-flow.js, quality-bar.js, response-chart.js,
+# rta-chart.js; ui/measure/calibration.js, constants.js, input.js, live.js, run.js, saving.js,
+# session.js, views.js).
+#
+# How it was judged:
+# - Data stays English: quality statuses, bar items and values, UNAVAILABLE words, badges and
+#   LOOPBACK_LABEL keep their English values in the view models, stored records and tests; the
+#   page shows them through measurement/views/display.js measureShown: calibrationShown first,
+#   then one alternation, longest phrase first, never inside a word of either alphabet, a digit,
+#   '_' or '-' (C3-590-1's lesson). LOOPBACK_LABEL maps whole, keeping "bez mikrofonu, bez
+#   akustické cesty". The input picker's "not available" suffix is one constant (GONE_SUFFIX),
+#   stripped before the name is stored.
+# - quality.js: only summarizeQuality's frame is Czech; it is computed for the view
+#   (quality-bar.js) and never stored or exported (the reviewer's grep); the quoted reasons stay
+#   stored English. "kalibrováno" only when frequency and level are both calibrated, as before.
+# - no-fake-science: the translated notes keep their meaning: relative levels, dB re unity / re
+#   peak / re reference, the IR noise-tail upper bound ("na této úrovni nebo pod ní"), NORMALIZED
+#   for display with the experiment keeping the original scale, the response as a ratio that a
+#   level calibration does not apply to, the phase reasons. No new claim.
+# - The spectrum caption (the reviewer's four conditions): 'RELATIVNÍ ÚROVEŇ (obdoba dBFS,
+#   nekalibrováno)', pinned whole, with captionQualifiersMissing and one mutation per qualifier
+#   (relative, dBFS-like, not a bare dBFS, uncalibrated); the aria-label moved with it ("Živé
+#   spektrum, relativní úroveň (obdoba dBFS, úroveň analyzátoru)") and the English one is
+#   refused; ADR 0017's body untouched apart from one trace line; the caption is a row of
+#   no-fake-science v3's display table. Nothing exports or stores SPECTRUM_Y_LABEL (grep).
+# - calibration-display census: the alias match now treats any Unicode letter as part of a word
+#   (it had matched `b` inside "během").
+#
+# Measured by the reviewer (Node 22.20.0, majordomus 1.0.1 first on PATH, ci.yml's pin):
+# - build:check exit 0 (v3.41.3); GITHUB_BASE_REF=main npm test exit 0 (5921 tests, 5920 pass,
+#   0 fail, 1 skipped).
+# - Browser, OSC_BROWSERS=chromium,firefox,webkit, 13 suites, run-suites exit 1 ("4 of 13
+#   suites failed"), load 8-53 on 18 cores: v3-ui 38/38 in each of the 6 legs, v3-measure ALL
+#   PASS (145), first-screen ALL PASS (645), navigation 25/25 in each of the 6, cross-links ALL
+#   PASS (108), v31-studio-workflows and v31-studio-links pass in all 6, labs ALL PASS,
+#   qa-regressions pass. The 4 failures, environmental:
+#   app 66/66 in 5 legs, webkit/http 49/66 when its browser closed ("Target page, context or
+#   browser has been closed"), then the suite passed the 1200 s deadline; journeys chromium and
+#   webkit 38/38, firefox 37/38 on journey-2-live:envelope-held (the Synth envelope switch not on
+#   within 10 000 ms, a path this PR does not touch); link-integrity's firefox/http browser
+#   closed and the suite passed the deadline; control-census passed the deadline mid-firefox.
+#   The reviewer's rerun of those 4 (OSC_SUITE_MS 2 700 000) ran nothing useful: load 58-159,
+#   app's page.goto timed out at 8 s, the other three never passed the load gate. So app
+#   webkit/http, journeys firefox, link-integrity and control-census are NOT proven by the
+#   reviewer; the CI legs run every one and the condition below binds on them.
+# - The reviewer's own probes: the Measure workspace's shown text before and after a loopback
+#   measurement in chromium (two English leftovers, P3 notes 1 and 2); the quality title, status
+#   chip and live bar (idle, so the expert metrics, which need a result, were not in it) at 320,
+#   375, 390, 1280, 1536 and 1920 px in the 3 engines, as shown and with
+#   'ZATÍM NEKONTROLOVÁNO' and 'POUŽITELNÁ' forced: no clip, overlap, overflow past the panel or
+#   viewport, or horizontal page scroll, 0 of 36 bad; the Measure header and action row with the
+#   expert label 'Měřit (s kontrolou nastavení)' at the same widths in the 3 engines: 0 bad (the
+#   #593 P3 overflow is gone).
+# Not run by the reviewer: the visual gate (MEASURE references re-accepted by 0b in both
+# environments), live-smoke (reads the deployed site).
+#
+# P3 notes, open, none blocks (sent to 0b for the next pass):
+# 1. The quality step detail reads "Kvalita USABLE": measure-flow.js:326 puts the English status
+#    into the detail and src/index.html:1010 binds the step detail through calibrationShown
+#    only, not measureShown.
+# 2. The three Measure charts' empty note is the English "NOT MEASURED", hard-coded in
+#    src/js/charts/measure-charts.js:89 (outside this PR).
+# 3. IR: "noise tail" became "šumový dozvuk" while the same note uses "dozvuk" for the decay
+#    ("Dozvuk, který tam ještě běží, se počítá jako šum"), blurring the distinction it explains;
+#    e.g. "šum na konci odezvy".
+# 4. Cosmetic: measureShown over mixed text gives "NORMALIZOVÁNO velikost" and "křivka
+#    KALIBROVÁNO je NEDOSTUPNÉ" (agreement).
+#
+# THE CONDITION of this verdict: it binds once the reviewer has read the six "Browser leg N
+# (browser)" logs of this pull request's run at this verdict's commit and found each leg's
+# suite list equal to shards.cjs --plan at this head, "run-suites: all K suites passed" and no
+# FAIL line (a v3-ui definitions timeout is judged as E077 against main before any rerun), and
+# the linux visual job passes with the re-accepted MEASURE references. Auto-merge is armed only
+# after the reviewer reports "legs OK"; otherwise a superseding verdict.
+#
+# Verdict: merge, under the condition above. No findings above P3.
+schema: review-verdict/v1
+pr: 597
+verdict: merge
+reviewer: oscilla-c3 rev-seat-2 (claude-code c0f0687c, a separate top-level session; built none of 48cd37e1)
+content: 4cffbd08a31ce699ff2e52945b79c2e641ddd7a9821581cd84c6650473d2afaa
+findings: []

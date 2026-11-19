@@ -2,8 +2,8 @@
 // the full-overlap lags after the peak, which end about one post-roll after it. A decay still
 // running there is counted as noise, so the figure is an upper bound on the noise, on average:
 // one run's estimate scatters about it (review of #343 R1). The view says so: the summary reads
-// "tail level estimate ≤ X dB re peak (noise or unfinished decay)" and the note names the window
-// (T1 to T2 ms after the peak), that the noise lies at or below the level within the estimate's
+// "odhad úrovně dozvuku ≤ X dB vůči špičce (šum nebo nedokončený dozvuk)" and the note names the
+// window (T1 až T2 ms po špičce), that the noise lies at or below the level within the estimate's
 // own scatter, and that a longer post-roll reads past the decay.
 // Fixture F4 of the P05 audit: a noise-free system whose decay (T60 2 s) outlasts a 0.5 s
 // post-roll. At 8 kHz (not the audit's 48 kHz) so the direct convolution stays quick.
@@ -58,7 +58,7 @@ const ARGS = { stimulus: X, captured: F4.captured, sampleRate: SR, f1: 20, f2: 3
 const IR = computeImpulseResponse(ARGS);
 const FRAMES = X.length; // the stimulus length, as rendered
 // The window as the note prints it: 450.125 ms (the first averaged sample) to 500 ms.
-const WINDOW_TEXT = `${msText(450.125, 1000 / SR)} to ${msText(500, 1000 / SR)} after the peak`;
+const WINDOW_TEXT = `${msText(450.125, 1000 / SR)} až ${msText(500, 1000 / SR)} po špičce`;
 
 /** 10·log10(mean h² / h_peak²) over [fromS, toS] re the peak, recomputed from the samples. */
 function meanPowerDb(ir, [fromS, toS]) {
@@ -74,23 +74,23 @@ test('T019 F4: the tail level estimate bounds the noise, with the window it was 
   assert.equal(IR.noiseFloorMethod, 'full-overlap-tail');
   const v = buildIrView(IR, { scale: 'db', stimulusFrames: FRAMES });
   const level = fixedText(Math.ceil(IR.noiseFloorDb), 0);
-  assert.ok(v.summary.includes(`tail level estimate ≤ ${level} dB re peak `
-    + '(noise or unfinished decay), '), v.summary);
-  assert.doesNotMatch(v.summary, /noise tail −?\d/);
-  const note = v.notes.find((n) => n.startsWith('Noise tail estimate: full-overlap-tail'));
+  assert.ok(v.summary.includes(`odhad úrovně dozvuku ≤ ${level} dB vůči špičce `
+    + '(šum nebo nedokončený dozvuk), '), v.summary);
+  assert.doesNotMatch(v.summary, /šum na konci odezvy −?\d/);
+  const note = v.notes.find((n) => n.startsWith('Odhad šumu na konci odezvy: full-overlap-tail'));
   assert.ok(note, v.notes.join(' | '));
   assert.ok(note.includes(WINDOW_TEXT), note);
-  assert.match(note, /A decay still running there counts as noise/);
-  assert.match(note, /lengthen the post-roll/);
-  assert.ok(note.includes('so the noise lies at or below this level, within the estimate\'s own '
-    + 'scatter;'), note);
+  assert.match(note, /Dozvuk, který tam ještě běží, se počítá jako šum/);
+  assert.match(note, /prodlužte post-roll/);
+  assert.ok(note.includes('takže šum leží na této úrovni nebo pod ní, v rámci vlastního rozptylu '
+    + 'odhadu;'), note);
 
   assert.equal(STIM.stimulusFrames(SWEEP.spec), X.length, 'the frame count without rendering');
   const w = irNoiseFloorWindow(IR, FRAMES);
   // The full-overlap lags end one post-roll after the peak; the tail is their last 10 %.
   assert.ok(Math.abs(w[1] - POST_S) < 2 / SR, `window end ${w[1]}`);
   assert.ok(Math.abs(w[0] - 0.9 * POST_S) < 2 / SR, `window start ${w[0]}`);
-  assert.equal(WINDOW_TEXT, '450.1 ms to 500.0 ms after the peak');
+  assert.equal(WINDOW_TEXT, '450.1 ms až 500.0 ms po špičce');
   // The window stated is the one averaged: its mean power is noiseFloorDb.
   assert.ok(Math.abs(meanPowerDb(IR, w) - IR.noiseFloorDb) < 1e-6,
     `${meanPowerDb(IR, w)} vs ${IR.noiseFloorDb}`);
@@ -103,7 +103,7 @@ test('T019: the stated bound is rounded up, never below the level read', () => {
   for (const [db, text] of [[-66.5, '−66'], [-66.4, '−66'], [-66.6, '−66'], [-66, '−66'],
     [-0.3, '0']]) {
     const v = buildIrView({ ...IR, noiseFloorDb: db }, { stimulusFrames: FRAMES });
-    assert.ok(v.summary.includes(`tail level estimate ≤ ${text} dB re peak `),
+    assert.ok(v.summary.includes(`odhad úrovně dozvuku ≤ ${text} dB vůči špičce `),
       `${db}: ${v.summary}`);
   }
 });
@@ -111,15 +111,15 @@ test('T019: the stated bound is rounded up, never below the level read', () => {
 test('T019: without the stimulus length the window is described, not invented', () => {
   const v = buildIrView(IR, {});
   assert.match(v.summary,
-    /tail level estimate ≤ -?−?\d+ dB re peak \(noise or unfinished decay\)/);
-  const note = v.notes.find((n) => n.startsWith('Noise tail estimate: full-overlap-tail'));
-  assert.match(note, /last 10 % of the lags at which the whole stimulus lies inside the capture/);
-  assert.doesNotMatch(note, /\d ms to /);
-  assert.match(note, /lengthen the post-roll/);
+    /odhad úrovně dozvuku ≤ -?−?\d+ dB vůči špičce \(šum nebo nedokončený dozvuk\)/);
+  const note = v.notes.find((n) => n.startsWith('Odhad šumu na konci odezvy: full-overlap-tail'));
+  assert.match(note, /posledních 10 % zpoždění, při nichž celý stimul leží uvnitř záznamu/);
+  assert.doesNotMatch(note, /\d ms až /);
+  assert.match(note, /prodlužte post-roll/);
   // A frame count that does not fit the IR gives no window either.
   assert.equal(irNoiseFloorWindow(IR, IR.samples.length + 10), null);
   assert.equal(irNoiseFloorWindow(IR, 0), null);
-  assert.doesNotMatch(buildIrView(IR, { stimulusFrames: 3.5 }).notes.join(' '), /\d ms to /);
+  assert.doesNotMatch(buildIrView(IR, { stimulusFrames: 3.5 }).notes.join(' '), /\d ms až /);
 });
 
 test('T019: a capped IR states the window of the full IR it was read on', () => {
@@ -127,7 +127,7 @@ test('T019: a capped IR states the window of the full IR it was read on', () => 
   assert.ok(capped.truncation);
   assert.deepEqual(irNoiseFloorWindow(capped, FRAMES), irNoiseFloorWindow(IR, FRAMES));
   const note = buildIrView(capped, { stimulusFrames: FRAMES }).notes
-    .find((n) => n.startsWith('Noise tail estimate'));
+    .find((n) => n.startsWith('Odhad šumu na konci odezvy'));
   assert.ok(note.includes(WINDOW_TEXT), note);
 });
 
@@ -135,20 +135,20 @@ test('T019: a capped IR states the window of the full IR it was read on', () => 
 // (sd 1.44 dB) and the rounded-up figure is still below it in 5 of 30, so the level bounds the
 // noise only on average. The copy says it is an estimate and names its scatter; the first
 // head's unconditional "so the level is an upper bound" is refused wherever the note appears.
-const SCATTER = 'so the noise lies at or below this level, within the estimate\'s own scatter;';
+const SCATTER = 'takže šum leží na této úrovni nebo pod ní, v rámci vlastního rozptylu odhadu;';
 
 test('T019 R1: the bound is stated as an estimate with its scatter, never unconditionally', () => {
   for (const [name, ir, opts] of [['F4', IR, { stimulusFrames: FRAMES }],
     ['no stimulus length', IR, {}], ['capped', capIrLength(IR, 4096), { stimulusFrames: FRAMES }],
     ['dB, normalized', IR, { stimulusFrames: FRAMES, scale: 'db', normalize: true }]]) {
     const v = buildIrView(ir, opts);
-    const note = v.notes.find((n) => n.startsWith('Noise tail estimate: full-overlap-tail'));
+    const note = v.notes.find((n) => n.startsWith('Odhad šumu na konci odezvy: full-overlap-tail'));
     assert.ok(note && note.includes(SCATTER), `${name}: ${note}`);
     const text = `${v.summary} ${v.notes.join(' ')}`;
     assert.doesNotMatch(text, /so the level is an upper bound/, name);
     assert.doesNotMatch(text, /\b(level|figure|tail) is an upper bound\b/, name);
     // The "≤" is the estimate's: the bare "tail level ≤" of the first head is gone.
-    assert.match(v.summary, /tail level estimate ≤ /, name);
+    assert.match(v.summary, /odhad úrovně dozvuku ≤ /, name);
     assert.doesNotMatch(v.summary, /tail level ≤/, name);
   }
 });
@@ -172,12 +172,12 @@ function assertTailStated(name, ir) {
   assert.ok(w && w[1] > w[0], `${name}: window ${w}`);
   const v = buildIrView(ir, { scale: 'db', stimulusFrames: FRAMES });
   const ms = (t) => msText(t * 1000, 1000 / SR);
-  const where = `${ms(w[0])} to ${ms(w[1])} after the peak`;
-  const note = v.notes.find((n) => n.startsWith('Noise tail estimate: full-overlap-tail'));
+  const where = `${ms(w[0])} až ${ms(w[1])} po špičce`;
+  const note = v.notes.find((n) => n.startsWith('Odhad šumu na konci odezvy: full-overlap-tail'));
   assert.ok(note && note.includes(where) && note.includes(SCATTER), `${name}: ${note}`);
   const level = fixedText(Math.ceil(ir.noiseFloorDb) || 0, 0);
-  assert.ok(v.summary.includes(`tail level estimate ≤ ${level} dB re peak `
-    + '(noise or unfinished decay), '), `${name}: ${v.summary}`);
+  assert.ok(v.summary.includes(`odhad úrovně dozvuku ≤ ${level} dB vůči špičce `
+    + '(šum nebo nedokončený dozvuk), '), `${name}: ${v.summary}`);
   if (Math.abs(ir.samples[ir.peakIndex]) > 0) {
     assert.ok(Math.abs(meanPowerDb(ir, w) - ir.noiseFloorDb) < 1e-6,
       `${name}: ${meanPowerDb(ir, w)} vs ${ir.noiseFloorDb}`);
@@ -196,7 +196,7 @@ test('T019 R3: a clipped capture states the same window as the unclipped one', (
   const w = assertTailStated('clipped', ir);
   assert.deepEqual(w, irNoiseFloorWindow(computeImpulseResponse(deltaCapture()), FRAMES));
   const note = buildIrView(ir, { stimulusFrames: FRAMES }).notes
-    .find((n) => n.startsWith('Noise tail estimate'));
+    .find((n) => n.startsWith('Odhad šumu na konci odezvy'));
   assert.ok(note.includes(WINDOW_TEXT), note);
 });
 
@@ -210,7 +210,7 @@ test('T019 R3: the minimum window is IR_NOISE_MIN_SAMPLES lags; one fewer reads 
   const none = computeImpulseResponse(deltaCapture({ post: MIN - 1 }));
   assert.equal(none.noiseFloorMethod, 'none');
   assert.equal(irNoiseFloorWindow(none, FRAMES), null);
-  assert.match(buildIrView(none, { stimulusFrames: FRAMES }).summary, /noise tail not available/);
+  assert.match(buildIrView(none, { stimulusFrames: FRAMES }).summary, /šum na konci odezvy není k dispozici/);
 });
 
 test('T019 negative: a null floor still reads "not available", with no bound and no window',
@@ -221,19 +221,19 @@ test('T019 negative: a null floor still reads "not available", with no bound and
     assert.equal(none.noiseFloorMethod, 'none');
     assert.equal(irNoiseFloorWindow(none, FRAMES), null);
     const v = buildIrView(none, { scale: 'db', stimulusFrames: FRAMES });
-    assert.match(v.summary, /noise tail not available, /);
-    assert.ok(v.notes.includes('Noise tail: not available.'));
-    assert.doesNotMatch(v.summary + v.notes.join(' '), /≤|upper bound|ms to /);
+    assert.match(v.summary, /šum na konci odezvy není k dispozici, /);
+    assert.ok(v.notes.includes('Šum na konci odezvy: není k dispozici.'));
+    assert.doesNotMatch(v.summary + v.notes.join(' '), /≤|horní mez|ms až /);
   });
 
 test('T019 negative: the farina-inverse method label is unchanged', () => {
   const ir = computeImpulseResponse({ ...ARGS, method: 'farina-inverse',
     inverse: inverseSweep(SWEEP.spec) });
   const v = buildIrView(ir, { stimulusFrames: FRAMES });
-  assert.ok(v.notes.includes(`Method: farina-inverse (${IR_ALGORITHMS['farina-inverse']}).`),
+  assert.ok(v.notes.includes(`Metoda: farina-inverse (${IR_ALGORITHMS['farina-inverse']}).`),
     v.notes.join(' | '));
-  assert.ok(v.notes.includes(`Method: spectral (${IR_ALGORITHMS.spectral}).`) === false);
-  assert.ok(buildIrView(IR, {}).notes.includes(`Method: spectral (${IR_ALGORITHMS.spectral}).`));
+  assert.ok(v.notes.includes(`Metoda: spectral (${IR_ALGORITHMS.spectral}).`) === false);
+  assert.ok(buildIrView(IR, {}).notes.includes(`Metoda: spectral (${IR_ALGORITHMS.spectral}).`));
 });
 
 test('T019 negative: stored IR results are unchanged (no new field, same floor)', () => {
@@ -248,7 +248,7 @@ test('T019 negative: stored IR results are unchanged (no new field, same floor)'
   assert.ok(!('noiseFloorMethod' in v1));
   assert.equal(irNoiseFloorWindow(v1, FRAMES), null);
   const v = buildIrView(v1, { stimulusFrames: FRAMES });
-  assert.ok(v.summary.includes(`noise tail ${fixedText(v1.noiseFloorDb, 0)} dB re peak, `),
+  assert.ok(v.summary.includes(`šum na konci odezvy ${fixedText(v1.noiseFloorDb, 0)} dB vůči špičce, `),
     v.summary);
   assert.doesNotMatch(v.summary, /≤/);
 });
@@ -276,9 +276,9 @@ const SPEC441 = STIM.normalizeStimulus({ ...SWEEP48.spec, sampleRate: 44100 }).s
 const ms48 = (t) => msText(t * 1000, 1000 / SR48);
 const windowText48 = (frames) => {
   const w = irNoiseFloorWindow(IR48, frames);
-  return w ? `${ms48(w[0])} to ${ms48(w[1])} after the peak` : null;
+  return w ? `${ms48(w[0])} až ${ms48(w[1])} po špičce` : null;
 };
-const tailNote = (notes) => notes.find((n) => n.startsWith('Noise tail estimate: full-overlap-tail'));
+const tailNote = (notes) => notes.find((n) => n.startsWith('Odhad šumu na konci odezvy: full-overlap-tail'));
 
 /** The IR panel the MEASURE adapter builds for a shown source (views.js rebuildIr). */
 function irPanelOf(src) {
@@ -324,12 +324,12 @@ test('T028 negative: a live capture keeps its rendered length; no stimulus or no
   for (const [name, recipe] of [['no stimulus', { repeats: 1 }], ['no recipe', undefined],
     ['no rate', { stimulus: { ...SPEC441, sampleRate: null } }]]) {
     const n = tailNote(irPanelOf({ recipe, results: { ir: IR48 } }).notes);
-    assert.match(n, /last 10 % of the lags at which the whole stimulus lies inside the capture/,
+    assert.match(n, /posledních 10 % zpoždění, při nichž celý stimul leží uvnitř záznamu/,
       name);
-    assert.doesNotMatch(n, /\d ms to /, name);
+    assert.doesNotMatch(n, /\d ms až /, name);
   }
   // An IR without a rate has no panel or names no window, whatever the recipe says.
   const p = irPanelOf({ recipe: { stimulus: SPEC441 }, results: { ir: { ...IR48,
     sampleRate: null } } });
-  assert.ok(p === null || !/\d ms to /.test(p.notes.join(' ')), p && p.notes.join(' | '));
+  assert.ok(p === null || !/\d ms až /.test(p.notes.join(' ')), p && p.notes.join(' | '));
 });

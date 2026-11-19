@@ -54,9 +54,9 @@ export const IR_MAX_POINTS = 4000;
 export const IR_DB_FLOOR = -120;
 
 export const IR_LABELS = Object.freeze({
-  time: 'Time re direct peak',
-  linear: 'Amplitude · relative (original scale)',
-  db: 'Level · dB re unity amplitude (relative)',
+  time: 'Čas vůči přímé špičce',
+  linear: 'Amplituda · relativní (původní měřítko)',
+  db: 'Úroveň · dB vůči jednotkové amplitudě (relativní)',
 });
 
 function validIr(ir) {
@@ -139,11 +139,11 @@ export function buildIrView(ir, options = {}) {
       values[i] = a > 0 ? Math.max(ZERO_POWER_DB, 20 * Math.log10(a)) : ZERO_POWER_DB;
     }
     label = IR_LABELS.db;
-    unit = 'dB re unity amplitude';
+    unit = 'dB vůči jednotkové amplitudě';
   } else {
     values = ir.samples;
     label = IR_LABELS.linear;
-    unit = 'relative';
+    unit = 'relativní';
   }
   const visible = values.subarray ? values.subarray(i0, i1 + 1) : values.slice(i0, i1 + 1);
   const ys = scale === 'db' ? Array.from(visible, (v) => (v > ZERO_POWER_DB ? v : -Infinity))
@@ -151,7 +151,7 @@ export function buildIrView(ir, options = {}) {
   const dec = decimate(xsVis, ys, maxPoints);
   const plotY = dec.y.map((v) => (Number.isFinite(v) ? v : null));
 
-  const lineLabel = `${kind === K.NORMALIZED ? 'NORMALIZED' : 'OBSERVED'} impulse response · `
+  const lineLabel = `${kind === K.NORMALIZED ? 'NORMALIZOVANÁ' : 'NAMĚŘENÁ'} impulsní odezva · `
     + `${label}`;
   const seriesList = [{
     id: 'ir', label: lineLabel, kind, role: 'observed', values: plotY,
@@ -184,8 +184,8 @@ export function buildIrView(ir, options = {}) {
     captureOffsetS: ir.captureOffsetS ?? 0,
     absolutePeakS,
     absolutePeakMs: absolutePeakS * 1000,
-    label: `0 ms = direct peak, ${msText(absolutePeakS * 1000, msPerSample)} after the capture `
-      + 'start',
+    label: `0 ms = přímá špička, ${msText(absolutePeakS * 1000, msPerSample)} po začátku `
+      + 'záznamu',
   };
 
   let windowRegion = null;
@@ -197,40 +197,41 @@ export function buildIrView(ir, options = {}) {
       startIndex: w.view.startIndex,
       endIndex: w.view.endIndex,
       samples: w.view.endIndex - w.view.startIndex,
-      label: `WINDOW ${msText(fromMs, msPerSample)} to ${msText(toMs, msPerSample)} (view only; `
-        + 'the impulse response is kept whole)',
+      label: `OKNO ${msText(fromMs, msPerSample)} až ${msText(toMs, msPerSample)} (jen zobrazení; `
+        + 'impulsní odezva zůstává celá)',
       role: 'neutral',
       dash: LINE_STYLES.marker.dash,
     };
   }
 
   const badges = [normalize ? 'NORMALIZED' : 'ORIGINAL SCALE', scale === 'db' ? 'dB' : 'LINEAR'];
-  const notes = [origin.label + '.', `Method: ${ir.method || 'spectral'} (${ir.algorithm}).`];
+  const notes = [origin.label + '.', `Metoda: ${ir.method || 'spectral'} (${ir.algorithm}).`];
   // T019: a full-overlap tail still holding the decay estimates an upper bound on the noise.
   const tailBound = Number.isFinite(ir.noiseFloorDb) && ir.noiseFloorMethod === 'full-overlap-tail';
-  if (!Number.isFinite(ir.noiseFloorDb)) notes.push('Noise tail: not available.');
+  if (!Number.isFinite(ir.noiseFloorDb)) notes.push('Šum na konci odezvy: není k dispozici.');
   else if (tailBound) notes.push(tailBoundNote(ir, stimulusFrames, msPerSample));
   else if (typeof ir.noiseFloorMethod === 'string' && ir.noiseFloorMethod) {
-    notes.push(`Noise tail estimate: ${ir.noiseFloorMethod}.`);
+    notes.push(`Odhad šumu na konci odezvy: ${ir.noiseFloorMethod}.`);
   }
-  if (dec.factor > 1) notes.push(`Drawn as the minimum and maximum of every ${dec.factor} `
-    + 'samples of the visible span (display decimation; the data are not resampled).');
-  if (normalize) notes.push('NORMALIZED for display; the experiment keeps the original scale.');
+  if (dec.factor > 1) notes.push(`Vykresleno jako minimum a maximum každých ${dec.factor} `
+    + 'vzorků viditelného úseku (decimace zobrazení; data se nepřevzorkovávají).');
+  if (normalize) notes.push('NORMALIZED pro zobrazení; experiment si drží původní měřítko.');
 
   const peakAmp = ir.samples[ir.peakIndex];
   const amp = Number.isFinite(peakAmp) ? Number(peakAmp.toPrecision(3)) : null;
-  const summary = 'Impulse response: direct peak '
-    + `${msText(absolutePeakS * 1000, msPerSample)} after the capture start (shown at 0 ms), `
-    + `peak amplitude ${amp === null ? '—' : fixedText(amp, decimalsOf(amp))} (relative, `
-    + `${amp !== null && amp < 0 ? 'inverted polarity, ' : ''}original scale), `
+  const summary = 'Impulsní odezva: přímá špička '
+    + `${msText(absolutePeakS * 1000, msPerSample)} po začátku záznamu (zobrazena v 0 ms), `
+    + `amplituda špičky ${amp === null ? '—' : fixedText(amp, decimalsOf(amp))} (relativní, `
+    + `${amp !== null && amp < 0 ? 'obrácená polarita, ' : ''}původní měřítko), `
     // IR v2 may report no noise floor (noiseFloorDb null): say so, never print a number. The
     // figure is rounded up, so the whole dB stated is never below the estimate read; the
     // estimate itself scatters run to run (the note says so).
-    + `${tailBound ? `tail level estimate ≤ ${fixedText(Math.ceil(ir.noiseFloorDb) || 0, 0)} `
-      + 'dB re peak (noise or unfinished decay)' : `noise tail ${Number.isFinite(ir.noiseFloorDb)
-      ? `${fixedText(ir.noiseFloorDb, 0)} dB re peak` : 'not available'}`}, `
-    + `length ${msText(n * msPerSample, Math.max(1, msPerSample))}`
-    + `${normalize ? '; display NORMALIZED' : ''}.`;
+    + `${tailBound ? `odhad úrovně dozvuku ≤ ${fixedText(Math.ceil(ir.noiseFloorDb) || 0, 0)} `
+      + 'dB vůči špičce (šum nebo nedokončený dozvuk)'
+      : `šum na konci odezvy ${Number.isFinite(ir.noiseFloorDb)
+      ? `${fixedText(ir.noiseFloorDb, 0)} dB vůči špičce` : 'není k dispozici'}`}, `
+    + `délka ${msText(n * msPerSample, Math.max(1, msPerSample))}`
+    + `${normalize ? '; zobrazení NORMALIZED' : ''}.`;
 
   return {
     x: dec.x,
@@ -254,13 +255,13 @@ export function buildIrView(ir, options = {}) {
 function tailBoundNote(ir, stimulusFrames, msPerSample) {
   const w = irNoiseFloorWindow(ir, stimulusFrames);
   const where = w
-    ? `the mean power ${msText(w[0] * 1000, msPerSample)} to ${msText(w[1] * 1000, msPerSample)} `
-      + 'after the peak'
-    : `the mean power of the last ${Math.round(IR_TAIL_FRACTION * 100)} % of the lags at which `
-      + 'the whole stimulus lies inside the capture (about one post-roll after the peak)';
-  return `Noise tail estimate: full-overlap-tail, ${where}. A decay still running there counts `
-    + 'as noise, so the noise lies at or below this level, within the estimate\'s own scatter; '
-    + 'lengthen the post-roll to read past the decay.';
+    ? `střední výkon ${msText(w[0] * 1000, msPerSample)} až ${msText(w[1] * 1000, msPerSample)} `
+      + 'po špičce'
+    : `střední výkon posledních ${Math.round(IR_TAIL_FRACTION * 100)} % zpoždění, při nichž `
+      + 'celý stimul leží uvnitř záznamu (zhruba jeden post-roll po špičce)';
+  return `Odhad šumu na konci odezvy: full-overlap-tail, ${where}. Dozvuk, který tam ještě běží, se `
+    + 'počítá jako šum, takže šum leží na této úrovni nebo pod ní, v rámci vlastního rozptylu '
+    + 'odhadu; pro čtení za dozvukem prodlužte post-roll.';
 }
 
 function decimalsOf(v) {

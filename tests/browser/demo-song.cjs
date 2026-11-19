@@ -907,10 +907,10 @@ async function journey(browser, leg) {
       // user replaces them; over the clean page it opens at once.
       const unsaved = await page.evaluate(() => window.OSCILLA.studio.dirty);
       await page.locator('[data-osc="studio.open"]').first().click();
-      await page.getByRole('button', { name: `Open ${SONG_TITLE}` }).first().click();
+      await page.getByRole('button', { name: `Otevřít ${SONG_TITLE}` }).first().click();
       if (unsaved) {
         await page.getByRole('button',
-          { name: `Replace the unsaved changes in Studio with ${SONG_TITLE}` }).first().click();
+          { name: `Nahradit neuložené změny ve Studiu projektem ${SONG_TITLE}` }).first().click();
       }
       const reopened = await until(async () => {
         const m = await model(page);

@@ -63,6 +63,7 @@ and stored records rely on them, and the page shows their Czech display forms th
   | `none (UNCALIBRATED)` | žádný (NEKALIBROVÁNO) |
   | a reason `UNCALIBRATED: …` | NEKALIBROVÁNO: … (the Czech sentence) |
   | the preset `CHARACTERIZE PLAYBACK CHAIN` (its id unchanged) | PROMĚŘIT ŘETĚZEC PŘEHRÁVÁNÍ |
+  | the analyser caption `RELATIVE LEVEL (dBFS-like, uncalibrated)` (ADR 0017; U115) | RELATIVNÍ ÚROVEŇ (obdoba dBFS, nekalibrováno) |
 
   A shown reason names its state first and is built from the structure (the differences of
   `levelCalibrationApplies`), never parsed out of the English sentence while that structure

@@ -747,7 +747,7 @@
                 :aria-label="analysisCanvasLabel"></div>
               <div class="osc-chart-host osc-h-spectrum" id="osc-chart-spectrum"
                 data-osc-chart="spectrum" role="img"
-                aria-label="Live spectrum, relative level (dBFS-like analyser level)"></div>
+                aria-label="Živé spektrum, relativní úroveň (obdoba dBFS, úroveň analyzátoru)"></div>
               <div class="osc-chart-host osc-h-analysis-spg" id="osc-chart-analysis-spg"
                 data-osc-chart="analysis-spectrogram" role="img"
                 aria-label="Živý spektrogram výstupu: čas, frekvence, relativní úroveň"></div>
@@ -994,7 +994,7 @@
             x-show="meas.loopback || meas.testContext" style="display: none">
             <svg aria-hidden="true"><use href="#q-warn"/></svg>
             <p><strong x-show="!meas.testContext">TESTOVACÍ KONTEXT.</strong>
-              <span x-text="meas.testContext || 'Digitální smyčka přes známý syntetický systém: bez mikrofonu a bez akustické cesty. Výsledky testují software, ne fyzickou sestavu.'"></span></p>
+              <span x-text="measureShown(meas.testContext) || 'Digitální smyčka přes známý syntetický systém: bez mikrofonu a bez akustické cesty. Výsledky testují software, ne fyzickou sestavu.'"></span></p>
           </div>
           <ol class="osc-m-steps" aria-label="Kroky měření">
             <template x-for="s in meas.flow.steps" :key="s.id">
@@ -1007,7 +1007,7 @@
                 <span class="osc-m-step-text">
                   <span class="osc-m-step-label" x-text="s.label"></span>
                   <span class="osc-sr-only" x-text="', ' + ({ done: 'hotovo', warn: 'hotovo s varováním', blocked: 'blokováno', current: 'aktuální krok', todo: 'nezahájeno' }[s.status] || s.status) + ': '"></span>
-                  <span class="osc-m-step-detail" x-text="calibrationShown(s.detail)"></span>
+                  <span class="osc-m-step-detail" x-text="measureShown(s.detail)"></span>
                 </span>
               </li>
             </template>
@@ -1091,7 +1091,7 @@
           </div>
           <dl class="osc-m-rows" data-osc="measure.inputFacts">
             <template x-for="r in meas.inputRows" :key="r.id">
-              <div class="osc-metric"><dt x-text="r.label"></dt><dd class="osc-num" x-text="r.text"></dd></div>
+              <div class="osc-metric"><dt x-text="r.label"></dt><dd class="osc-num" x-text="measureShown(r.text)"></dd></div>
             </template>
             <div class="osc-metric"><dt>Frekvenční profil</dt><dd x-text="meas.cal.profile && meas.cal.useFrequency ? meas.cal.profile.name : calibrationShown('none (UNCALIBRATED)')"></dd></div>
             <div class="osc-metric"><dt>Úrovně</dt><dd x-text="calibrationShown(measureLevelsText)"></dd></div>
@@ -1103,23 +1103,23 @@
         <!-- ---------- Quality: live checks, then the assessment with its reasons ---------- -->
         <section class="osc-panel osc-m-quality" id="osc-measure-quality" aria-labelledby="osc-m-q-title">
           <div class="osc-panel-header">
-            <h3 class="osc-panel-title" id="osc-m-q-title">Quality</h3>
+            <h3 class="osc-panel-title" id="osc-m-q-title">Kvalita</h3>
             <span class="osc-spacer"></span>
             <span class="osc-q osc-m-qstatus" data-osc="measure.quality" :class="[meas.quality.className, meas.quality.shape]">
               <svg class="osc-q-icon" aria-hidden="true"><use :href="'#q-' + meas.quality.className.slice(7)"/></svg>
-              <span x-text="meas.quality.statusText"></span>
+              <span x-text="measureShown(meas.quality.statusText)"></span>
             </span>
           </div>
-          <ul class="osc-m-bar" aria-label="Live checks" data-osc="measure.bar">
+          <ul class="osc-m-bar" aria-label="Živé kontroly" data-osc="measure.bar">
             <template x-for="it in meas.bar.items" :key="it.id">
-              <li class="osc-q" :class="[it.className, it.shape]" :title="calibrationShown(it.detail) || ''">
+              <li class="osc-q" :class="[it.className, it.shape]" :title="calibrationShown(measureShown(it.detail)) || ''">
                 <svg class="osc-q-icon" aria-hidden="true"><use :href="'#q-' + it.status"/></svg>
-                <span class="osc-q-text" x-text="calibrationShown(it.text)"></span>
+                <span class="osc-q-text" x-text="calibrationShown(measureShown(it.text))"></span>
               </li>
             </template>
           </ul>
           <p class="osc-m-summary" x-text="meas.quality.summary"></p>
-          <ul class="osc-m-reasons" aria-label="Quality reasons" x-show="meas.quality.reasons.length">
+          <ul class="osc-m-reasons" aria-label="Důvody kvality" x-show="meas.quality.reasons.length">
             <template x-for="(r, i) in meas.quality.reasons" :key="r.code + i">
               <li class="osc-q-reason" :class="r.className">
                 <svg class="osc-q-icon" aria-hidden="true"><use :href="'#q-' + r.className.slice(7)"/></svg>
@@ -1127,9 +1127,9 @@
               </li>
             </template>
           </ul>
-          <dl class="osc-m-rows osc-m-metrics" x-show="meas.expert && meas.quality.metrics.length" aria-label="Quality metrics">
+          <dl class="osc-m-rows osc-m-metrics" x-show="meas.expert && meas.quality.metrics.length" aria-label="Metriky kvality">
             <template x-for="mt in meas.quality.metrics" :key="mt.id">
-              <div class="osc-metric"><dt x-text="mt.label"></dt><dd class="osc-num" x-text="calibrationShown(mt.text)"></dd></div>
+              <div class="osc-metric"><dt x-text="mt.label"></dt><dd class="osc-num" x-text="calibrationShown(measureShown(mt.text))"></dd></div>
             </template>
           </dl>
         </section>
@@ -1137,10 +1137,10 @@
         <!-- ---------- Measurement result: frequency response, impulse response, RTA ---------- -->
         <section class="osc-panel osc-m-result" id="osc-measure-result" aria-labelledby="osc-m-result-title">
           <div class="osc-panel-header osc-m-result-head">
-            <h3 class="osc-panel-title" id="osc-m-result-title">Measurement result</h3>
-            <span class="osc-m-chip" data-osc="measure.shown" x-text="meas.shownTitle || 'NOT MEASURED'"></span>
+            <h3 class="osc-panel-title" id="osc-m-result-title">Výsledek měření</h3>
+            <span class="osc-m-chip" data-osc="measure.shown" x-text="measureShown(meas.shownTitle || 'NOT MEASURED')"></span>
             <span class="osc-spacer"></span>
-            <div class="osc-tabs osc-tabs--auto osc-m-tabs" role="tablist" aria-label="Result view">
+            <div class="osc-tabs osc-tabs--auto osc-m-tabs" role="tablist" aria-label="Pohled výsledku">
               <template x-for="t in MEASURE_RESULT_TABS" :key="t.id">
                 <button type="button" class="osc-tab" role="tab" data-osc="measure.tab" :data-value="t.id"
                   :id="'osc-m-tab-' + t.id" :aria-controls="'osc-m-pane-' + t.id"
@@ -1154,25 +1154,25 @@
           <div class="osc-m-pane" id="osc-m-pane-response" role="tabpanel" aria-labelledby="osc-m-tab-response"
             x-show="meas.tab === 'response'">
             <div class="osc-m-toolbar">
-              <label class="osc-label" for="osc-m-smoothing">Smoothing</label>
+              <label class="osc-label" for="osc-m-smoothing">Vyhlazení</label>
               <div class="osc-select"><select id="osc-m-smoothing" data-osc="measure.smoothing"
                 @change="measureSetView('smoothing', Number($event.target.value))">
-                <option value="0" :selected="meas.view.smoothing === 0">None (RAW)</option>
-                <option value="24" :selected="meas.view.smoothing === 24">1/24 octave</option>
-                <option value="12" :selected="meas.view.smoothing === 12">1/12 octave</option>
-                <option value="6" :selected="meas.view.smoothing === 6">1/6 octave</option>
-                <option value="3" :selected="meas.view.smoothing === 3">1/3 octave</option>
+                <option value="0" :selected="meas.view.smoothing === 0">Žádné (RAW)</option>
+                <option value="24" :selected="meas.view.smoothing === 24">1/24 oktávy</option>
+                <option value="12" :selected="meas.view.smoothing === 12">1/12 oktávy</option>
+                <option value="6" :selected="meas.view.smoothing === 6">1/6 oktávy</option>
+                <option value="3" :selected="meas.view.smoothing === 3">1/3 oktávy</option>
               </select></div>
-              <label class="osc-label" for="osc-m-normalization">Normalization</label>
+              <label class="osc-label" for="osc-m-normalization">Normalizace</label>
               <div class="osc-select"><select id="osc-m-normalization" data-osc="measure.normalization"
                 @change="measureSetView('normalization', $event.target.value)">
-                <option value="none" :selected="meas.view.normalization === 'none'">None</option>
+                <option value="none" :selected="meas.view.normalization === 'none'">Žádná</option>
                 <option value="1k" :selected="meas.view.normalization === '1k'"
-                  :disabled="!meas.normAvail['1k'].ok" :title="meas.normAvail['1k'].reason || ''">0 dB at 1 kHz</option>
+                  :disabled="!meas.normAvail['1k'].ok" :title="meas.normAvail['1k'].reason || ''">0 dB na 1 kHz</option>
                 <option value="band" :selected="meas.view.normalization === 'band'"
-                  :disabled="!meas.normAvail.band.ok" :title="meas.normAvail.band.reason || ''">0 dB = mean 500 Hz–2 kHz</option>
+                  :disabled="!meas.normAvail.band.ok" :title="meas.normAvail.band.reason || ''">0 dB = průměr 500 Hz–2 kHz</option>
               </select></div>
-              <div class="osc-seg osc-m-seg" role="radiogroup" aria-label="Response quantity"
+              <div class="osc-seg osc-m-seg" role="radiogroup" aria-label="Veličina odezvy"
                 x-show="meas.expert" style="display: none">
                 <template x-for="q in RESPONSE_QUANTITIES" :key="q.id">
                   <button type="button" class="osc-seg-btn" role="radio" data-osc="measure.quantity" :data-value="q.id"
@@ -1183,23 +1183,23 @@
               </div>
               <span class="osc-spacer"></span>
               <template x-for="b in (meas.response ? meas.response.badges : [])" :key="b">
-                <span class="osc-m-badge" x-text="calibrationShown(b)"></span>
+                <span class="osc-m-badge" x-text="calibrationShown(measureShown(b))"></span>
               </template>
             </div>
-            <p class="osc-m-axis" x-text="meas.response ? meas.response.yLabel : ''"></p>
+            <p class="osc-m-axis" x-text="meas.response ? measureShown(meas.response.yLabel) : ''"></p>
             <div class="osc-chart-host osc-m-chart" id="osc-measure-chart-response" role="img"
-              aria-label="Frequency response chart" aria-describedby="osc-m-sum-response"></div>
+              aria-label="Graf frekvenční odezvy" aria-describedby="osc-m-sum-response"></div>
             <p class="osc-m-summary" id="osc-m-sum-response" data-osc="measure.responseSummary"
-              x-text="meas.response ? meas.response.summary : 'Frequency response: NOT MEASURED.'"></p>
-            <ul class="osc-m-legend" x-show="meas.response" aria-label="Curves">
+              x-text="meas.response ? measureShown(meas.response.summary) : 'Frekvenční odezva: NEZMĚŘENO.'"></p>
+            <ul class="osc-m-legend" x-show="meas.response" aria-label="Křivky">
               <template x-for="s in (meas.response ? meas.response.legend : [])" :key="s.id">
-                <li><span class="osc-m-swatch" :class="['is-' + s.role, s.faded ? 'is-faded' : '']" aria-hidden="true"></span><span x-text="calibrationShown(s.label)"></span></li>
+                <li><span class="osc-m-swatch" :class="['is-' + s.role, s.faded ? 'is-faded' : '']" aria-hidden="true"></span><span x-text="calibrationShown(measureShown(s.label))"></span></li>
               </template>
-              <li x-show="meas.response && meas.response.envelope"><span class="osc-m-swatch is-band" aria-hidden="true"></span><span x-text="meas.response ? meas.response.envelope : ''"></span></li>
+              <li x-show="meas.response && meas.response.envelope"><span class="osc-m-swatch is-band" aria-hidden="true"></span><span x-text="meas.response ? measureShown(meas.response.envelope) : ''"></span></li>
             </ul>
             <ul class="osc-m-notes osc-m-notes--plain">
               <template x-for="(n, i) in (meas.response ? meas.response.notes : [])" :key="i">
-                <li x-text="calibrationShown(n)"></li>
+                <li x-text="calibrationShown(measureShown(n))"></li>
               </template>
               <li data-osc="measure.phaseNote" x-show="meas.expert && meas.response && meas.response.phase && !meas.response.phase.available"
                 x-text="meas.response && meas.response.phase ? meas.response.phase.text : ''"></li>
@@ -1209,17 +1209,17 @@
           <div class="osc-m-pane" id="osc-m-pane-ir" role="tabpanel" aria-labelledby="osc-m-tab-ir"
             x-show="meas.tab === 'ir'" style="display: none">
             <div class="osc-m-toolbar">
-              <div class="osc-seg osc-m-seg" role="radiogroup" aria-label="Impulse response scale">
+              <div class="osc-seg osc-m-seg" role="radiogroup" aria-label="Měřítko impulsní odezvy">
                 <button type="button" class="osc-seg-btn" role="radio" data-osc="measure.irScale" data-value="linear"
                   :class="{ 'is-active': meas.view.irScale === 'linear' }" :aria-checked="String(meas.view.irScale === 'linear')"
                   :tabindex="meas.view.irScale === 'linear' ? 0 : -1" @click="measureSetView('irScale', 'linear')"
-                  @keydown="rovingKeydown($event)">Linear</button>
+                  @keydown="rovingKeydown($event)">Lineární</button>
                 <button type="button" class="osc-seg-btn" role="radio" data-osc="measure.irScale" data-value="db"
                   :class="{ 'is-active': meas.view.irScale === 'db' }" :aria-checked="String(meas.view.irScale === 'db')"
                   :tabindex="meas.view.irScale === 'db' ? 0 : -1" @click="measureSetView('irScale', 'db')"
                   @keydown="rovingKeydown($event)">dB</button>
               </div>
-              <div class="osc-seg osc-m-seg" role="radiogroup" aria-label="Impulse response time span">
+              <div class="osc-seg osc-m-seg" role="radiogroup" aria-label="Časový úsek impulsní odezvy">
                 <template x-for="sp in IR_SPANS" :key="sp.id">
                   <button type="button" class="osc-seg-btn" role="radio" data-osc="measure.irSpan" :data-value="sp.id"
                     :class="{ 'is-active': meas.view.irSpan === sp.id }" :aria-checked="String(meas.view.irSpan === sp.id)"
@@ -1229,23 +1229,23 @@
               </div>
               <button type="button" class="osc-toggle" role="switch" aria-checked="false" data-osc="measure.irNormalize"
                 :aria-checked="String(meas.view.irNormalize)" @click="measureSetView('irNormalize', !meas.view.irNormalize)">
-                <span>Normalize</span><span class="osc-toggle-track" aria-hidden="true"></span></button>
+                <span>Normalizovat</span><span class="osc-toggle-track" aria-hidden="true"></span></button>
               <button type="button" class="osc-toggle" role="switch" aria-checked="false" data-osc="measure.irWindow"
                 :aria-checked="String(meas.view.irWindow)" @click="measureSetView('irWindow', !meas.view.irWindow)">
-                <span>Window</span><span class="osc-toggle-track" aria-hidden="true"></span></button>
+                <span>Okno</span><span class="osc-toggle-track" aria-hidden="true"></span></button>
               <span class="osc-spacer"></span>
               <template x-for="b in (meas.ir ? meas.ir.badges : [])" :key="b">
-                <span class="osc-m-badge" x-text="calibrationShown(b)"></span>
+                <span class="osc-m-badge" x-text="calibrationShown(measureShown(b))"></span>
               </template>
             </div>
-            <p class="osc-m-axis" x-text="meas.ir ? meas.ir.yLabel + ' over time re the direct peak (ms)' : ''"></p>
+            <p class="osc-m-axis" x-text="meas.ir ? measureShown(meas.ir.yLabel) + ' v čase vůči přímé špičce (ms)' : ''"></p>
             <div class="osc-chart-host osc-m-chart" id="osc-measure-chart-ir" role="img"
-              aria-label="Impulse response chart" aria-describedby="osc-m-sum-ir"></div>
+              aria-label="Graf impulsní odezvy" aria-describedby="osc-m-sum-ir"></div>
             <p class="osc-m-summary" id="osc-m-sum-ir" data-osc="measure.irSummary"
-              x-text="meas.ir ? meas.ir.summary : 'Impulse response: NOT MEASURED.'"></p>
+              x-text="meas.ir ? measureShown(meas.ir.summary) : 'Impulsní odezva: NEZMĚŘENO.'"></p>
             <ul class="osc-m-notes osc-m-notes--plain">
-              <template x-for="(n, i) in (meas.ir ? meas.ir.notes : [])" :key="i"><li x-text="calibrationShown(n)"></li></template>
-              <li x-show="meas.ir && meas.ir.window" x-text="meas.ir ? meas.ir.window : ''"></li>
+              <template x-for="(n, i) in (meas.ir ? meas.ir.notes : [])" :key="i"><li x-text="calibrationShown(measureShown(n))"></li></template>
+              <li x-show="meas.ir && meas.ir.window" x-text="meas.ir ? measureShown(meas.ir.window) : ''"></li>
             </ul>
           </div>
 
@@ -1255,10 +1255,10 @@
               <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="measure.rtaLive"
                 aria-pressed="false" :aria-pressed="String(meas.rtaLive.running)"
                 :disabled="!meas.rtaLive.available || meas.busy || meas.rtaLive.starting"
-                :title="!meas.rtaLive.available ? meas.rtaLive.unavailableText : (meas.busy ? 'Not while a measurement is in progress.' : '')"
+                :title="!meas.rtaLive.available ? meas.rtaLive.unavailableText : (meas.busy ? 'Ne během měření.' : '')"
                 @click="measureRtaLiveToggle()"
-                x-text="meas.rtaLive.running ? 'Stop live RTA' : (meas.rtaLive.starting ? 'Opening input…' : 'Start live RTA')">Start live RTA</button>
-              <div class="osc-seg osc-m-seg" role="radiogroup" aria-label="RTA mode">
+                x-text="meas.rtaLive.running ? 'Zastavit živé RTA' : (meas.rtaLive.starting ? 'Otevírá se vstup…' : 'Spustit živé RTA')">Spustit živé RTA</button>
+              <div class="osc-seg osc-m-seg" role="radiogroup" aria-label="Režim RTA">
                 <template x-for="c in RTA_MODE_CHOICES" :key="c.id">
                   <button type="button" class="osc-seg-btn" role="radio" data-osc="measure.rtaMode" :data-value="c.id"
                     :class="{ 'is-active': meas.view.rtaMode === c.id }" :aria-checked="String(meas.view.rtaMode === c.id)"
@@ -1266,7 +1266,7 @@
                     @click="measureSetView('rtaMode', c.id)" @keydown="rovingKeydown($event)" x-text="c.label"></button>
                 </template>
               </div>
-              <div class="osc-seg osc-m-seg" role="radiogroup" aria-label="RTA averaging">
+              <div class="osc-seg osc-m-seg" role="radiogroup" aria-label="Průměrování RTA">
                 <template x-for="c in RTA_AVERAGING_CHOICES" :key="c.id">
                   <button type="button" class="osc-seg-btn" role="radio" data-osc="measure.rtaAveraging" :data-value="c.id"
                     :class="{ 'is-active': meas.view.rtaAveraging === c.id }" :aria-checked="String(meas.view.rtaAveraging === c.id)"
@@ -1274,30 +1274,30 @@
                     @click="measureSetView('rtaAveraging', c.id)" @keydown="rovingKeydown($event)" x-text="c.label"></button>
                 </template>
               </div>
-              <span class="osc-m-chip" data-osc="measure.rtaModeChip" x-text="meas.rta ? meas.rta.mode : 'NOT MEASURED'"></span>
+              <span class="osc-m-chip" data-osc="measure.rtaModeChip" x-text="measureShown(meas.rta ? meas.rta.mode : 'NOT MEASURED')"></span>
               <button type="button" class="osc-toggle" role="switch" aria-checked="false" data-osc="measure.rtaPeak"
                 :aria-checked="String(meas.view.rtaPeakHold)" @click="measureSetView('rtaPeakHold', !meas.view.rtaPeakHold)">
-                <span>Peak hold</span><span class="osc-toggle-track" aria-hidden="true"></span></button>
+                <span>Držet špičky</span><span class="osc-toggle-track" aria-hidden="true"></span></button>
               <button type="button" class="osc-toggle" role="switch" aria-checked="false" data-osc="measure.rtaFreeze"
                 :aria-checked="String(meas.rtaFrozen)" @click="measureRtaFreeze()">
-                <span>Freeze</span><span class="osc-toggle-track" aria-hidden="true"></span></button>
+                <span>Zmrazit</span><span class="osc-toggle-track" aria-hidden="true"></span></button>
               <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="measure.rtaReset"
-                @click="measureRtaReset()">Reset peaks</button>
+                @click="measureRtaReset()">Vynulovat špičky</button>
               <span class="osc-spacer"></span>
               <template x-for="b in (meas.rta ? meas.rta.badges : [])" :key="b">
-                <span class="osc-m-badge" x-text="calibrationShown(b)"></span>
+                <span class="osc-m-badge" x-text="calibrationShown(measureShown(b))"></span>
               </template>
             </div>
             <p class="osc-m-error" role="alert" data-osc="measure.rtaError"
               x-show="meas.rtaLive.error || !meas.rtaLive.available" style="display: none"
               x-text="meas.rtaLive.error || meas.rtaLive.unavailableText"></p>
-            <p class="osc-m-axis" data-osc="measure.rtaSource" x-text="meas.rta ? meas.rta.source + ' · ' + meas.rta.yLabel : 'Start the live RTA, or run a measurement with a noise check for its background band levels.'"></p>
+            <p class="osc-m-axis" data-osc="measure.rtaSource" x-text="meas.rta ? measureShown(meas.rta.source + ' · ' + meas.rta.yLabel) : 'Spusťte živé RTA, nebo měřte s kontrolou šumu a uvidíte úrovně pásem pozadí.'"></p>
             <div class="osc-chart-host osc-m-chart" id="osc-measure-chart-rta" role="img"
-              aria-label="RTA chart: band levels of the live input or of the background noise" aria-describedby="osc-m-sum-rta"></div>
+              aria-label="Graf RTA: úrovně pásem živého vstupu nebo šumu pozadí" aria-describedby="osc-m-sum-rta"></div>
             <p class="osc-m-summary" id="osc-m-sum-rta" data-osc="measure.rtaSummary"
-              x-text="meas.rta ? meas.rta.summary : 'RTA: NOT MEASURED.'"></p>
+              x-text="meas.rta ? measureShown(meas.rta.summary) : 'RTA: NEZMĚŘENO.'"></p>
             <ul class="osc-m-notes osc-m-notes--plain">
-              <template x-for="(n, i) in (meas.rta ? meas.rta.notes : [])" :key="i"><li x-text="calibrationShown(n)"></li></template>
+              <template x-for="(n, i) in (meas.rta ? meas.rta.notes : [])" :key="i"><li x-text="calibrationShown(measureShown(n))"></li></template>
             </ul>
           </div>
         </section>
@@ -1429,7 +1429,7 @@
               :disabled="meas.state !== 'COMPLETE'" @click="measureRepeat()">Opakovat (nový experiment)</button>
             <button type="button" class="osc-btn osc-btn-secondary" data-osc="measure.toExperiments" data-osc-link="jump"
               @click="setWorkspace('experiments', { focusHeading: true })">Otevřít Experimenty</button>
-            <a href="#m=studio&amp;st=measurement-sweep" data-osc="measure.toStudio" data-osc-link="open-in">Open Measurement Sweep in Studio</a>
+            <a href="#m=studio&amp;st=measurement-sweep" data-osc="measure.toStudio" data-osc-link="open-in">Otevřít šablonu Measurement Sweep ve Studiu</a>
           </div>
           <div class="osc-m-defnote" data-osc="measure.definition" x-show="meas.definition" style="display: none">
             <p class="osc-m-hint"><strong>Definice:</strong> <span x-text="meas.definition ? meas.definition.text : ''"></span><span
@@ -1512,7 +1512,7 @@
               <a href="#m=studio" role="menuitem" data-osc="seq.toStudio" data-osc-link="send-to" hidden :hidden="workspace !== 'sequencer'"
                 @click="studioOpenSequence($event)" :class="PRO.menuItem">Otevřít tuto sekvenci ve Studiu</a>
               <a href="#m=studio&amp;st=sweep-sequence" role="menuitem" data-osc="seq.toStudioTemplate" data-osc-link="open-in" hidden
-                :hidden="workspace !== 'sequencer'" :class="PRO.menuItem">Šablona Sweep Sequence ve Studiu</a>
+                :hidden="workspace !== 'sequencer'" :class="PRO.menuItem">Otevřít šablonu Sweep Sequence ve Studiu</a>
               <a href="#m=synth" role="menuitem" data-osc="seq.toSynth" data-osc-link="jump" hidden :hidden="workspace !== 'sequencer'"
                 x-bind="counterpartLink('synth')" :class="PRO.menuItem">Otevřít Synth</a>
             </div>
@@ -1646,9 +1646,9 @@
             <div id="osc-filter-open-menu" role="menu" hidden aria-labelledby="osc-filter-open"
               x-bind="menuPanel('filterOpen')" class="right-0" :class="PRO.menu">
               <a href="#m=studio&amp;st=filter-automation" role="menuitem" data-osc="filter.toStudio" data-osc-link="open-in" hidden
-                :hidden="workspace !== 'filter'" :class="PRO.menuItem">Open Filter Automation in Studio</a>
+                :hidden="workspace !== 'filter'" :class="PRO.menuItem">Otevřít šablonu Filter Automation ve Studiu</a>
               <a href="#m=synth" role="menuitem" data-osc="filter.toSynth" data-osc-link="jump" hidden :hidden="workspace !== 'filter'"
-                x-bind="counterpartLink('synth')" :class="PRO.menuItem">Open the Synth</a>
+                x-bind="counterpartLink('synth')" :class="PRO.menuItem">Otevřít Synth</a>
             </div>
           </div>
           <button type="button" class="osc-icon-btn osc-icon-btn--sm osc-panel-fs max-md:order-first"
@@ -1715,7 +1715,7 @@
             title="Sekvence si ponechá obálky a tvar vlny svých bloků; tvaruje ji filtr stránky Filtry."
             > · instrument only</span></h2>
           <a href="#m=studio&amp;st=subtractive-synth" data-osc="envelope.toStudio" data-osc-link="open-in" hidden
-            :hidden="workspace !== 'synthesis'">Open Subtractive Synth in Studio</a>
+            :hidden="workspace !== 'synthesis'">Otevřít šablonu Subtractive Synth ve Studiu</a>
           <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm osc-env-power"
             id="osc-env-enable" data-osc="envelope.enable" aria-pressed="false"
             aria-label="Envelope enabled">
@@ -1964,9 +1964,9 @@
         <div class="osc-panel-header max-md:flex-wrap">
           <h2 class="osc-panel-title" id="osc-dual-title">Dual Oscillator</h2>
           <a href="#m=studio&amp;st=stereo-beat" data-osc="dual.toStudio" data-osc-link="open-in" hidden
-            :hidden="workspace !== 'synthesis'">Open Stereo Beat in Studio</a>
+            :hidden="workspace !== 'synthesis'">Otevřít šablonu Stereo Beat ve Studiu</a>
           <a href="#m=synth" data-osc="dual.toSynth" data-osc-link="jump" hidden :hidden="workspace !== 'synthesis'"
-            x-bind="counterpartLink('synth')">Open the Synth</a>
+            x-bind="counterpartLink('synth')">Otevřít Synth</a>
           <span class="osc-spacer"></span>
           <output class="osc-dual-beat osc-num osc-muted max-md:basis-full" id="osc-dual-beat"
             data-osc="dual.beat" aria-label="Difference frequency" x-text="beatText">Δ —</output>
@@ -2589,7 +2589,7 @@
                 <template x-if="t.demo">
                   <button type="button" data-osc="learn.example" :class="PRO.btnSecondary"
                     @click="learnTopic = t.id"
-                    :aria-pressed="String(learnTopic === t.id)">Relate to current settings</button>
+                    :aria-pressed="String(learnTopic === t.id)">Ukázat na aktuálním nastavení</button>
                 </template>
                 <template x-if="t.demo">
                   <button type="button" data-osc="learn.demo" data-osc-link="jump" :class="PRO.btnPrimary"
@@ -2638,7 +2638,7 @@
           <a href="#m=synth" data-osc="presets.toSynth" data-osc-link="jump" hidden
             class="self-center [@media(pointer:coarse)]:inline-flex [@media(pointer:coarse)]:min-h-11
               [@media(pointer:coarse)]:items-center"
-            :hidden="workspace !== 'presets'" x-bind="counterpartLink('synth')">Open the Synth</a>
+            :hidden="workspace !== 'presets'" x-bind="counterpartLink('synth')">Otevřít Synth</a>
         </div>
         <div role="tabpanel" :aria-labelledby="'osc-ptab-cat-' + presetTab">
           <template x-if="presetTab !== 'history'">
@@ -3581,62 +3581,61 @@
   <dialog class="osc-dialog osc-dialog--wide" id="osc-dlg-level-cal" data-oscilla-modal
     aria-labelledby="osc-dlg-level-title" @close="measureAbortLevelReference()">
     <form method="dialog" class="osc-dialog-body" @submit.prevent="measureSaveLevelCalibration()">
-      <h2 class="osc-dialog-title" id="osc-dlg-level-title">Level calibration</h2>
-      <p>Put a known external acoustic reference on the microphone (typically a calibrator that
-        produces 94 dB re 20 µPa at 1 kHz), switch it on and capture it here. OSCILLA reads its
-        level through the same input as a measurement; the offset is the reference minus the
-        reading. It is valid only for this microphone, input gain, browser settings and
-        position: OSCILLA records the input (as far as the browser reports it) and stops applying
-        the calibration when the input changes. It is kept in page memory only: a reload or a closed
-        tab discards it, and the browser asks first while one is set.</p>
-      <p class="osc-m-hint" data-osc="levelCal.retention">Capturing opens the microphone for
-        <span x-text="REFERENCE_CAPTURE_S"></span> s. The recording is discarded as soon as its
-        level is read: only the level reading and the facts of the input are kept.</p>
-      <p class="osc-m-hint" data-osc="levelCal.scale"><strong>Scale of the reading:</strong>
+      <h2 class="osc-dialog-title" id="osc-dlg-level-title">Kalibrace úrovně</h2>
+      <p>Nasaďte na mikrofon známou vnější akustickou referenci (obvykle kalibrátor, který
+        vydává 94 dB re 20 µPa na 1 kHz), zapněte ji a zachyťte zde. OSCILLA čte její úroveň
+        stejným vstupem jako měření; posun je reference minus naměřená hodnota. Platí jen pro
+        tento mikrofon, zisk vstupu, nastavení prohlížeče a polohu: OSCILLA si vstup zaznamená
+        (nakolik ho prohlížeč sdělí) a při jeho změně přestane kalibraci používat. Drží se jen
+        v paměti stránky: obnovení nebo zavření karty ji zahodí a prohlížeč se předtím zeptá.</p>
+      <p class="osc-m-hint" data-osc="levelCal.retention">Zachycení otevře mikrofon na
+        <span x-text="REFERENCE_CAPTURE_S"></span> s. Nahrávka se zahodí, jakmile se přečte její
+        úroveň: zůstane jen naměřená úroveň a údaje o vstupu.</p>
+      <p class="osc-m-hint" data-osc="levelCal.scale"><strong>Měřítko hodnoty:</strong>
         <span x-text="LEVEL_SCALE.label"></span>.</p>
       <div class="osc-settings-grid">
-        <label class="osc-label" for="osc-lc-hz">Reference frequency (Hz)</label>
+        <label class="osc-label" for="osc-lc-hz">Referenční frekvence (Hz)</label>
         <input class="osc-number" id="osc-lc-hz" type="number" min="20" max="20000" step="1"
           data-osc="levelCal.hz" x-model="meas.levelForm.referenceHz" :disabled="meas.levelForm.capturing">
-        <label class="osc-label" for="osc-lc-ref">Reference sound pressure (dB re 20 µPa)</label>
+        <label class="osc-label" for="osc-lc-ref">Referenční akustický tlak (dB re 20 µPa)</label>
         <input class="osc-number" id="osc-lc-ref" type="number" min="40" max="140" step="0.1"
           data-osc="levelCal.ref" x-model="meas.levelForm.referenceDb">
       </div>
       <div class="osc-m-btnrow" x-show="!meas.levelForm.manual">
         <button type="button" class="osc-btn osc-btn-secondary" data-osc="levelCal.capture"
           :disabled="meas.levelForm.capturing" @click="measureCaptureLevelReference()"
-          x-text="'Capture reference (' + REFERENCE_CAPTURE_S + ' s)'">Capture reference</button>
+          x-text="'Zachytit referenci (' + REFERENCE_CAPTURE_S + ' s)'">Zachytit referenci</button>
         <button type="button" class="osc-btn osc-btn-secondary" data-osc="levelCal.stop"
-          x-show="meas.levelForm.capturing" @click="measureAbortLevelReference()">Stop</button>
+          x-show="meas.levelForm.capturing" @click="measureAbortLevelReference()">Zastavit</button>
       </div>
       <p class="osc-m-hint" role="status" aria-live="polite" data-osc="levelCal.reading"
         x-show="!meas.levelForm.manual"
-        x-text="meas.levelForm.capturing ? 'Capturing the reference…' : (meas.levelForm.reading && meas.levelForm.reading.ok ? meas.levelForm.reading.text : 'No reference captured yet.')"></p>
+        x-text="meas.levelForm.capturing ? 'Zachycuje se reference…' : (meas.levelForm.reading && meas.levelForm.reading.ok ? meas.levelForm.reading.text : 'Zatím nezachycena žádná reference.')"></p>
       <ul class="osc-m-notes osc-m-notes--plain" x-show="!meas.levelForm.manual && meas.levelForm.reading && meas.levelForm.reading.warnings.length">
         <template x-for="(w, i) in (meas.levelForm.reading ? meas.levelForm.reading.warnings : [])" :key="i"><li x-text="w"></li></template>
       </ul>
       <button type="button" class="osc-toggle" role="switch" data-osc="levelCal.manual"
         :aria-checked="String(meas.levelForm.manual)" aria-checked="false"
         :disabled="meas.levelForm.capturing" @click="measureSetLevelManual(!meas.levelForm.manual)">
-        <span>Advanced: enter the reading by hand</span><span class="osc-toggle-track" aria-hidden="true"></span></button>
+        <span>Pokročilé: zadat hodnotu ručně</span><span class="osc-toggle-track" aria-hidden="true"></span></button>
       <div class="osc-settings-grid" x-show="meas.levelForm.manual" style="display: none">
-        <label class="osc-label" for="osc-lc-obs">Observed reading (dB relative, on the scale above)</label>
+        <label class="osc-label" for="osc-lc-obs">Naměřená hodnota (dB relativně, na měřítku výše)</label>
         <input class="osc-number" id="osc-lc-obs" type="number" step="0.1" data-osc="levelCal.observed"
-          x-model="meas.levelForm.observedDb" placeholder="e.g. -32.5" aria-describedby="osc-lc-obs-note">
+          x-model="meas.levelForm.observedDb" placeholder="např. -32.5" aria-describedby="osc-lc-obs-note">
       </div>
       <p class="osc-m-hint" id="osc-lc-obs-note" role="status" data-osc="levelCal.manualNote"
         x-show="meas.levelForm.manual" style="display: none"
-        x-text="measureLevelManualNote || 'The reading is bound to the input checked last; OSCILLA stops applying it when the input changes.'"></p>
+        x-text="measureLevelManualNote || 'Hodnota je vázaná na naposledy zkontrolovaný vstup; při jeho změně ji OSCILLA přestane používat.'"></p>
       <div class="osc-settings-grid">
-        <label class="osc-label" for="osc-lc-cond">Conditions (device, gain, position)</label>
+        <label class="osc-label" for="osc-lc-cond">Podmínky (zařízení, zisk, poloha)</label>
         <input class="osc-number" id="osc-lc-cond" type="text" :maxlength="measureLevelConditionsMax" autocomplete="off"
           data-osc="levelCal.conditions" x-model="meas.levelForm.conditions">
       </div>
       <p class="osc-pp-error" role="alert" x-show="meas.levelForm.error" x-text="meas.levelForm.error"></p>
       <div class="osc-dialog-actions">
-        <button type="button" class="osc-btn osc-btn-secondary" @click="measureCloseLevelCalibration()">Cancel</button>
+        <button type="button" class="osc-btn osc-btn-secondary" @click="measureCloseLevelCalibration()">Zrušit</button>
         <button type="submit" class="osc-btn osc-btn-primary" data-osc="levelCal.save"
-          :disabled="meas.levelForm.capturing">Store calibration</button>
+          :disabled="meas.levelForm.capturing">Uložit kalibraci</button>
       </div>
     </form>
   </dialog>
@@ -3646,10 +3645,10 @@
   <dialog class="osc-dialog osc-dialog--wide" id="osc-dlg-cal-convention" data-oscilla-modal
     aria-labelledby="osc-dlg-conv-title">
     <form method="dialog" class="osc-dialog-body" @submit.prevent="measureConfirmCalibrationConvention()">
-      <h2 class="osc-dialog-title" id="osc-dlg-conv-title">What does this file state?</h2>
+      <h2 class="osc-dialog-title" id="osc-dlg-conv-title">Co tento soubor uvádí?</h2>
       <p data-osc="calConv.basis" x-text="meas.calImport ? '“' + meas.calImport.name + '”: ' + meas.calImport.basis + '.' : ''"></p>
       <fieldset class="osc-m-group">
-        <legend>Sign convention</legend>
+        <legend>Znaménková konvence</legend>
         <template x-for="o in (meas.calImport ? meas.calImport.options : [])" :key="o.id">
           <label class="osc-m-fieldrow">
             <input type="radio" name="osc-cal-convention" data-osc="calConv.choice" :value="o.id"
@@ -3660,9 +3659,9 @@
         </template>
       </fieldset>
       <div class="osc-dialog-actions">
-        <button type="button" class="osc-btn osc-btn-secondary" @click="measureCancelCalibrationImport()">Cancel</button>
+        <button type="button" class="osc-btn osc-btn-secondary" @click="measureCancelCalibrationImport()">Zrušit</button>
         <button type="submit" class="osc-btn osc-btn-primary" data-osc="calConv.load"
-          :disabled="!meas.calImport || !meas.calImport.choice">Load profile</button>
+          :disabled="!meas.calImport || !meas.calImport.choice">Načíst profil</button>
       </div>
     </form>
   </dialog>

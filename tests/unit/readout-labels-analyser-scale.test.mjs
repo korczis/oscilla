@@ -57,7 +57,40 @@ for (const path of ['README.md', 'docs/GLOSSARY.md']) {
   });
 }
 
-test('the single-mode spectrum caption stays as ADR 0017 chose it', () => {
-  assert.equal(SPECTRUM_Y_LABEL, 'RELATIVE LEVEL (dBFS-like, uncalibrated)');
-  assert.match(html, /aria-label="Live spectrum, relative level \(dBFS-like analyser level\)"/);
+/**
+ * The qualifiers ADR 0017 requires of the analyser caption, in the Czech it is shown in since
+ * U115 (Q104): relative, dBFS-like (never a bare dBFS) and uncalibrated. Each is a missing
+ * qualifier when absent; a caption with all three passes.
+ */
+export function captionQualifiersMissing(caption) {
+  const missing = [];
+  // \b is ASCII-only: Ň is no word character to it, so the space is matched explicitly.
+  if (!/^RELATIVNÍ ÚROVEŇ /u.test(caption)) missing.push('relative');
+  if (!/\bobdoba dBFS\b/u.test(caption)) missing.push('dBFS-like');
+  if (/(?<!obdoba )dBFS/u.test(caption)) missing.push('dBFS-like, not a bare dBFS');
+  if (!/\bnekalibrováno\b/u.test(caption)) missing.push('uncalibrated');
+  return missing;
+}
+
+test('the spectrum caption keeps ADR 0017\'s meaning: relative, dBFS-like, uncalibrated', () => {
+  assert.equal(SPECTRUM_Y_LABEL, 'RELATIVNÍ ÚROVEŇ (obdoba dBFS, nekalibrováno)');
+  assert.deepEqual(captionQualifiersMissing(SPECTRUM_Y_LABEL), []);
+  // The accessible name moves with the caption and keeps the same qualifiers.
+  assert.match(html, /aria-label="Živé spektrum, relativní úroveň \(obdoba dBFS, úroveň analyzátoru\)"/);
+  assert.doesNotMatch(html, /Live spectrum, relative level/);
+});
+
+test('mutation: dropping any one qualifier from the Czech caption is refused', () => {
+  const full = 'RELATIVNÍ ÚROVEŇ (obdoba dBFS, nekalibrováno)';
+  const cases = [
+    [full.replace('RELATIVNÍ ', ''), 'relative'],
+    [full.replace('obdoba dBFS, ', ''), 'dBFS-like'],
+    [full.replace('obdoba ', ''), 'dBFS-like'],
+    [full.replace(', nekalibrováno', ''), 'uncalibrated'],
+  ];
+  for (const [caption, qualifier] of cases) {
+    assert.notEqual(caption, full);
+    assert.ok(captionQualifiersMissing(caption).includes(qualifier),
+      `${caption}: ${captionQualifiersMissing(caption).join(', ')}`);
+  }
 });

@@ -23,7 +23,7 @@ import {
 } from '../../src/js/ui/shell.js';
 import { routeOfHash } from '../../src/js/ui/navigation.js';
 import {
-  CONTENT_LINKS, COUNTERPARTS, PANEL_LINKS, counterpartsOf, livePanelLinks,
+  CONTENT_LINKS, COUNTERPARTS, PANEL_LINKS, counterpartsOf, livePanelLinks, panelLinkText,
 } from '../../src/js/ui/counterparts.js';
 import {
   LEARN_TOOLS, STUDIO_TEMPLATE_LINKS, contentRoutesOf, pageRelatedOf, relatedText,
@@ -99,9 +99,14 @@ test('the panel links are generated from related, each written once with that hr
       const text = HTML.slice(at, HTML.indexOf('</a>', at)).trim();
       const tpl = templateOfRef(l.to);
       const want = l.text || (tpl ? studioTemplateText({ title: STUDIO_TEMPLATE_LINKS
-        .find((s) => s.osc === l.osc).title }) : `Open the ${WORKSPACE_LABELS[l.to]}`);
+        .find((s) => s.osc === l.osc).title }) : panelLinkText(l));
       assert.equal(text, want, `${l.osc}: its text`);
+      // U118: an action link is the Czech verb form; a kept name is not declined (Q104).
+      assert.match(text, /^(Otevřít|Porovnat) /, `${l.osc}: a Czech verb, not "Open …" (${text})`);
     }
+    assert.equal(panelLinkText({ to: 'synth' }), 'Otevřít Synth', 'Synth stays a name');
+    assert.equal(panelLinkText({ to: 'studio' }), 'Otevřít Studio', 'Studio stays a name');
+    assert.equal(panelLinkText({ to: 'synthesis' }), 'Otevřít Syntézu', 'a Czech label declines');
     // The tables the panels and the suites read are the generated ones.
     assert.deepEqual(COUNTERPARTS.slice(1), counterpartsOf());
     assert.equal(COUNTERPARTS[0].id, 'measure-rta', 'the one hand-kept row (a MEASURE tab)');
