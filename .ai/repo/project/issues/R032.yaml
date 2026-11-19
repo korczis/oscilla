@@ -20,7 +20,7 @@ scope:
   - "tests/unit/source-size-baseline.json"
   - "tests/README.md"
   - "dist"
-current_state: "Audit 2026-11-15 by oscilla-ff (session cae276ab-2d90-45d2-babb-a1f8023668d2) on main 474ce9c3, on the owner's order to finish unfinished work: landed but not done. Partial: criteria 1, 2, 3, 5, 7 met (61 pass, 1 skip); 4 not met (no before/after byte comparison of the timeline <ol>, only DOM equality, as current_state says); 6 unsure (the size cap was not lowered in the same change); 8 unsure (the criterion names prismatic-majordomus-98 as verdict writer; 460.yaml and 523.yaml were written by oscilla-21 and oscilla-c3). Earlier: Built by oscilla-75 in task t-20261110050759-6988 on feat/r032-about-stations-data from main a7102358, on the coordinator's assignment (oscilla-43; lane b0 absent 2026-11-10); it lands in train T6 with the verdict from oscilla-c1. Most of R032 was already on main in 7ec17bf1 (feat(release): the About stations are data, 2026-11-06): src/data/about-stations.json, scripts/about-stations.mjs --stamp and --check, run by release:prepare, and the build expansion. This change adds --check-station (about-stations.mjs and release-prepare.mjs), which judges the release commit against its own parent rather than the pull request against its base, because a release pull request is often a train whose docs(about) members write the prose (oscilla-43's design correction). It also adds the test that a station storing X.Y.Z is a version:check hit, and the U086 edge. Measured from git on 2026-11-10: the dist <ol class=\"osc-about-timeline\"> before and after 7ec17bf1 is 8454 bytes both and equal after whitespace normalisation, but not byte for byte (each station's <time> attributes were wrapped across two lines and now sit on one); criterion 4 holds as DOM equality, not byte identity. Criterion 6 needed no lowering: the src/index.html cap of 300000 is below the headroom ceiling of its size (299062 bytes, ceiling 329000)."
+current_state: "Re-checked on main 8e087873 in the audit-and-stamp follow-up train (oscilla-d9, 2026-11-18). Stamped done in this train; the evidence names what was re-run and which criteria moved to which follow-up issue. Before this audit: Audit 2026-11-15 by oscilla-ff (session cae276ab-2d90-45d2-babb-a1f8023668d2) on main 474ce9c3, on the owner's order to finish unfinished work: landed but not done. Partial: criteria 1, 2, 3, 5, 7 met (61 pass, 1 skip); 4 not met (no before/after byte comparison of the timeline <ol>, only DOM equality, as current_state says); 6 unsure (the size cap was not lowered in the same change); 8 unsure (the criterion names prismatic-majordomus-98 as verdict writer; 460.yaml and 523.yaml were written by oscilla-21 and oscilla-c3). Earlier: Built by oscilla-75 in task t-20261110050759-6988 on feat/r032-about-stations-data from main a7102358, on the coordinator's assignment (oscilla-43; lane b0 absent 2026-11-10); it lands in train T6 with the verdict from oscilla-c1. Most of R032 was already on main in 7ec17bf1 (feat(release): the About stations are data, 2026-11-06): src/data/about-stations.json, scripts/about-stations.mjs --stamp and --check, run by release:prepare, and the build expansion. This change adds --check-station (about-stations.mjs and release-prepare.mjs), which judges the release commit against its own parent rather than the pull request against its base, because a release pull request is often a train whose docs(about) members write the prose (oscilla-43's design correction). It also adds the test that a station storing X.Y.Z is a version:check hit, and the U086 edge. Measured from git on 2026-11-10: the dist <ol class=\"osc-about-timeline\"> before and after 7ec17bf1 is 8454 bytes both and equal after whitespace normalisation, but not byte for byte (each station's <time> attributes were wrapped across two lines and now sit on one); criterion 4 holds as DOM equality, not byte identity. Criterion 6 needed no lowering: the src/index.html cap of 300000 is below the headroom ceiling of its size (299062 bytes, ceiling 329000)."
 depends_on:
   - "Q091"
   - "U086"
@@ -40,4 +40,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-05
-updated_at: 2026-11-10
+updated_at: 2026-11-18T03:20:12Z
+started_at: 2026-11-18T03:15:53Z
+started_event: sha256:756bbc9a85239485a31b9953a765e0a56eba341fe15a7e22ebce3d1a086480ba
+verified_at: 2026-11-18T03:17:58Z
+verified_event: sha256:793548dd13c328fb226a374aa378d3f17827790f13a10d25bee740a9ec3bad46
+completed_at: 2026-11-18T03:20:12Z
+completed_event: sha256:1f98775ea3cfceda5099f951fd05173b5592009744b2b48cdd718a3428dab339
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/release-about-station.test.mjs"
+    result: "Audit-and-stamp follow-up train (oscilla-d9, 2026-11-18), re-run on main 8e087873: release-about-station 15/15 (HEAD's copy 0/1 on #460's base 0426993d); about-current 19 pass, 1 skip by design; about 11/11; source-size-budget 16/16; about-stations --check holds 45 stations and --check-station exits 0; a scratch --stamp with no pending station exits 1 naming the docs(about) commit; the src/index.html cap fell 309000 to 300000 in #460 (a0f103b9), within the 327000 ceiling; npm test (5912 pass, 0 fail) and build:check green in CI run 44210690542 on the same tree. Verdicts 460.yaml (oscilla-21) and 523.yaml (oscilla-c3), both built none: the seat criterion is met under Q111. Criterion 4 (the byte-for-byte <ol> comparison in about-current.test.mjs) is unmet, the timeline being equal only after whitespace normalisation, and moved verbatim to R059."
+    artifact: "tests/unit/release-about-station.test.mjs"
+    commit: 8e087873968df0438165b474684d6dee7ac7e5ff
+    recorded_at: 2026-11-18T03:19:29Z

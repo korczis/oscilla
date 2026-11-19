@@ -8,7 +8,7 @@ priority: p0
 profile: implementation
 objective: "Lands as fix(studio-ui), built by 21 on fix/p8-keyboard-back (028906c7). studioExpand in src/js/ui/studio/workspace/navigation.js focuses the graph viewport in the next animation frame unconditionally, so focus that reached the in-page Back in that frame is taken and the graph's keydown (workspace.js:487) consumes the key: keyboard Back from a Studio opened from the Sequencer does not return, and history Back and Forward then go off by one. Fast Tab and screen readers hit it. After: the expand focuses the viewport only when focus has not moved since the expand began."
 why: "A product bug first seen as a webkit flake: #419 run 41942714722 attempt 1 (Browser gate webkit, cross-links P8 keyboard leg, recorded by the flake ledger as unclassified) and #417 run 41955594170 job 127010139496 (webkit/http), where C028 slice 1 printed the state: workspace studio, hash #m=studio, focus DIV data-osc=studio.graph.viewport. Root-caused by 21 (2026-11-05); af's condition after #419 was to file it on a second occurrence."
-current_state: "Audit 2026-11-15 by oscilla-ff (session cae276ab-2d90-45d2-babb-a1f8023668d2) on main 474ce9c3, on the owner's order to finish unfinished work: landed but not done. Partial: expand-focus is in tests/browser/cross-links.cjs:564-592 and studio-expand-focus.test.mjs passes 2/2 (fix focusMovedSince, navigation.js), 451.yaml judges merge; criterion 1's six-leg browser fail-first on 2195a7a3 is not recorded, and criterion 2 is not met: the flake-ledger entries (#419 attempt 1, run 41955594170) are classified product defect in no record of the repository."
+current_state: "Re-checked on main 8e087873 in the audit-and-stamp follow-up train (oscilla-d9, 2026-11-18). Criterion 2's classification half is recorded here, as the ledger keeps every entry unclassified until a record classifies it (E072's practice): the two flake-ledger entries of P8 (#419 run 41942714722 attempt 1, Browser gate webkit; #417 run 41955594170 job 127010139496, webkit/http) are classified product defect: Expand's deferred focus in src/js/ui/studio/workspace/navigation.js took focus from the Studio's Back, fixed by focusMovedSince (19b1345a, #451). P8 passes in all six legs of CI run 44135531351. Criterion 1's browser fail-first on 2195a7a3 moved to C071; stamped done. Before this audit: Audit 2026-11-15 by oscilla-ff (session cae276ab-2d90-45d2-babb-a1f8023668d2) on main 474ce9c3, on the owner's order to finish unfinished work: landed but not done. Partial: expand-focus is in tests/browser/cross-links.cjs:564-592 and studio-expand-focus.test.mjs passes 2/2 (fix focusMovedSince, navigation.js), 451.yaml judges merge; criterion 1's six-leg browser fail-first on 2195a7a3 is not recorded, and criterion 2 is not met: the flake-ledger entries (#419 attempt 1, run 41955594170) are classified product defect in no record of the repository."
 scope:
   - "src/js/ui/studio/workspace/navigation.js"
   - "tests/browser/cross-links.cjs"
@@ -26,4 +26,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-05'
-updated_at: '2026-11-05'
+updated_at: 2026-11-18T03:41:59Z
+started_at: 2026-11-18T03:38:47Z
+started_event: sha256:0e64a1ef896ccfedc68b9d531ef467328e093f9dfcff97697d0f21045827c72c
+verified_at: 2026-11-18T03:40:16Z
+verified_event: sha256:81049fd063ba0d28fd21a9a108a81a521832873714d5bd5d6cceb235f5bdf506
+completed_at: 2026-11-18T03:41:59Z
+completed_event: sha256:8739b93dfbdaa91478d6ee6142380854303683ee1408057d49221e9374752804
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/studio-expand-focus.test.mjs"
+    result: "Audit-and-stamp follow-up train (oscilla-d9, 2026-11-18), re-run on main 8e087873: studio-expand-focus 2/2 (0/2 on 2195a7a3's source); cross-links expand-focus and P8 PASS in all six legs of CI run 44135531351 (chromium, firefox, webkit; file:// and http); timing-baseline.json unchanged by 19b1345a, browser-timing 31/31; build:check up to date; verdict 451.yaml. The two flake-ledger entries of P8 are classified product defect in this issue's current_state (the ledger's classification record). The six-leg fail-first of expand-focus on 2195a7a3 moved verbatim to C071."
+    artifact: "tests/unit/studio-expand-focus.test.mjs"
+    commit: 8e087873968df0438165b474684d6dee7ac7e5ff
+    recorded_at: 2026-11-18T03:41:24Z

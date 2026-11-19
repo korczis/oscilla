@@ -8,7 +8,7 @@ priority: p1
 profile: implementation
 objective: "Lands as fix(studio). Found on #515's CI run 42713534778 (train T4, firefox leg 1, tests/browser/v31-studio-runtime.cjs waveform-live: failed [noGap], seam low -106.8 dB at 3.551 s); logged by the review seat as C1-H001-2 (P2, pre-existing on main). runtime.apply read its crossfade time (hooks.soon()) before its prepare phase built the new nodes (src/js/studio/runtime.js transact), while the transport continues a sounding pattern voice on the rebuilt node (H001) from the soonest time it reads after apply returns (transport.js applyEdit resumeAt, from scheduler.edit's horizon). When the prepare takes longer than the 20 ms crossfade (STUDIO_XFADE_S) in audio time, the old routes have faded out before the continuation starts: CI measured the crossfade from 3.5236 s and the continuation at 3.5556 s, 32 ms later, against 0 or 2.9 ms in 36 local firefox runs on both T4 9fa580e0 and main b8bfd3b6. Before: a slow CPU, a phone or a starved runner hears a gap of silence when a structural parameter (a waveform) changes while a clip plays. After: the crossfade starts no earlier than the soonest time read after the prepare, so the old routes sound until the continuation starts. Rollback: revert."
 why: "oscilla-43, integrator (2026-11-10): 'It's a real audible gap that slow phones would hit too, so fix it now for T5'; oscilla-c1, review seat: 'take the crossfade's start and the continuation from one time read after prepare ... pin it fail-first with a unit case where prepare is made to take, say, 40 ms of fake audio time'."
-current_state: "Re-checked on main 4682eea4 in audit-and-stamp train A (oscilla-d9, 2026-11-18); left open. Criteria 1 and 3 met (466de004 via #522, verdict 522.yaml by oscilla-c1; v31-studio-transport 52/0; the fail-first copy without runtime.js:714 fails C1-H001-2). Criterion 2 waits on v31-studio-runtime.cjs --only waveform-live and v31-studio-audio.cjs in three browsers on this tree. Not stampable while BLOCKED on H001. Before this audit: Fixed on fix/h001-seam-after-prepare from train T4 9fa580e0: runtime.js takes the crossfade time as the later of the time read before the prepare and the one read after it; tests/unit/v31-studio-transport.test.mjs C1-H001-2 moves the audio clock 40 ms inside the prepare and fails on the base (the old route reads 0.0001 where the continuation starts, 40 ms after the crossfade)."
+current_state: "Re-checked on main 8e087873 in the audit-and-stamp follow-up train (oscilla-d9, 2026-11-18). Stamped done in this train; the evidence names what was re-run and which criteria moved to which follow-up issue. Before this audit: Re-checked on main 4682eea4 in audit-and-stamp train A (oscilla-d9, 2026-11-18); left open. Criteria 1 and 3 met (466de004 via #522, verdict 522.yaml by oscilla-c1; v31-studio-transport 52/0; the fail-first copy without runtime.js:714 fails C1-H001-2). Criterion 2 waits on v31-studio-runtime.cjs --only waveform-live and v31-studio-audio.cjs in three browsers on this tree. Not stampable while BLOCKED on H001. Before this audit: Fixed on fix/h001-seam-after-prepare from train T4 9fa580e0: runtime.js takes the crossfade time as the later of the time read before the prepare and the one read after it; tests/unit/v31-studio-transport.test.mjs C1-H001-2 moves the audio clock 40 ms inside the prepare and fails on the base (the old route reads 0.0001 where the continuation starts, 40 ms after the crossfade)."
 scope:
   - "src/js/studio/runtime.js"
   - "tests/unit/v31-studio-transport.test.mjs"
@@ -27,4 +27,25 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-10'
-updated_at: 2026-11-18
+updated_at: 2026-11-18T04:26:13Z
+started_at: 2026-11-18T03:56:25Z
+started_event: sha256:32d256dccc64f815b73b05c886c68a1f9285d9748b5276c655aa5fe65d699684
+verified_at: 2026-11-18T03:58:53Z
+verified_event: sha256:4f1718b4fde6c54b0ff8cd6e3080be4659b83b3779286ef54d1704514b1de303
+completed_at: 2026-11-18T04:01:35Z
+completed_event: sha256:722b7f1676cb6a3e9c27abb060c65ef78dd241160dd7b8136879de03fa32b33b
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/v31-studio-transport.test.mjs"
+    result: "Audit-and-stamp follow-up train (oscilla-d9, 2026-11-18), re-run on main 8e087873 (criteria audited in train A, #599, and unblocked here): v31-studio-transport 52/52, whose C1-H001-2 case (a 40 ms prepare keeps the old route and the seam above half) fails on a copy with runtime.js:714's 'Math.max(t, hooks.soon())' removed; CI run 44135531351 (src, tests and dist equal 8e087873) passes tests/browser/v31-studio-runtime.cjs (waveform-live among its checks) and tests/browser/v31-studio-audio.cjs in chromium, firefox and webkit; verdict 522.yaml by oscilla-c1, who built none of it (H007 was built by oscilla-d9). All 3 criteria met; its dependency H001 is stamped done in this train."
+    artifact: "tests/unit/v31-studio-transport.test.mjs"
+    commit: 8e087873968df0438165b474684d6dee7ac7e5ff
+    recorded_at: 2026-11-18T04:00:49Z
+  - covers: "verified"
+    type: manual
+    command: "cat .ai/repo/reviews/522.yaml"
+    result: "Verdict for #522 (train T5, H007's 466de004 in src/js/studio/runtime.js): .ai/repo/reviews/522.yaml by oscilla-c1, who built none of it (H007 was built by oscilla-d9): 'K180, K207, H007: judged at their heads'; re-checked 2026-11-18 by oscilla-d9 in the audit-and-stamp follow-up train."
+    artifact: ".ai/repo/reviews/522.yaml"
+    commit: 8e087873968df0438165b474684d6dee7ac7e5ff
+    recorded_at: 2026-11-18T04:26:13Z

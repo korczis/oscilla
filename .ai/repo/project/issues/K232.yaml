@@ -8,7 +8,7 @@ priority: p2
 profile: implementation
 objective: "Lands as feat(studio). Found while planning K220 (oscilla-ee, 2026-11-09): the Studio refuses a low-pass or high-pass filter's Q as a modulation target (studio/adapters/processing.js modTarget('Q') answers CLIP_TARGET_TEXT.filterQ, since the biquad's Q is in dB for those types and a linear CV would be mis-scaled), and so refuses Q automation lanes; the Synth panel's LPF hides its Q jack (panels/semi-mono.js FILTER_JACKS). K220's pad L therefore drives X = LPF cutoff and Y = HPF cutoff (the coordinator oscilla-43's decision of 2026-11-09, option (a)), not resonance. This slice makes Q a CV and automation target on those types with a dB-aware mapping (the modulation and the lane in the parameter's own scale, converted to the biquad's dB the way applyBase converts the base value, nodeQ), shows the Q jack on the panel's filters, and moves pad L's Y default to LPF resonance. Before: a filter's resonance can only be set by its knob. After: a cable, a pad and a lane drive it, scaled as its knob is. Rollback: revert; models keep validating (an edge into Q is held where it does not play, with its reason)."
 why: "Owner direction Q103 and the reference instrument of 2026-11-09 (a pad on cutoff and resonance); K220 lands on HPF cutoff until this is in."
-current_state: "Re-checked on main 4682eea4 in audit-and-stamp train A (oscilla-d9, 2026-11-18); left open. All criteria met on main; not stampable while BLOCKED on K220. Follow-up worth filing: a Studio cable into an LP/HP Q defaults to linear and is refused."
+current_state: "Re-checked on main 8e087873 in the audit-and-stamp follow-up train (oscilla-d9, 2026-11-18). Stamped done in this train; the evidence names what was re-run and which criteria moved to which follow-up issue. Before this audit: Re-checked on main 4682eea4 in audit-and-stamp train A (oscilla-d9, 2026-11-18); left open. All criteria met on main; not stampable while BLOCKED on K220. Follow-up worth filing: a Studio cable into an LP/HP Q defaults to linear and is refused."
 scope:
   - "src/js/studio/adapters/processing.js"
   - "src/js/studio/clip-targets.js"
@@ -30,4 +30,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-09'
-updated_at: '2026-11-18'
+updated_at: 2026-11-18T03:54:58Z
+started_at: 2026-11-18T03:52:12Z
+started_event: sha256:30481f0e717dfff2a44b0dbb2f355b8ff9cd0ea8c3289ad269f56a68c309a8bb
+verified_at: 2026-11-18T03:53:15Z
+verified_event: sha256:95c780dee823ae4a7aedadfd105c62307373794ed3148dc56c07ac5ad3322135
+completed_at: 2026-11-18T03:54:58Z
+completed_event: sha256:7f4dc0d59a380a883c3482d55db353bab1255e7499be68bcc9b184347c91cd17
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/k232-lowpass-q-cv.test.mjs"
+    result: "Audit-and-stamp follow-up train (oscilla-d9, 2026-11-18), re-run on main 8e087873 (criteria audited in train A, #599, and unblocked here): k232-lowpass-q-cv 5/5 (the CONTROL to LP Q edge plays in dB, the Q lane plays, the panel LPF/HPF show the Peak jack and pad L Y defaults to LPF Peak, a cable replaces the normal; fail-first on the base), v4-clip-target-policy 16/16 over every filter type, synth-dual-pads 11/11; verdict 522.yaml by oscilla-c1 rev-seat, who built none of it (builder oscilla-ee), C1-K232-1 P3 carried by K235. All 4 criteria met; its dependency K220 is stamped done in this train."
+    artifact: "tests/unit/k232-lowpass-q-cv.test.mjs"
+    commit: 8e087873968df0438165b474684d6dee7ac7e5ff
+    recorded_at: 2026-11-18T03:54:12Z
