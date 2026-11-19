@@ -2819,7 +2819,7 @@
          editor, node library, Inspector and compact widget are rendered by their modules from
          the ONE Studio store; the timeline region belongs to src/js/ui/studio/timeline-editor.js
          (spec §131-§136). Below 768 px one of GRAPH / TIMELINE / INSPECTOR is shown at a time. -->
-    <section class="osc-view osc-view--studio box-border !pb-[max(0px,calc(var(--osc-dock-h,0px)_-_var(--osc-statusbar-h)))]" :class="PRO.pageView" id="osc-view-studio" data-osc="studio-view"
+    <section class="osc-view osc-view--studio box-border max-md:!px-0 max-md:!pt-0 !pb-[max(0px,calc(var(--osc-dock-h,0px)_-_var(--osc-statusbar-h)))]" :class="PRO.pageView" id="osc-view-studio" data-osc="studio-view"
       data-osc-modes="studio" hidden :hidden="workspace !== 'studio'" :data-subview="studio.subview"
       aria-labelledby="osc-studio-title" tabindex="-1">
       <h2 class="osc-sr-only" id="osc-studio-title">Studio</h2>
