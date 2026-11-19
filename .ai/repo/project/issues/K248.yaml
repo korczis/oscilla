@@ -1,0 +1,33 @@
+id: K248
+milestone: M067
+serves:
+- "connected-instrument#step-sequencer"
+- "connected-instrument#modulation-everywhere"
+- "connected-instrument#one-transport"
+title: "Step-voltage sequencer unit proofs: the Step Modulator's step times, a mid-step reset, every step trigger, the validator's sentence and one undoable edit"
+slug: step-voltage-sequencer-unit-proofs
+priority: p2
+profile: implementation
+objective: "Lands as test(studio), or fix(studio) if a defect is found (then fail-first). tests/unit/studio-step-voltage-sequencer.test.mjs asserts what K226's criteria 1 and 5 ask and its 14 cases do not: the row and trigN frames equal a Step Modulator's on the same Clock; a reset arriving mid-step takes effect only at the next step boundary; trig1..16 over 16 triggers with trig9..16 silent at length 8; canConnect cvA to a VCO pitch input and trig3 to an Envelope gate; the TRIGGER to AUDIO refusal reason equals the validator's sentence; one param-list edit is one undo entry and undo/redo restore byte-equal serializeStudio."
+why: "Split from K226 (criteria 1, 5, copied verbatim) by the audit-and-stamp follow-up train of 2026-11-18 (oscilla-d9, under the triage the owner approved on 2026-11-18, relayed by oscilla-e5, Q112). Re-run on main 8e087873 (studio-step-voltage-sequencer 14/14): criterion 1 lacks the Step Modulator comparison, a mid-step reset, trig1..16 with trig10..16 silent, a VCO-pitch canConnect and the refusal sentence (only non-empty is checked); criterion 5 has its census proof but no undo/redo test on this node. The oscilla-ff audit of 2026-11-15 found the same gaps."
+current_state: "Filed 2026-11-18 by oscilla-d9 in the audit-and-stamp follow-up train; not started."
+scope:
+- tests/unit/studio-step-voltage-sequencer.test.mjs
+- tests/README.md
+- src/js/studio/step-voltage.js
+- src/js/studio/adapters/modulation.js
+- dist
+depends_on: []
+acceptance_criteria:
+- "tests/unit/studio-step-voltage-sequencer.test.mjs, failing on the merge base: the type is registered with the ports and parameters above and every pinned template studioHash is unchanged (D2); the scheduler's plan for 16 clock triggers at a stated tempo puts row A, B and C's values and trig1 .. trig16 on the step times the clock gives, the same times a Step Modulator on that clock plays (one-transport); a reset on step 5 plays step 1 at the next step boundary, never mid-step; length 8 leaves trig9 .. trig16 silent; back and forth and once play their stated orders; a cable from cvA into a VCO's pitch and from trig3 into an Envelope's gate passes canConnect, and a TRIGGER out into an AUDIO input is refused with the validator's sentence (project.typed-ports)."
+- "Every edit is one undoable dispatch through the one Studio store (a knob drag one history entry; undo and redo restore the exact serialized model) (project.studio-model-is-canonical); every node it plays is built through the engine with track()/source() accounting, all timing on the audio clock, and the engine node census is 0 after stop (project.audio-engine-discipline)."
+- "(added) Clock 1/16 at 120 BPM, 16 ticks, length 16: the row and trigN frames equal a Step Modulator's on the same Clock; a reset between step 5's and step 6's ticks changes nothing before step 6's tick, which plays step 1; trig9..16 are each silent over two passes at length 8."
+- "(added) The refusal reason equals canConnect's reason; a rowA edit through the param-list mount is one undo entry and undo then redo give byte-equal serializeStudio."
+- "(added) fail-first: assertions on landed behaviour are stated as fail-first: n/a in the pull request body with that reason; a defect found is fixed with a test that fails on the merge base."
+validation:
+- node --test tests/unit/studio-step-voltage-sequencer.test.mjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-11-18'
+updated_at: '2026-11-18'

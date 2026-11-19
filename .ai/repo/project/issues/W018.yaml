@@ -1,0 +1,27 @@
+id: W018
+milestone: M101
+serves:
+- "instrument-kinds#kind-contract"
+title: "The link graph reads the instrument kinds' declared links (G016 over kind declarations)"
+slug: link-graph-reads-the-instrument-kind-links
+priority: p2
+profile: implementation
+objective: "Lands as test(ui) once G016 is on main. G016's graph (src/js/ui/catalog/links.js, tests/unit/ui-link-graph.test.mjs) takes as producers the links.opens and links.openedBy of each kind declaration; a kind link that resolves to no node fails the test. Negative cases: an unknown route; a removed kind that the graph still names. Rollback: revert."
+why: "Split from W001 (criteria 6, copied verbatim) by the audit-and-stamp follow-up train of 2026-11-18 (oscilla-d9, under the triage the owner approved on 2026-11-18, relayed by oscilla-e5, Q112). Re-run on main 8e087873: W001's criterion 6 is met in its first half (step-grid names its links, kinds/step-grid.js:114, resolved by ui-kinds :419) but not in its second: G016 is not built (BLOCKED on G007, G014, G018, G019, K075) and its objective reads only catalogued components."
+current_state: "Filed 2026-11-18 by oscilla-d9 in the audit-and-stamp follow-up train; not started."
+scope:
+- src/js/ui/catalog/links.js
+- tests/unit/ui-link-graph.test.mjs
+- tests/README.md
+depends_on:
+- G016
+acceptance_criteria:
+- "Definition of done, interlinks: every kind names the links it opens and is opened by; G016's link graph reads them."
+- "(added) tests/unit/ui-link-graph.test.mjs lists each kind:<kind> declaration's links as edges of the graph and fails, with a fixture, when a kind link resolves to no node; it fails on the merge base."
+validation:
+- node --test tests/unit/ui-link-graph.test.mjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-11-18'
+updated_at: '2026-11-18'

@@ -1,0 +1,27 @@
+id: W017
+milestone: M101
+serves:
+- "instrument-kinds#kind-contract"
+title: "Instrument kind props on G003's parameter model: the step-grid descriptors round-trip through param-model.js"
+slug: instrument-kind-props-on-the-parameter-model
+priority: p2
+profile: implementation
+objective: "Lands as test(ui) once G003 is on main. Every prop descriptor of every kind declaration goes through src/js/ui/catalog/param-model.js: parse, format and slider position round-trip, and a refusal carries validateParamValue's reason. tests/unit/ui-kinds.test.mjs gains that case and a fixture prop the model refuses. Rollback: revert; test only."
+why: "Split from W001 (criteria 5, copied verbatim) by the audit-and-stamp follow-up train of 2026-11-18 (oscilla-d9, under the triage the owner approved on 2026-11-18, relayed by oscilla-e5, Q112). Re-run on main 8e087873: the G001 clause (kinds.js:14, ui-kinds :69) and the section 79 clause (kind.js:39-41) of W001's criterion 5 are met, but G003's src/js/ui/catalog/param-model.js does not exist (G003 is open). W001 is the root of about 100 waiting issues."
+current_state: "Filed 2026-11-18 by oscilla-d9 in the audit-and-stamp follow-up train; not started."
+scope:
+- src/js/ui/catalog/kind.js
+- tests/unit/ui-kinds.test.mjs
+- tests/README.md
+depends_on:
+- G003
+acceptance_criteria:
+- "Definition of done, extends: G001's catalogue and kind list, G003's parameter model and the section 79 descriptor; no second registry."
+- "(added) tests/unit/ui-kinds.test.mjs feeds every prop of every declared kind through G003's parameter model (src/js/ui/catalog/param-model.js) and asserts the value, slider-position and text round trip; a fixture prop outside its range is refused with validateParamValue's reason; the test fails on the merge base."
+validation:
+- node --test tests/unit/ui-kinds.test.mjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-11-18'
+updated_at: '2026-11-18'

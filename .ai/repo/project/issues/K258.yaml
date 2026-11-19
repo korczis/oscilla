@@ -1,0 +1,30 @@
+id: K258
+milestone: M064
+serves:
+- "connected-instrument#synth-panel"
+- "connected-instrument#piano-keyboard"
+- "connected-instrument#one-transport"
+title: "studio-keys asserts that the note router plays the added Keys node, and synth-wording reads the strings K060 added"
+slug: studio-keys-routed-node-and-synth-wording-sources
+priority: p2
+profile: implementation
+objective: "Lands as test(studio). sk-linked in tests/browser/studio-keys.cjs compares the note router's routed node with the id from someKeys (today it checks only !!studioSink(), :226-231) and sk-live matches that id (today its first match takes any row with note 69, :249-250); tests/unit/synth-wording.test.mjs adds src/js/studio/clip-targets.js, transport.js and runtime.js to its SOURCES (their #447 strings are clean by its own patterns, 0 hits on 8e087873). About four lines, no guarded path."
+why: "Split from K060 (criteria 9, 13, copied verbatim) by the audit-and-stamp follow-up train of 2026-11-18 (oscilla-d9, under the triage the owner approved on 2026-11-18, relayed by oscilla-e5, Q112). Re-run on main 8e087873: criteria 9 and 13 of K060 are each open on a single point. They are small, but K060 is the root of about 100 blocked issues, so they move here rather than hold it open."
+current_state: "Filed 2026-11-18 by oscilla-d9 in the audit-and-stamp follow-up train; not started."
+scope:
+- tests/browser/studio-keys.cjs
+- tests/unit/synth-wording.test.mjs
+- tests/README.md
+depends_on: []
+acceptance_criteria:
+- "A browser check in tests/browser/synth.cjs (or a new suite added to the test:studio script of package.json), run by npm run test:studio (so CI and the release gate run it), fails on the merge base and proves the slice linked, real-time and interactive. Linked: a keys node added in the Studio is offered as a target of an event clip in the timeline and of the note router (src/js/studio/live-notes.js). Real-time: a note sent through window.OSCILLA's existing Drive surface for the Studio (no new seam member) reaches the runtime pitch value and opens the gate, read back from the runtime's debugInfo, each within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: the keys node is added by pointer, keyboard and touch, and its outputs carry accessible names ('Pitch control output', 'Gate trigger output'). Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+- "Every string it adds passes tests/unit/synth-wording.test.mjs (K059's wording test): no product, brand or model name, no analog-modelling or vintage claim, and every approximation it makes labelled where it is shown (project.no-fake-science)."
+- "(added) Each new assertion fails under a mutation (the router aimed at another node; a banned word planted in clip-targets.js), recorded in the pull request body; sk-linked and sk-live pass in chromium, firefox and webkit."
+validation:
+- node tests/browser/studio-keys.cjs
+- node --test tests/unit/synth-wording.test.mjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-11-18'
+updated_at: '2026-11-18'

@@ -8,6 +8,7 @@ priority: p2
 profile: implementation
 objective: "Lands as docs(adr). ADR 0061's resolution note of 2026-10-30 (.ai/repo/adrs/0061-the-ui-is-built-on-flowbite-pro.md, 'the instrument visuals, and the Synth panel surface narrows the skeuomorphism ban') says K058's own component, src/js/ui/kinds/param/knob.js, remains planned work and that the Synth panel's knob is panel-local until it lands. The knob shipped instead as the one knob model src/js/ui/synth/knob.js with src/js/synth/view/knob.js its panel skin (#367, #420), and the DRY-families decision of 2026-11-05 (M123, G021, G022) makes that core the one knob. An appended resolution note says so and names G022 as the owner of any later split of the model; every section above it and the record's status stay unchanged. Before: the ADR names a planned component that will not be built. After: it names the knob that ships. Rollback: revert; records only."
 why: "Gap of K058 (criterion 1) found by the M064 audit of origin/main 37c52bee (oscilla-a3 with the plan coordinator, 2026-11-07, tests run): the ADR 0061 note on main calls K058's component planned, while the knob shipped as the one knob model. No owner direction re-scopes it, so it is its own issue and K058's criterion points here (chore/plan-m064-rescope). K058 rests on the owner direction of 2026-10-29 (the connected instrument) and Q018 (knobs with a number shown, a new Synth workspace)."
+current_state: "Re-checked on main 8e087873 in the audit-and-stamp follow-up train (oscilla-d9, 2026-11-18). Stamped done in this train; the evidence names what was re-run and which criteria moved to which follow-up issue."
 scope:
   - ".ai/repo/adrs/0061-the-ui-is-built-on-flowbite-pro.md"
 depends_on: []
@@ -21,4 +22,25 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-07
-updated_at: 2026-11-07
+updated_at: 2026-11-18T04:25:00Z
+started_at: 2026-11-18T04:12:50Z
+started_event: sha256:154eda966628d63006ed31d9225a3823f2a24c2685517319fa86b73b8fe2afbc
+verified_at: 2026-11-18T04:13:54Z
+verified_event: sha256:9ba89c32fa6e90ddfa09baee5060f930b765f7867a0898db7d4ec23338194fff
+completed_at: 2026-11-18T04:17:00Z
+completed_event: sha256:77d4a81db84df14b26ec6248dd26e330cf9efe28535804f81f63cf268796e013
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/knowledge-integrity.test.mjs"
+    result: "Audit-and-stamp follow-up train (oscilla-d9, 2026-11-18), re-run on main 8e087873: ADR 0061's resolution note '2026-11-09: the knob that ships is the one knob model and its panel skin' (commit 68202340, on main via #523) names src/js/ui/synth/knob.js as the one knob model and src/js/synth/view/knob.js as its panel skin, citing the DRY-families decision of 2026-11-05 (M123, G021, G022) and K058; git show 68202340 on the record is 12 insertions and 0 deletions, the status line unchanged, and the note names no rule id. majordomus adr check: 72 decisions, every identity unique, every status known, every reference resolves (exit 0); node --test tests/unit/knowledge-integrity.test.mjs 36/0. Docs-only, not guarded. Both criteria met."
+    artifact: "tests/unit/knowledge-integrity.test.mjs"
+    commit: 8e087873968df0438165b474684d6dee7ac7e5ff
+    recorded_at: 2026-11-18T04:15:55Z
+  - covers: "verified"
+    type: ci
+    command: "node scripts/review-verdict.mjs (base GUARDED)"
+    result: "No verdict needed for K203's content in #523 (commit 68202340): it changes only .ai/repo/adrs/0061-the-ui-is-built-on-flowbite-pro.md, which is not in the base program's GUARDED list, as K203's own criterion 3 states (docs-only); #523's verdict 523.yaml covers that train's other, guarded content; re-checked 2026-11-18 by oscilla-d9 in the audit-and-stamp follow-up train."
+    artifact: "scripts/review-verdict.mjs"
+    commit: 8e087873968df0438165b474684d6dee7ac7e5ff
+    recorded_at: 2026-11-18T04:25:00Z

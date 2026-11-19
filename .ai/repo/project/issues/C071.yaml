@@ -1,0 +1,25 @@
+id: C071
+milestone: M090
+serves:
+- "coherent-state#user-journeys-hold"
+title: "Prove expand-focus fails on 2195a7a3 in each leg it claims, and record the legs"
+slug: prove-expand-focus-fails-on-its-base
+priority: p2
+profile: implementation
+objective: "Lands as test(studio) or chore(plan). HEAD's cross-links.cjs --only expand-focus runs against the 2195a7a3 dist in chromium, firefox and webkit over file:// and http (on CI, or locally under OSC_LOAD_MAX); each leg's result is recorded with its run id or log. Where a leg passes on the base, that is recorded and criterion 1 is restated to the failing legs by a recorded decision (tests/README.md:128 says the pre-fix bug showed in chromium and webkit)."
+why: "Split from C060 (criteria 1, copied verbatim) by the audit-and-stamp follow-up train of 2026-11-18 (oscilla-d9, under the triage the owner approved on 2026-11-18, relayed by oscilla-e5, Q112). Re-run on main 8e087873: expand-focus passes in all six legs of CI run 44135531351 and the unit fail-first holds (studio-expand-focus 0/2 on 2195a7a3, 2/2 on main), but the browser failure on the base was never recorded and the local run on 2195a7a3's dist was refused by the load gate (load 89, OSC_LOAD_MAX 36)."
+current_state: "Filed 2026-11-18 by oscilla-d9 in the audit-and-stamp follow-up train; not started."
+scope:
+- tests/browser/cross-links.cjs
+- .ai/repo/project/issues/C060.yaml
+depends_on: []
+acceptance_criteria:
+- "Fail-first browser check expand-focus in tests/browser/cross-links.cjs: open Studio from the Sequencer, move focus to the in-page Back within the expand frame, activate it by keyboard, and the Sequencer is shown; it fails on 2195a7a3 in all six legs (three engines, file:// and http) and passes with the fix."
+- "(added) The run on 2195a7a3 is recorded per leg (engine, origin, PASS or FAIL line, run id or log path); a leg that passes on the base is named, and the criterion is restated to the failing legs by a recorded decision rather than left claimed."
+- "(added) No OSC_LOAD_MAX or OSC_LOAD_WAIT_MS is raised; the run goes through tests/browser/lib/suite.cjs."
+validation:
+- node tests/browser/cross-links.cjs --only expand-focus
+evidence_required:
+- verified
+created_at: '2026-11-18'
+updated_at: '2026-11-18'

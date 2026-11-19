@@ -1,0 +1,29 @@
+id: K252
+milestone: M065
+serves:
+- "connected-instrument#step-sequencer"
+- "connected-instrument#one-transport"
+title: "The Synth's step strip shows the same playhead position as the Studio for a linked notes clip"
+slug: synth-step-strip-shows-the-studio-playhead
+priority: p2
+profile: implementation
+objective: "Lands as test(synth), or fix(synth) if the strip does not follow. st-linked in tests/browser/steps.cjs reads the Synth playhead from what the Synth workspace shows (the step strip's current step, src/js/synth/step-strip-view.js) and asserts it equals the Studio playhead for a linked notes clip, in three engines; if the strip does not show a linked Studio notes clip, it is made to through the one transport. st-linked fails when the strip's step is frozen or offset."
+why: "Split from K068 (criteria 3, copied verbatim) by the audit-and-stamp follow-up train of 2026-11-18 (oscilla-d9, under the triage the owner approved on 2026-11-18, relayed by oscilla-e5, Q112). Re-run on main 8e087873: st-linked, st-realtime, st-keys and st-a11y are ok in three engines (CI run 44135531351), but st-linked's own result records 'gap: the Synth workspace shows no playhead of its own'; the step strip now reads the playhead, but no check compares it with the Studio's."
+current_state: "Filed 2026-11-18 by oscilla-d9 in the audit-and-stamp follow-up train; not started."
+scope:
+- tests/browser/steps.cjs
+- src/js/synth/step-strip-view.js
+- tests/README.md
+- dist
+depends_on:
+- K060
+acceptance_criteria:
+- "A browser check in tests/browser/steps.cjs, wired into npm run test:synth (so CI and the release gate run it), fails on the merge base and proves the slice linked, real-time and interactive. Linked: a notes clip with a grid on the panel's Keys node plays the panel in the Synth workspace and in the Studio from the same transport, and the Studio playhead and the Synth playhead show the same position. Real-time: the playing step index read from the page follows transport.playhead(); a tempo changed while playing changes the measured onset interval in the runtime's debugInfo, each within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: Play and Stop by pointer, Space and touch; Tap by pointer, Enter and touch; the transport group's buttons and the tempo spinbutton are asserted in the accessibility tree. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+- "(added) The Synth playhead is read from what the Synth workspace shows (the step strip's current step), not from transport.playhead(), and st-linked's result no longer carries a 'gap'."
+validation:
+- node tests/browser/steps.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-11-18'
+updated_at: '2026-11-18'
