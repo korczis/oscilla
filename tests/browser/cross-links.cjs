@@ -14,8 +14,8 @@
 //   labels          (B6, B7, B8) the skip link says "Skip to main content: Playground" (H004
 //                   names the workspace shown); the "?" button is
 //                   named "Keyboard shortcuts" and opens that dialog; the logo keeps the
-//                   product's name, its title says "Open the Playground" (H004), and it goes to the
-//                   Playground from another workspace, Back returns
+//                   product's name, its description says "Otevřít Playground" (H004, U120),
+//                   and it goes to the Playground from another workspace, Back returns
 //   filter-toggle   (B1) the Filter Lab ⤢ button is not shown on the lighter Playground (#278);
 //                   in Filter Lab, opened through the navigation, it is named "Back to the
 //                   Playground" and returns to the Playground; Back reopens Filter Lab
@@ -242,6 +242,8 @@ const H = {
     return {
       label: el.getAttribute('aria-label'),
       title: el.getAttribute('title'),
+      description: (document.getElementById(el.getAttribute('aria-describedby') || '')
+        || { textContent: '' }).textContent.trim() || null,
       text: el.textContent.replace(/\s+/g, ' ').trim(),
       href: el.getAttribute('href'),
       shown: el.getClientRects().length > 0,
@@ -303,7 +305,7 @@ async function runLeg(name, origin) {
         skip && skip.text === 'Přeskočit na hlavní obsah: Playground'
         && help && help.label === 'Klávesové zkratky' && help.title === 'Klávesové zkratky'
         && brand && brand.href === '#m=playground' && /OSCILLA/.test(brand.label)
-        && brand.title === 'Open the Playground',
+        && brand.title === null && brand.description === 'Otevřít Playground',
         JSON.stringify({ skip, help, brand }));
       const wrong = [];
       for (const input of INPUTS) {

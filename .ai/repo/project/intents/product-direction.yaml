@@ -14,7 +14,7 @@ satisfaction:
     evidence: "command"
     ref: "majordomus plan list | grep -Eq '^Q002 +DONE '"
   - id: "positioning-consistent"
-    criterion: "README's opening line, the About lede, the page's meta description, the og:description and twitter:description generated from scripts/social-assets.mjs, and package.json's description contain the chosen sentence verbatim and stay within 200 characters; the title, og:title, twitter:title and the brand label keep the name within 70 characters; and a unit test fails when any of them differs or a surface is added that the test neither checks nor exempts with a reason"
+    criterion: "The app's own surfaces (the About lede, the page's meta description, and the og:description and twitter:description generated from scripts/social-assets.mjs) contain the chosen sentence's Czech rendering (Q113, for Q104) verbatim, and the developer surfaces (README's opening line and package.json's description) contain Q002's English verbatim, each from one source in scripts/social-assets.mjs and within 200 characters; the title, og:title, twitter:title and the brand label keep the name within 70 characters; and a unit test fails when any of them differs, carries the other language's sentence, or a surface is added that the test neither checks nor exempts with a reason"
     evidence: claim
     ref: "positioning-sentence-consistent"
   - id: "product-path-decided"
