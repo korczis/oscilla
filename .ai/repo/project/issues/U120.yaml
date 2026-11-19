@@ -1,0 +1,26 @@
+id: U120
+milestone: M054
+serves:
+  - "ui-current#app-speaks-czech"
+title: "Czech pass 8 markup cut 3: the header brand link describes where it goes in Czech, its English name kept"
+slug: czech-pass-8-brand-description
+priority: p2
+profile: implementation
+objective: "Lands as fix(ui). The header brand link (data-osc header.brand) keeps its accessible name, the product name 'OSCILLA · Interactive Sound & Frequency Lab', marked lang='en'. Its description 'Open the Playground' was a title attribute on that lang='en' element. It becomes 'Otevřít Playground', a hidden span (id osc-brand-desc) outside the link, so the page's lang cs applies, referenced by aria-describedby. The link has no title any more (a hover tooltip, unavailable to keyboard and touch). oscilla-c3's option B (2026-11-18): A, moving lang to the visible spans, would read the English name with a Czech voice; naming from the visible spans fails below 375 px, where the wordmark drops; a sr-only span would repeat the description in browse mode."
+why: "U118's first criterion, as oscilla-43 re-checked it after v3.41.7, still has one gap: title='Open the Playground' on the header brand (src/index.html). The shortcut dialog's English group names, the other remnant, wait for #602 (D05), which rewrites the same lines in src/js/ui/keys."
+current_state: "Built by oscilla-0b in task t-20261119005733-58f2 on fix/czech-u120-brand-title. Left for after #602: the shortcut dialog's group names (Page, Instrument, Keyboard, General)."
+scope:
+  - "src/index.html"
+depends_on: [U118]
+acceptance_criteria:
+  - "The header brand link's accessible description is 'Otevřít Playground' through aria-describedby; the target is hidden, outside the lang='en' link, and takes the page's lang cs; the link has no title; its name is unchanged and lang='en'."
+  - "tests/unit/control-names.test.mjs and tests/unit/cross-links.test.mjs pin it and fail on the base; tests/browser/navigation.cjs and tests/browser/cross-links.cjs read the description; H004 reads 'its description says …'."
+  - "The czech-prose-short ratchet does not rise; src/index.html within its cap; the four visual gates pass."
+validation:
+  - "npm test"
+  - "node tests/browser/navigation.cjs"
+  - "node tests/browser/cross-links.cjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-19'
+updated_at: '2026-11-19'
