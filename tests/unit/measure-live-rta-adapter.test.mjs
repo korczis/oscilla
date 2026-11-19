@@ -76,7 +76,7 @@ test('startLive opens the tap, runs on the frame loop and announces; a second st
     assert.equal(h.meas.rtaLive.starting, false);
     assert.equal(h.meas.rtaFrozen, false);
     assert.equal(h.ctx.liveStarting, false);
-    assert.deepEqual(h.said, ['Live RTA started']);
+    assert.deepEqual(h.said, ['Živé RTA spuštěno']);
     assert.equal(h.counts.opened, 1);
     assert.equal(h.frames.length, 1, 'subscribed to the frame loop');
     assert.equal(await h.live.startLive(h.cmp), false, 'one live RTA at a time');
@@ -146,7 +146,7 @@ test('stopLive releases the tap once and says it stopped; with nothing running i
     assert.equal(h.ctx.live, null);
     assert.equal(h.meas.rtaLive.running, false);
     assert.equal(h.meas.rtaLive.kind, null);
-    assert.equal(h.said.at(-1), 'Live RTA stopped');
+    assert.equal(h.said.at(-1), 'Živé RTA zastaveno');
     assert.equal(h.live.stopLive(), false);
   });
 
@@ -159,7 +159,7 @@ test('the io closing the tap ends the run; a disconnected track says so; a stale
     assert.notEqual(h.ctx.live, null);
     tap.onClosed('track-ended');
     assert.equal(h.ctx.live, null);
-    assert.match(h.meas.rtaLive.error, /input device was disconnected/);
+    assert.match(h.meas.rtaLive.error, /vstupní zařízení bylo odpojeno/);
     assert.equal(h.counts.closed, 0, 'the io closed it itself');
 
     const g = harness();

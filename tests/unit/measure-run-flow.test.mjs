@@ -58,7 +58,7 @@ test('a setup check that fails says so; an aborted one says nothing', async () =
     state: S.COMPLETE }) });
   await bad.run.runPreflight(bad.cmp);
   assert.equal(bad.engine.resets, 1, 'a finished run is reset first');
-  assert.deepEqual(bad.notes, [{ kind: 'error', title: 'Setup check failed', text: 'No input' }]);
+  assert.deepEqual(bad.notes, [{ kind: 'error', title: 'Kontrola nastavení selhala', text: 'No input' }]);
   assert.equal(bad.ctx.pending, null);
   assert.equal(bad.cmp.meas.saved, false);
   assert.equal(bad.cmp.meas.savedId, null);
@@ -77,7 +77,7 @@ test('a failed measurement says so and resolves null; the definition mismatch is
     h.ctx.definition = { id: 'def-1' };
     assert.equal(await h.run.runMeasure(h.cmp), null);
     assert.deepEqual(h.notes.map((n) => [n.kind, n.title]), [
-      ['warning', 'Not run from the definition'], ['error', 'Measurement failed']]);
+      ['warning', 'Neběží podle definice'], ['error', 'Měření selhalo']]);
     assert.equal(h.ctx.lastRecipe, h.recipe);
     assert.equal(h.ctx.checking, h.recipe);
     assert.equal(h.ctx.runDefinition, null);
@@ -240,7 +240,7 @@ test('a Studio recipe run: refused when busy, failed with its reasons, saved wit
     const h = harness();
     const busy = flow(h, { owns: true }).c;
     assert.deepEqual(await busy.measureRunRecipe({}), { ok: false, state: S.IDLE,
-      reason: 'A measurement is already in progress.' });
+      reason: 'Měření už probíhá.' });
 
     const throwing = flow(h).c;
     throwing.measureRunRecipe = measureFlowPart(h.ctx, h.svc, { ...h.ops,
@@ -270,7 +270,7 @@ test('a Studio recipe run: refused when busy, failed with its reasons, saved wit
 
     const unsaved = flow(h, { result: { state: S.COMPLETE }, save: () => null }).c;
     assert.deepEqual(await unsaved.measureRunRecipe({}), { ok: false, state: S.COMPLETE,
-      reason: 'The experiment was not saved.' });
+      reason: 'Experiment nebyl uložen.' });
   });
 
 /** A component with the recipe link part over the harness. */
