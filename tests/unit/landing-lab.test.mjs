@@ -55,7 +55,9 @@ import path from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CHARTS, REPO_ROOT, collectFacts } from '../../scripts/facts.mjs';
-import { esc, fmtInt } from '../../scripts/landing/charts.mjs';
+import {
+  RELEASE_WINDOW, esc, fmtInt, windowFacts,
+} from '../../scripts/landing/charts.mjs';
 import { CHANGELOG_FULL_RELEASES, RATCHET_COPY } from '../../scripts/landing/copy.mjs';
 import { generateLanding, ruleFileOf } from '../../scripts/landing.mjs';
 import * as LANDING_PAGE from '../../scripts/landing/page.mjs';
@@ -136,7 +138,11 @@ const ALLOWED_LINK = new RegExp('^https://(github\\.com/korczis/oscilla(/|$)'
 //   zmeny/index.html    376 934 B: one card per release tag (the newest 8 and the unreleased
 //                       changes list their commits, the rest a compare link): 480 000.
 //   grafy/index.html    279 709 B: the 12 charts inline with their value tables, which grow by
-//                       a row per release in five of them: 360 000.
+//                       a row per release in five of them: 360 000. It reached 360 295 B on
+//                       2026-11-18's release record (about 2.4 KB a release); since then the six
+//                       per-release charts and their tables show the newest RELEASE_WINDOW (48)
+//                       releases, 307 191 B that day, flat in releases (the test below); the
+//                       weekly and daily charts still grow by time, a few hundred bytes a day.
 //   tvrzeni/index.html  218 344 B: about 1 300 B a claim: 280 000.
 //   roadmapa/index.html 190 787 B: about 950 B a milestone: 250 000.
 //   adr/index.html      151 040 B: about 770 B an ADR: 200 000.
@@ -149,6 +155,85 @@ const PAGE_CEILING = Object.freeze({
   'tvrzeni/index.html': 280_000, 'roadmapa/index.html': 250_000, 'adr/index.html': 200_000,
   'revize/index.html': 240_000, 'dluh/index.html': 160_000,
 });
+
+// The six per-release charts and their tables show the newest RELEASE_WINDOW releases, so the
+// page stays the same size however many releases follow (P018's ceiling was passed at 360 295 B
+// on 2026-11-18's release record, about 2.4 KB a release). `doubled` appends a copy of every
+// per-release series, a later release for each, as if as many releases again had been published.
+const PER_RELEASE = ['releases', 'size', 'growth', 'claims-trend', 'ratchets', 'cadence'];
+function doubled(f) {
+  const later = (r, i) => ({ ...r, version: `9.${i}.0`, tag: `v9.${i}.0`, from: `9.${i}.0`,
+    published_at: r.published_at && new Date(Date.parse(r.published_at) + 400 * 86400000)
+      .toISOString() });
+  const twice = (xs) => (Array.isArray(xs) ? [...xs, ...xs.map(later)] : xs);
+  return { ...f,
+    releases: f.releases && { ...f.releases, items: twice(f.releases.items) },
+    codeInventory: f.codeInventory && { ...f.codeInventory,
+      perRelease: twice(f.codeInventory.perRelease) },
+    claimsPerRelease: f.claimsPerRelease && { ...f.claimsPerRelease,
+      items: twice(f.claimsPerRelease.items) },
+    ratchets: f.ratchets && { ...f.ratchets, items: (f.ratchets.items || []).map((it) => ({
+      ...it, perRelease: twice(it.perRelease) })) },
+    releaseCadence: f.releaseCadence && { ...f.releaseCadence,
+      items: twice(f.releaseCadence.items) } };
+}
+const marks = (svg) => (svg.match(/<g class="mark">/g) || []).length;
+
+test('the per-release charts and tables show the newest releases, so grafy/ stays flat', () => {
+  const big = doubled(FACTS);
+  const a = renderCharts(FACTS);
+  const b = renderCharts(big);
+  for (const name of PER_RELEASE) {
+    assert.equal(marks(b[name]), marks(a[name]), `${name}: as many points with twice the releases`);
+    assert.equal(chartTable(name, big).rows.length, chartTable(name, FACTS).rows.length,
+      `${name}: as many table rows with twice the releases`);
+    assert.ok(chartTable(name, big).rows.length <= RELEASE_WINDOW + 1, `${name}: the window`);
+    const size = (x) => Buffer.byteLength(x);
+    assert.ok(Math.abs(size(b[name]) - size(a[name])) <= size(a[name]) * 0.03,
+      `${name}: ${size(a[name])} B, ${size(b[name])} B with twice the releases`);
+  }
+  // A chart says it is windowed exactly when its series was cut (a tree without history has no
+  // per-release code inventory, so its growth chart is empty and says nothing of a window).
+  const w = windowFacts(FACTS);
+  const omitted = { releases: w.releases?.omitted, size: w.releases?.omitted,
+    growth: w.codeInventory?.omitted, 'claims-trend': w.claimsPerRelease?.omitted,
+    ratchets: w.ratchets?.items?.[0]?.omitted, cadence: w.releaseCadence?.omitted };
+  for (const name of PER_RELEASE) {
+    const said = /posledních \d+ vydání; \d+ starších je ve Změnách\./.test(a[name]);
+    assert.equal(said, (omitted[name] || 0) > 0, `${name}: says its window when cut`);
+  }
+  if ((w.releaseCadence?.omitted || 0) > 0) {
+    assert.match(a.cadence, /medián ukázaných intervalů /, 'the median says it is of the shown');
+  }
+  if (datedCount(FACTS) > RELEASE_WINDOW) {
+    assert.match(a.releases, new RegExp(`${fmtInt(datedCount(FACTS))}\\. vydání`),
+      'the newest point carries its true position');
+  }
+  assert.match(PAGES.get(pageOf('grafy')),
+    /ukazují posledních \d+ vydání[^<]*jsou ve <a [^>]*href="\.\.\/zmeny\/">Změnách<\/a>/);
+});
+
+test('mutation: without the window the doubled series are longer than the window', () => {
+  const big = doubled(FACTS);
+  const whole = windowFacts(big, Infinity);
+  const w = windowFacts(big);
+  for (const [k, series] of [['releases', (f) => f.releases.items],
+    ['codeInventory', (f) => f.codeInventory?.perRelease || []],
+    ['claimsPerRelease', (f) => f.claimsPerRelease?.items || []],
+    ['ratchets', (f) => f.ratchets?.items?.[0]?.perRelease || []],
+    ['releaseCadence', (f) => f.releaseCadence?.items || []]]) {
+    if (series(whole).length > RELEASE_WINDOW) {
+      assert.ok(series(w).length === RELEASE_WINDOW, `${k}: windowed to ${RELEASE_WINDOW}`);
+    }
+  }
+  assert.equal(w.releases.items.length, Math.min(RELEASE_WINDOW, datedCount(big)));
+  assert.equal(w.releases.omitted, Math.max(0, datedCount(big) - RELEASE_WINDOW));
+  assert.equal(FACTS.releases.omitted, undefined, 'the facts other pages read are not changed');
+});
+
+function datedCount(f) {
+  return (f.releases?.items || []).filter((r) => r.published_at).length;
+}
 
 test('two generations from the same checkout are byte-identical', async () => {
   const again = await withHistory(() => generateLanding({ majordomus: false }));
@@ -534,8 +619,10 @@ test('the review table has a row per record, newest first, naming every open P0 
 
 test('a release whose tree has no claims ledger reads as absent in the trend, not as zero', () => {
   const facts = clone(FACTS);
-  facts.claimsPerRelease.items[0] = { ...facts.claimsPerRelease.items[0], present: false,
-    total: null, byStatus: null };
+  // The oldest release the window shows (RELEASE_WINDOW): its row is the table's last.
+  const items = facts.claimsPerRelease.items;
+  const oldest = items.length - Math.min(items.length, RELEASE_WINDOW);
+  items[oldest] = { ...items[oldest], present: false, total: null, byStatus: null };
   const t = chartTable('claims-trend', facts);
   assert.equal(t.rows[t.rows.length - 1][t.head.length - 1], 'soubor chybí');
   assert.ok(t.rows[t.rows.length - 1].slice(1, -1).every((c) => c === 'chybí'));

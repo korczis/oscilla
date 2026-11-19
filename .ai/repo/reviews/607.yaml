@@ -1,0 +1,63 @@
+# Review verdict for pull request #607 (fix/czech-pass-7c): Czech pass 7c (U115), the reviewer's
+# four P3 notes on #597 (7b). Built by oscilla-0b: fe1b7ca5 fix(ui), bd05cc5f merge of main,
+# 73a761cf fix(ui) closing C3-607-1. Judged at 73a761cf on base origin/main 1f1a6183,
+# 2026-11-18, in the reviewer's own detached worktree ~/dev/oscilla-wt/review-526.
+#
+# Reviewer: rev-seat-2 (session oscilla-c3, claude-code c0f0687c), a separate top-level session
+# acting as rev-seat (Q108 A). It built none of this: oscilla-0b built every commit. The four
+# changes are the reviewer's own notes from #597's verdict.
+#
+# The digest: origin/main's scripts/review-verdict.mjs --content --list at 73a761cf:
+# 1151321c4de1... over 2 guarded paths (src/js/measurement/views/ir-chart.js,
+# response-chart.js). At bd05cc5f it was 935c9760 (before the C3-607-1 fix).
+#
+# How it was judged, note by note (#597's P3 numbering):
+# 1. The review step's detail: src/index.html binds the step detail through measureShown, which
+#    runs calibrationShown first, so no calibration state is lost and the quality status shows
+#    as "Kvalita POUŽITELNÁ" (was "Kvalita USABLE").
+# 2. The three Measure charts' empty note: measure-charts.js sets it from
+#    measureShown(UNAVAILABLE.NOT_MEASURED), "NEZMĚŘENO"; UNAVAILABLE stays English data.
+# 3. The IR noise tail: "šum na konci odezvy" in the notes, the summary and the tail-bound note,
+#    so it no longer shares "dozvuk" with the decay the same note explains. C3-607-1 (found by
+#    the reviewer at bd05cc5f, closed by 73a761cf): the "not available" note at ir-chart.js:211
+#    still said "Šumový dozvuk" and two tests pinned it; now "Šum na konci odezvy: není k
+#    dispozici." in src and both tests, and git grep finds no "šumový dozvuk" in src or tests.
+# 4. Agreement: "NORMALIZOVANÁ velikost", "NORMALIZOVANÁ / NAMĚŘENÁ impulsní odezva",
+#    "kalibrovaná křivka není k dispozici; zobrazena surová křivka" (the reviewer's optional note,
+#    taken). The kinds (NORMALIZED, OBSERVED, RAW) stay the data values; measureShown's whole-word
+#    match cannot hit NORMALIZOVANÁ.
+# No meaning changed: the notes still say the calibrated curve is unavailable and the raw one is
+# shown uncalibrated, and the noise-tail bound still reads "at or below this level".
+#
+# Measured by the reviewer (Node 22.20.0, majordomus 1.0.1 first on PATH, ci.yml's pin):
+# - build:check exit 0; GITHUB_BASE_REF=main npm test exit 0 (5924 tests, 5923 pass, 0 fail,
+#   1 skipped).
+# - Browser, 6 suites that read Measure text, in 3 engines. chromium (first run): v3-ui 38/38
+#   file and http, app 66/66 both, navigation 25/25 both, v3-measure, first-screen and
+#   cross-links with every chromium check passing, 0 chromium FAIL lines; that run's firefox and
+#   webkit legs failed at launch because another project's Playwright install had collected
+#   OSCILLA's firefox-1543 and webkit-2359 from the shared cache (reinstalled by the reviewer
+#   from this worktree). Then OSC_BROWSERS=firefox,webkit: run-suites exit 0, "all 6 suites
+#   passed": v3-ui 38/38 in the 4 legs, v3-measure ALL PASS (97), first-screen ALL PASS (430),
+#   app 66/66 in the 4 legs, navigation 25/25 in the 4 legs, cross-links ALL PASS (72).
+# - The reviewer's probe in chromium: the three charts' empty notes read NEZMĚŘENO; after a
+#   loopback measurement no "Kvalita USABLE", "NOT MEASURED" or other English state word
+#   remains among the strings the #597 probe lists.
+# Not run by the reviewer: the visual gate (0b: the linux MEASURE references do not move, 0 % in
+# the noble container); the CI legs and the linux visual job run it.
+#
+# THE CONDITION of this verdict: it binds once the reviewer has read the six "Browser leg N
+# (browser)" logs of this pull request's run at this verdict's commit and found each leg's
+# suite list equal to shards.cjs --plan at this head, "run-suites: all K suites passed" and no
+# FAIL line (a flake is judged against main before any rerun), and the linux visual job passes
+# with the unchanged MEASURE references. Auto-merge is armed only after the reviewer reports
+# "legs OK"; otherwise a superseding verdict.
+#
+# Verdict: merge, under the condition above. Findings: C3-607-1 closed.
+schema: review-verdict/v1
+pr: 607
+verdict: merge
+reviewer: oscilla-c3 rev-seat-2 (claude-code c0f0687c, a separate top-level session; built none of 73a761cf)
+content: 1151321c4de1efecd654edb9ca99950a449f06c6be45d1ded6568513c8459086
+findings:
+  - { id: C3-607-1, severity: P3, status: closed, title: "the IR 'not available' note (ir-chart.js:211) still said 'Šumový dozvuk', pinned by two tests; closed by 73a761cf ('Šum na konci odezvy: není k dispozici.')" }

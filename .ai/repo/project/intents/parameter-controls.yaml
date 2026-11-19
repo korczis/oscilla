@@ -12,6 +12,7 @@ milestones:
 - M111
 - M112
 - M113
+- "M087"
 satisfaction:
 - id: one-declaration
   criterion: "Every parameter, in the Studio registry, the labs, the instrument, the sequencer and MEASURE, is declared once with id, unit, range, step, scale, default, state path, automatable, modulatable, links and docs, and a continuous parameter that is neither automatable nor modulatable says why"
@@ -63,4 +64,4 @@ non_goals:
 - "A second census beside PACK 03's, or a second declaration beside the catalogue's"
 - Reading a modulated value from AudioParam.value
 created_at: '2026-10-29'
-updated_at: '2026-10-30'
+updated_at: 2026-11-18

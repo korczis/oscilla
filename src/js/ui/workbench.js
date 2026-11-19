@@ -20,7 +20,7 @@ import {
 import { midiToFrequency, nearestNote, formatCents } from '../core/music.js';
 import { gainLevelDb } from '../core/config.js';
 import { PATTERN_NAMES, SWEEP_PARAMS } from '../audio/patterns.js';
-import { LEARN_CARDS, LEARN_VIZ_TARGETS } from '../data/learn.js';
+import { LEARN_VIZ_TARGETS } from '../data/learn.js';
 import { additiveHarmonicTable, harmonicTable } from '../visualization/harmonics.js';
 import { totalDurationMs } from '../sequencer/model.js';
 import { sequenceDigest } from '../sequencer/editor.js';
@@ -87,7 +87,6 @@ export function createWorkbench(svc) {
   return {
     OSCILLA_VERSION,
     SWEEP_FORM,
-    LEARN_CARDS,
     rovingKeydown,
     timeWindowMs: 5,
     announceText: '',
@@ -789,8 +788,8 @@ export function createWorkbench(svc) {
       const tool = learnToolOf(topic.id);
       if (!tool) return;
       this.learnTopic = topic.id;
-      this.notify('info', `Opened ${tool.text.replace(/^Open /, '')} from the lesson`,
-        `${topic.title}: the lesson stays where you left it.`,
+      this.notify('info', `Otevřeno z lekce: ${WORKSPACE_LABELS[tool.workspace]}`,
+        `${topic.title}: lekce zůstane, kde jste ji opustili.`,
         { action: learnReturnAction(topic) });
     },
     /** Follow a notice's link: the notice goes, the router opens the address. */

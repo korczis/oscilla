@@ -1,0 +1,33 @@
+id: U118
+milestone: M054
+serves:
+  - "ui-current#app-speaks-czech"
+title: "Czech pass 8 markup cut: the Studio template and workspace action links, and the Studio saved-row actions, in Czech"
+slug: czech-pass-8-studio-action-links
+priority: p2
+profile: implementation
+objective: "Lands as fix(ui). Every action link to a Studio template reads 'Otevřít šablonu <title> ve Studiu', derived from the one fallback in src/js/ui/cross-links.js (studioTemplateText), and every workspace panel link reads 'Otevřít <label>' in the accusative from one fallback in src/js/ui/counterparts.js (panelLinkText, a kept English name such as Synth not declined, Q104); the per-link text overrides of the Sequencer's two links go. The literal copies change with them: the Measure, Filter Lab, Synthesis and Sequencer anchors of src/index.html and the labels of ui/catalog/decl/cross-links.js (the First patch included). The Studio library's saved-row actions (Otevřít, Nahradit neuložené změny, Smazat, Potvrdit smazání, Vložit, Nahradit graf, Exportovat) and their accessible names move together (WCAG 2.5.3 label-in-name), with the status sentence that quotes the button. The header's related list (relatedText) keeps the noun form 'Šablona <title> ve Studiu': it lists related things and is no command. Template titles stay as names."
+why: "Q104 (the app's visible prose is Czech): after U115 and U116 the shared fallback 'Open <title> in Studio' still showed in Měření's Experiment card as 'Open Measurement Sweep in Studio' (oscilla-43's live check of v3.41.5), and three forms of the same action stood side by side (Šablona … ve Studiu, Otevřít šablonu … ve Studiu, Open … in Studio). Agreed with oscilla-43 on 2026-11-18: the verb form for every action link, one fallback per kind."
+current_state: "Built by oscilla-0b in task t-20261118155735-b26f on fix/czech-u118-studio-links, from #600's head (U116) and merged with main once #600 landed. Landed by #613 (e2993b14, c3's review and legs OK at f8646a05) and released in v3.41.7 (0cb38ae3). Re-checked on main 0cb38ae3 by oscilla-43 (2026-11-18): AC2-AC4 hold (ratchets 2637->2633 and 1549->1527; workspace-registry and g013-sequencer-paths 19/0; the browser suites green in #613's legs; no guarded path, so no verdict file), and the live page shows 'Otevřít šablonu Measurement Sweep ve Studiu', 'Otevřít Synth' and 'Otevřít Studio' with no English link text. Left open on AC1: the header brand link to the Playground workspace still carries title=\"Open the Playground\" (src/index.html:156). Done once that title reads its Czech form and ships in a release."
+scope:
+  - "src/js/ui/cross-links.js"
+  - "src/js/ui/counterparts.js"
+  - "src/js/ui/catalog/decl/cross-links.js"
+  - "src/js/ui/studio/patches-panel.js"
+  - "src/index.html"
+depends_on: [U116]
+acceptance_criteria:
+  - "No action link to a Studio template or a workspace shows 'Open … in Studio' or 'Open the …'; each reads the Czech verb form from its one fallback, with no per-link override; Synth and Studio are not declined; the header's related list keeps the noun form."
+  - "The Studio saved-row actions and their accessible names are Czech, each accessible name starting with its visible text."
+  - "The czech-prose and czech-prose-short ratchets fall; src/index.html within its cap."
+  - "Every unit and browser check that read the changed text reads its Czech form as a positive (workspace-registry, g013-sequencer-paths, cross-links, demo-song, v31-studio-graph, v31-studio-workflows); a reviewer's verdict for the guarded paths."
+validation:
+  - "npm test"
+  - "node tests/browser/cross-links.cjs"
+  - "node tests/browser/v31-studio-workflows.cjs"
+  - "node tests/browser/v31-studio-graph.cjs"
+  - "node tests/browser/demo-song.cjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-18'
+updated_at: 2026-11-18

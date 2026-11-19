@@ -144,7 +144,7 @@ test('V322: the input list holds real inputs with the browser labels, nothing in
   ]);
   assert.deepEqual(list, [
     { id: 'a1', label: 'USB mic (2-channel)', labelExposed: true },
-    { id: 'b2', label: 'Input 2 (label not exposed by the browser)', labelExposed: false },
+    { id: 'b2', label: 'Vstup 2 (název prohlížeč nesděluje)', labelExposed: false },
   ]);
   assert.deepEqual(inputDeviceList(null), []);
 });
@@ -156,7 +156,7 @@ test('V322: the default stays the default; a vanished choice stays selected and 
   assert.deepEqual(before.options.filter((o) => !o.testContext),
     [{ value: '', label: DEFAULT_INPUT_LABEL, missing: false }]);
   assert.equal(before.selected, '');
-  assert.match(before.status, /Run the setup check to list the inputs/);
+  assert.match(before.status, /Spusťte kontrolu nastavení, aby se vstupy vypsaly/);
   const listed = inputDeviceView({ devices, enumerated: true });
   assert.deepEqual(listed.options.filter((o) => !o.testContext).map((o) => o.value), ['', 'a1']);
   assert.equal(listed.missing, false);
@@ -168,11 +168,11 @@ test('V322: the default stays the default; a vanished choice stays selected and 
     enumerated: true });
   assert.equal(gone.missing, true);
   assert.equal(gone.selected, 'a1', 'nothing switches to another input silently');
-  assert.deepEqual(gone.options.at(-2), { value: 'a1', label: 'USB mic — not available',
+  assert.deepEqual(gone.options.at(-2), { value: 'a1', label: 'USB mic — není k dispozici',
     missing: true });
-  assert.match(gone.message, /^"USB mic" is no longer available .*nothing is switched for you/);
+  assert.match(gone.message, /^„USB mic“ už není k dispozici .*nic se nepřepne samo/);
   const unnamed = inputDeviceView({ devices: [], selectedId: 'zz', enumerated: true });
-  assert.match(unnamed.message, /^The selected input is no longer available/);
+  assert.match(unnamed.message, /^Zvolený vstup už není k dispozici/);
 });
 
 test('V322: a chosen input that cannot be opened is a readable NO_INPUT', () => {
@@ -326,7 +326,7 @@ test('V356: equivalent experiments get an IR overlay on their original scale', a
   assert.deepEqual(v.irOverlay.labels, ['A', 'B']);
   assert.equal(view.axes.x.unit, 'ms');
   assert.deepEqual(view.axes.x.range, [-5, 200]);
-  assert.match(view.axes.y.label, /original scale/);
+  assert.match(view.axes.y.label, /původní měřítko/);
   assert.ok(view.series.every((s) => s.values.length === view.x.length));
   // Original scale: the drawn maximum is each IR's own peak sample (no normalization).
   for (const [s, e] of [[view.series[0], a.experiment], [view.series[1], b.experiment]]) {

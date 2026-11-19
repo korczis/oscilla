@@ -111,13 +111,16 @@ export const STATUS_PRESENTATION = Object.freeze({
     className: 'osc-q--info', role: 'info' }),
 });
 
-/** Quality status → presentation (spec §65). NOT ASSESSED is not a quality.js status. */
+/**
+ * Quality status → presentation (spec §65). NOT ASSESSED is not a quality.js status. `text` is the
+ * data word (shown through views/display.js); `word` is the Czech word a shown sentence uses.
+ */
 export const QUALITY_STATUS_PRESENTATION = Object.freeze({
-  GOOD: Object.freeze({ text: 'GOOD', word: 'good', severity: 'ok' }),
-  USABLE: Object.freeze({ text: 'USABLE', word: 'usable', severity: 'ok' }),
-  POOR: Object.freeze({ text: 'POOR', word: 'poor', severity: 'warn' }),
-  INVALID: Object.freeze({ text: 'INVALID', word: 'invalid', severity: 'fail' }),
-  NOT_ASSESSED: Object.freeze({ text: UNAVAILABLE.NOT_ASSESSED, word: 'not assessed',
+  GOOD: Object.freeze({ text: 'GOOD', word: 'dobrá', severity: 'ok' }),
+  USABLE: Object.freeze({ text: 'USABLE', word: 'použitelná', severity: 'ok' }),
+  POOR: Object.freeze({ text: 'POOR', word: 'slabá', severity: 'warn' }),
+  INVALID: Object.freeze({ text: 'INVALID', word: 'neplatná', severity: 'fail' }),
+  NOT_ASSESSED: Object.freeze({ text: UNAVAILABLE.NOT_ASSESSED, word: 'neposouzena',
     severity: 'unknown' }),
 });
 

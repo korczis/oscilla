@@ -8,7 +8,7 @@ priority: p1
 profile: implementation
 objective: "Add src/js/ui/keys/: registry.js (bind a binding { id, keys, scope { workspace, view?, focus? }, run, up?, when?, repeat?, label, group }; a chord is a KeyboardEvent.code with its modifiers in a fixed order; a second owner of a chord in the same scope throws at bind; the most specific scope wins, a view over its workspace over '*'; helpRows gives the shortcuts help from the registry) and dispatcher.js (the one document keydown/keyup listener: it resolves the focus context once, runs the owner once per press, swallows auto-repeat unless asked, pairs every press with one up() and releases every held key on blur or a hidden page; it passes through IME composition, text fields, a focused control's Space, Enter, arrows and paging, an open modal and every chord nobody owns). No client binds yet: the next issues move keyboard-ui.js, the shortcuts dialog and the Studio editors onto it, and new keys (the Synth's XY performance, the step sequencer) bind through it from their first commit. A ratchet counts the key listeners outside src/js/ui/keys/ (47 across 16 files on main 32b439e6) and lets them only fall."
 why: "Owner direction of 2026-11-02, relayed by af and b0 (lane coordinator): \"keyboard and shortcuts barely work, aren't reused, aren't a component\", with \"OSCILLA practically doesn't work on iPhone: verify everything\". On main 66635acc, 24 keydown listeners in 15 files each decide on their own whom a key belongs to; ui/shortcuts.js only lists the Space owners and nothing enforces them."
-current_state: "CONTRADICTED on main 6d5efa89 (af audit wf_99782352-a93, 2026-11-05): stamped done without re-checking its criteria on main; see C034 for the file:line evidence and the re-check. Its done record is not evidence until C034 passes."
+current_state: "CONTRADICTED on main 6d5efa89 (af audit wf_99782352-a93, 2026-11-05): stamped done without re-checking its criteria on main; see C034 for the file:line evidence and the re-check. Its done record is not evidence until C034 passes. Gap recorded on 2026-11-18 under the plan triage the owner approved in bulk (Q112: 'schvaluji vse', 2026-11-18T02:27Z, Claude Code session 980e22ee-d9d4-4dd0-8318-8b727f127ce9, oscilla-e5; triage derived from origin/main 4682eea4): the objective says helpRows gives the shortcuts help from the registry, but on origin/main 8e087873 `git grep helpRows src` finds only its definition (src/js/ui/keys/registry.js:141) and the comment at :27; the Keyboard shortcuts dialog reads src/js/ui/shortcuts.js shortcutHelp (src/js/ui/app.js:13 and :436), not the registry. The done stamp stays (majordomus plan has no supported way to withdraw one); the code fix is another builder's (D05)."
 scope:
 - src/js/ui/keys/registry.js
 - src/js/ui/keys/dispatcher.js
@@ -28,7 +28,7 @@ validation:
 evidence_required:
 - verified
 created_at: '2026-11-02'
-updated_at: 2026-11-02T18:18:15Z
+updated_at: 2026-11-18
 started_at: 2026-11-02T18:17:32Z
 started_event: sha256:dd98386202dd3ab71771b64366db149e2a74518871084ccbf059814162774727
 verified_at: 2026-11-02T18:17:53Z

@@ -1,0 +1,27 @@
+id: U119
+milestone: M054
+serves:
+  - "ui-current#app-speaks-czech"
+title: "Czech pass 8 markup cut 2: the Learn card's example button and the keyboard dock's handle in Czech"
+slug: czech-pass-8-learn-example-dock-handle
+priority: p2
+profile: implementation
+objective: "Lands as fix(ui). The Learn card's example button (data-osc learn.example, src/index.html) reads 'Ukázat na aktuálním nastavení' instead of 'Relate to current settings', and the keyboard dock's handle (data-osc keyboard.handle, src/js/midi/dock-yield.js) reads 'Klávesnice' instead of 'Keyboard'. The visible text is the accessible name of each (neither has an aria-label). Ids, data-osc hooks and the Alt+K shortcut stay."
+why: "Q104 (the app's visible prose is Czech): oscilla-43's live check of v3.41.6 found 'Relate to current settings' on every Learn card, the most visible remnant, and the dock's 'Keyboard' beside Czech status lines (Klávesnice se složí…). Agreed with oscilla-43 on 2026-11-18 as its own issue so that U116 closes with its own evidence; the app's tagline (Q002's positioning sentence) is a separate Q record agreed by oscilla-0b, oscilla-c3 and oscilla-43 under Q110."
+current_state: "Built by oscilla-0b in task t-20261118190540-9a34 on fix/czech-u119-learn-dock, from main after #613 (U118). Left for a later cut: the shortcut dialog's English group names (Page, Instrument, Keyboard, General in src/js/ui/keys). Landed by #618 (7eef2499, c3's legs OK on run 44422539544) and released in v3.41.8 (a165fd9d). Re-checked on main by oscilla-43 (2026-11-19): every criterion holds (live v3.41.8: each Learn card reads 'Ukázat na aktuálním nastavení', the dock handle 'Klávesnice'; learn-demo-focus, keyboard-dock-yield and both czech-prose tests 41/0; the browser suites green in #618's legs), but plan start refuses it: BLOCKED on U118 (open on the header brand title, which U120 carries). Stamp it done once U118 is."
+scope:
+  - "src/index.html"
+  - "src/js/midi/dock-yield.js"
+depends_on: [U118]
+acceptance_criteria:
+  - "The Learn card's example button and the dock's handle show Czech text, which is their accessible name; hooks and the Alt+K shortcut unchanged."
+  - "tests/unit/learn-demo-focus.test.mjs and tests/unit/keyboard-dock-yield.test.mjs assert the Czech names and fail on the base."
+  - "The czech-prose-short ratchet falls; src/index.html within its cap; every browser suite that presses either control passes."
+validation:
+  - "npm test"
+  - "node tests/browser/control-census.cjs"
+  - "node tests/browser/midi.cjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-18'
+updated_at: 2026-11-19

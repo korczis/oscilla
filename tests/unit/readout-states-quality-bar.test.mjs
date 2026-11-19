@@ -121,12 +121,12 @@ test('T016: a run whose peak reached the rail without a clip region is AT RAIL, 
   assert.notEqual(c.text, 'CLIPPING NONE');
   assert.equal(c.status, 'warn');
   assert.equal(c.text, 'CLIPPING AT RAIL');
-  assert.match(c.detail, /brief clipping is not excluded/);
+  assert.match(c.detail, /krátký ořez není vyloučen/);
   assert.match(c.detail, /0\.995/);
   assert.match(c.detail, new RegExp(`≥ ${CLIP_THRESHOLD}`));
   // The analog blind spot is stated: the rail is digital full scale only (review R6).
   assert.match(c.detail,
-    /clipping before the converter, in a preamp or by automatic gain, cannot be seen/);
+    /ořez před převodníkem, v předzesilovači nebo automatickým ziskem vidět není/);
   // Exactly at the threshold counts as at the rail (capture-checks: |x| ≥ CLIP_THRESHOLD).
   assert.equal(clippingOf(reduceAll([runEvent(0, { peak: CLIP_THRESHOLD })])).value, 'AT RAIL');
 });
@@ -136,7 +136,7 @@ test('T016: AT RAIL is kept across later clean runs; a clip region still overrid
     runEvent(2, { peak: 0.4 })]);
   const c = clippingOf(kept);
   assert.equal(c.text, 'CLIPPING AT RAIL');
-  assert.match(c.detail, /Run 1/);
+  assert.match(c.detail, /Běh 1/);
   const clipped = reduceAll([runEvent(0, { peak: 0.995 }), runEvent(1, { peak: 1,
     reasons: [{ code: 'CLIPPING', text: 'clipping in 2 regions' }] }), runEvent(2,
   { peak: 0.5 })]);
@@ -150,17 +150,17 @@ test('T016: a rail first reached in a later run moves NONE and NOT CHECKED up to
     runEvent(1, { peak: 0.995 })]));
   assert.equal(fromNone.text, 'CLIPPING AT RAIL');
   assert.equal(fromNone.status, 'warn');
-  assert.match(fromNone.detail, /^Run 2: peak 0\.995/);
+  assert.match(fromNone.detail, /^Běh 2: špička 0\.995/);
   // NOT CHECKED after an unreported run 1, then run 2 reaches the rail: AT RAIL outranks it.
   const fromUnchecked = clippingOf(reduceAll([runEvent(0), runEvent(1, { peak: 0.995 })]));
   assert.equal(fromUnchecked.text, 'CLIPPING AT RAIL');
   assert.equal(fromUnchecked.status, 'warn');
-  assert.match(fromUnchecked.detail, /^Run 2: peak 0\.995/);
+  assert.match(fromUnchecked.detail, /^Běh 2: špička 0\.995/);
   // And it stays there after a third, clean run.
   const kept = clippingOf(reduceAll([runEvent(0), runEvent(1, { peak: 0.995 }),
     runEvent(2, { peak: 0.5 })]));
   assert.equal(kept.text, 'CLIPPING AT RAIL');
-  assert.match(kept.detail, /^Run 2:/);
+  assert.match(kept.detail, /^Běh 2:/);
 });
 
 test('T016: an unknown peak is NOT CHECKED; NONE names its threshold', () => {
@@ -173,8 +173,8 @@ test('T016: an unknown peak is NOT CHECKED; NONE names its threshold', () => {
   const clean = clippingOf(reduceAll([runEvent(0, { peak: 0.5 })]));
   assert.equal(clean.text, 'CLIPPING NONE');
   assert.equal(clean.status, 'ok');
-  assert.match(clean.detail, /no sample at or above 0\.98 of digital full scale/);
-  assert.match(clean.detail, /peak 0\.500/);
+  assert.match(clean.detail, /žádný vzorek na ani nad 0\.98 digitálního plného rozsahu/);
+  assert.match(clean.detail, /špička 0\.500/);
   assert.doesNotMatch(clean.detail, /no sample at digital full scale/);
 });
 
@@ -275,8 +275,8 @@ test('T016: a live chunk peak never clears an earlier AT RAIL or NOT CHECKED', (
 test('T016: NONE never shows a peak rounded up to the threshold it is below', () => {
   const c = clippingOf(reduceAll([runEvent(0, { peak: 0.97996 })]));
   assert.equal(c.text, 'CLIPPING NONE');
-  assert.match(c.detail, /peak 0\.979,/);
+  assert.match(c.detail, /špička 0\.979,/);
   // Away from the threshold the peak is rounded as everywhere else (a Float32 0.57 is 0.5699…).
   assert.match(clippingOf(reduceAll([runEvent(0, { peak: Math.fround(0.57) })])).detail,
-    /peak 0\.570,/);
+    /špička 0\.570,/);
 });

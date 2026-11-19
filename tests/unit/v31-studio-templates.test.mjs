@@ -260,8 +260,10 @@ test('V617 First Patch: steps 2 and 4, in the order the notes give, are accepted
 });
 
 test('V617 Learn: the Signal path card links to the First Patch through the Studio link', () => {
-  const card = LEARN_CONCEPTS.find((c) => c.title === 'Signal path');
-  assert.deepStrictEqual(card.link, { label: 'Open the First patch in Studio',
+  const card = LEARN_CONCEPTS.find((c) => c.id === 'signal-path');
+  // Czech since Czech pass 8 (U116, Q104).
+  assert.strictEqual(card.title, 'Signálová cesta');
+  assert.deepStrictEqual(card.link, { label: 'Otevřít šablonu First Patch ve Studiu',
     href: '#m=studio&st=first-patch' });
   assert.deepStrictEqual(decodeStudioLink(card.link.href), { ok: true,
     templateId: 'first-patch', subview: null });

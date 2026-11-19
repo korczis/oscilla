@@ -26,8 +26,9 @@
 import uPlot from 'uplot';
 import { chartTheme, withAlpha, uplotAxis, canvasFont, observeSize } from './chart-theme.js';
 import { formatHzTick, formatDbTick } from './axes.js';
-import { MEASUREMENT_ROLES } from '../measurement/views/common.js';
+import { MEASUREMENT_ROLES, UNAVAILABLE } from '../measurement/views/common.js';
 import { calibrationShown } from '../calibration/display.js';
+import { measureShown } from '../measurement/views/display.js';
 
 /** The theme colour of a measurement role (an existing token, src/styles/tokens.css). */
 export function roleColour(theme, role) {
@@ -86,7 +87,7 @@ function createViewChart(host, { onReadout = null, draw = null } = {}) {
   const liveState = { frame: null, showPeaks: false };
   const empty = document.createElement('div');
   empty.className = 'osc-chart-note';
-  empty.textContent = 'NOT MEASURED';
+  empty.textContent = measureShown(UNAVAILABLE.NOT_MEASURED);
   const chip = document.createElement('div');
   chip.className = 'osc-chip-readout osc-chip-readout--stack';
   chip.setAttribute('aria-hidden', 'true');
