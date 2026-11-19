@@ -27,4 +27,25 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-18'
-updated_at: 2026-11-18
+updated_at: 2026-11-19T02:04:15Z
+started_at: 2026-11-19T02:00:38Z
+started_event: sha256:1a76a0fc94f287b93ec84e0a609d6ff80f10c65b09ccbb72d4421fe3f4221260
+verified_at: 2026-11-19T02:01:05Z
+verified_event: sha256:ebde53fb0c451adda3fe49b8b0297dbf7b801a117c8e6597691981ebd87b33fe
+completed_at: 2026-11-19T02:01:50Z
+completed_event: sha256:2c9f282d7fc710eb6f043422e2a18856d0b68d907e937dda5a3550ac2c3bde58
+evidence:
+  - covers: "verified"
+    type: test
+    command: "npm test; node tests/browser/cross-links.cjs; node tests/browser/app.cjs (CI legs); live Playwright check of v3.41.8"
+    result: "Re-checked on main a165fd9d by oscilla-43 (2026-11-19): AC1 the Learn cards, live example and buttons, preset categories, names and lines show Czech (live v3.41.8: every Learn card reads 'Ukázat na aktuálním nastavení', which U119 #618 carried for the button kept out of this pass by AC3; Předvolby Referenční/Hudební/Sweepy/Vzory), ids, hooks and stored data unchanged; AC2 czech-prose 2659->2637 and czech-prose-short 1553->1549 at #600 (62873b29), no new English; AC3 the tests read the Czech forms, src/index.html untouched by #600; AC4 oscilla-c3's review held over the merge f3d74ac1, legs OK at 03072780 (run 44329994980), empty digest so no verdict file. Released in v3.41.6 (0ecb7e33), its last gap closed by v3.41.8 (a165fd9d)."
+    artifact: "https://github.com/korczis/oscilla/actions/runs/44329994980"
+    commit: a165fd9de536c059bedaa5f9a293be7569e059ef
+    recorded_at: 2026-11-19T02:01:36Z
+  - covers: "verified"
+    type: ci
+    command: "node scripts/review-verdict.mjs (base program) for PR 600"
+    result: "no verdict needed: PR #600 touches no guarded path, the base review-verdict program gives the empty digest e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855; oscilla-c3 reviewed it (review held over the merge f3d74ac1, legs OK at 03072780)."
+    artifact: "https://github.com/korczis/oscilla/pull/600"
+    commit: a165fd9de536c059bedaa5f9a293be7569e059ef
+    recorded_at: 2026-11-19T02:04:15Z
