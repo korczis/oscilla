@@ -153,7 +153,7 @@
         <!-- Below lg the brand gives way to the actions (it shrinks and cuts its own content,
              never drawing over a control) and drops the wordmark below 375 px, where it
              collides on wider fonts (review #330 F2); the mark always stays. -->
-        <a href="#m=playground" x-bind="homeLink()" data-osc="header.brand" data-osc-link="jump" title="Open the Playground"
+        <a href="#m=playground" x-bind="homeLink()" data-osc="header.brand" data-osc-link="jump" aria-describedby="osc-brand-desc"
           lang="en" aria-label="OSCILLA · Interactive Sound &amp; Frequency Lab"
           class="flex items-center min-w-0 overflow-hidden min-h-11 mr-3 rounded-lg lg:flex-none lg:mr-10 focus:outline-none focus:ring-2 focus:ring-primary-500">
           <svg class="osc-logo flex-none mr-2.5" viewBox="0 0 50 36" aria-hidden="true" focusable="false">
@@ -174,6 +174,7 @@
             <span class="hidden text-xs leading-4 text-gray-500 whitespace-nowrap xl:block dark:text-gray-400">Interactive Sound &amp; Frequency Lab</span>
           </span>
         </a>
+        <span id="osc-brand-desc" hidden>Otevřít Playground</span>
         <form class="hidden lg:block lg:pl-2" role="search" @submit.prevent="navSearchGo()">
           <label for="osc-nav-search" class="sr-only">Najít pracovní plochu</label>
           <div class="relative lg:w-64 xl:w-80">
@@ -2589,7 +2590,7 @@
                 <template x-if="t.demo">
                   <button type="button" data-osc="learn.example" :class="PRO.btnSecondary"
                     @click="learnTopic = t.id"
-                    :aria-pressed="String(learnTopic === t.id)">Relate to current settings</button>
+                    :aria-pressed="String(learnTopic === t.id)">Ukázat na aktuálním nastavení</button>
                 </template>
                 <template x-if="t.demo">
                   <button type="button" data-osc="learn.demo" data-osc-link="jump" :class="PRO.btnPrimary"

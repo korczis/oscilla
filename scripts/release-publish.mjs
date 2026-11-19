@@ -207,9 +207,15 @@ export function diagnoseStuckRuns({ stuck, head, now, ancestry }) {
 export const DISPATCH_ARGS = ['workflow', 'run', 'pages.yml', '--ref', 'main'];
 export const dispatchedListArgs = (head) => ['--event', 'workflow_dispatch', '--commit', head,
   '--limit', '5'];
-// Reads of the live page after verify-deploy passed, 10 s apart: a CDN edge that still serves
-// the previous stamp gets that long to catch up, and no longer.
-export const TAGGED_ATTEMPTS = 3;
+// Reads of the live page after verify-deploy passed, TAGGED_DELAY_S apart until it names the
+// tag or TAGGED_WAIT_S have passed: a CDN edge that still serves the previous stamp gets that
+// long to catch up, and no longer. Three reads over 20 s were too few: the publish of
+// 2026-11-18 14:5x read 'untagged' three times right after verify-deploy passed, and the page
+// said tagged two minutes later.
+export const TAGGED_WAIT_S = 300;
+export const TAGGED_DELAY_S = 10;
+/** The most reads the wait makes: one at once, then one per delay inside the wait. */
+export const TAGGED_ATTEMPTS = 1 + Math.floor(TAGGED_WAIT_S / TAGGED_DELAY_S);
 
 /**
  * Pure: why the live page does not name the tag of `commit` (null when its metadata region
@@ -653,17 +659,24 @@ export async function publish({
     reassert('before deployment verification');
     must('node', ['scripts/verify-deploy.mjs', '--commit', head], 'deployment verification');
     let tagged = 'not read';
-    for (let n = 1; n <= TAGGED_ATTEMPTS; n++) {
+    const taggedDeadline = clock() + TAGGED_WAIT_S * 1000;
+    let reads = 0;
+    while (reads < TAGGED_ATTEMPTS) {
+      reads += 1;
       try {
         tagged = taggedPageProblem(await fetchPage(`${PUBLIC_URL}?oscilla-publish=`
-          + `${head.slice(0, 12)}.${n}`), head);
+          + `${head.slice(0, 12)}.${reads}`), head);
       } catch (e) {
         tagged = `the live page could not be read: ${e.message}`;
       }
       if (tagged === null) break;
-      if (n < TAGGED_ATTEMPTS) await sleep(10);
+      if (clock() + TAGGED_DELAY_S * 1000 > taggedDeadline) break;
+      await sleep(TAGGED_DELAY_S);
     }
-    if (tagged !== null) throw new Error(`after the redeploy of ${tag}, ${tagged}`);
+    if (tagged !== null) {
+      throw new Error(`after the redeploy of ${tag}, ${tagged} (${reads} reads over `
+        + `${TAGGED_WAIT_S} s)`);
+    }
     // The notes and the asset copy are temporary: removed whatever the create answers (a
     // dist copy per publish, and per test run of it, filled the machine's TMPDIR).
     const dir = mkdtempSync(path.join(os.tmpdir(), 'oscilla-release-'));
