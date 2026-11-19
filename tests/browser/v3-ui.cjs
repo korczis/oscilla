@@ -437,7 +437,7 @@ function defineChecks(fixtures) {
         // the assessment of the same capture.
         clipping: [...document.querySelectorAll('[data-osc="measure.bar"] .osc-q')]
           .map((li) => ({ text: li.textContent.replace(/\s+/g, ' ').trim(), title: li.title }))
-          .find((x) => /^CLIPPING /.test(x.text)) || null,
+          .find((x) => /^OŘEZ /.test(x.text)) || null,
         codes: window.OSCILLA.app.meas.quality.reasons.map((r) => r.code),
       };
     });
@@ -519,28 +519,29 @@ function defineChecks(fixtures) {
         && res.workers[0].kinds[0] === 'ready' && res.workers[0].kinds.at(-1) === 'result',
       history: d.state === 'COMPLETE' && d.history.includes('ANALYZING')
         && d.history.includes('ARMED'),
-      bar: d.bar.length === 5 && d.bar.includes('CAPTURE COMPLETE') && d.bar.includes('INPUT OK'),
-      clippingFromPeak: !!d.clipping && d.clipping.text === 'CLIPPING NONE'
-        && /no sample at or above 0\.98 of digital full scale/.test(d.clipping.title)
+      // U115 7b: the bar, its titles and the quality status as shown, in Czech over English data.
+      bar: d.bar.length === 5 && d.bar.includes('ZÁZNAM HOTOVO') && d.bar.includes('VSTUP OK'),
+      clippingFromPeak: !!d.clipping && d.clipping.text === 'OŘEZ ŽÁDNÝ'
+        && /žádný vzorek na ani nad 0\.98 digitálního plného rozsahu/.test(d.clipping.title)
         && !d.codes.includes('CLIPPING_NOT_EXCLUDED'),
       barPhone: res.barPhone.fits === true,
-      quality: /^(GOOD|USABLE)$/.test(d.quality) && d.reasons > 0,
-      response: /^Frequency response \(/.test(d.response) && /TEST CONTEXT/.test(d.shown)
+      quality: /^(DOBRÁ|POUŽITELNÁ)$/.test(d.quality) && d.reasons > 0,
+      response: /^Frekvenční odezva \(/.test(d.response) && /TESTOVACÍHO KONTEXTU/.test(d.shown)
         && d.primary === 'Uložit experiment' && d.chart,
-      ir: /^Impulse response: direct peak/.test(res.ir.text) && res.ir.chart
+      ir: /^Impulsní odezva: přímá špička/.test(res.ir.text) && res.ir.chart
         && res.ir.tabs === 'true' && res.rtaTab === 'osc-m-tab-rta',
       // T019: the full-overlap tail estimates an upper bound, with the window it was read over
       // and the estimate's scatter (review of #343 R1: never an unconditional upper bound).
-      irTail: /tail level estimate ≤ −?\d+ dB re peak \(noise or unfinished decay\)/
+      irTail: /odhad úrovně dozvuku ≤ −?\d+ dB vůči špičce \(šum nebo nedokončený dozvuk\)/
         .test(res.ir.text)
-        && res.ir.notes.some((n) => /full-overlap-tail, the mean power [\d.]+ ms to [\d.]+ ms /
-          .test(n) && /after the peak\. A decay still running there counts as noise, so the noise/
-          .test(n) && /lies at or below this level, within the estimate's own scatter;/.test(n))
-        && !res.ir.notes.some((n) => /so the level is an upper bound/.test(n))
+        && res.ir.notes.some((n) => /full-overlap-tail, střední výkon [\d.]+ ms až [\d.]+ ms /
+          .test(n) && /po špičce\. Dozvuk, který tam ještě běží, se počítá jako šum, takže šum/
+          .test(n) && /leží na této úrovni nebo pod ní, v rámci vlastního rozptylu odhadu;/.test(n))
+        && !res.ir.notes.some((n) => /úroveň je horní mez/.test(n))
         && !!res.irPhone && res.irPhone.fits,
       rtaStored: !!res.rtaStored && res.rtaStored.badges.includes('NOISE CHECK SNAPSHOT')
         && !res.rtaStored.badges.includes('LIVE') && res.rtaStored.live === false
-        && /fewer than 6 FFT bins/.test(res.rtaStored.notes), // rta.v2: Hann limit (V382)
+        && /pokrývají méně než 6 FFT binů/.test(res.rtaStored.notes), // rta.v2: Hann limit (V382)
       announcements: announced.every((t) => res.live.filter((x) => x === t).length === 1)
         && !res.live.some((t) => /%/.test(t)),
       zero: H.zero(res.counts) && H.zero(res.counts2),
@@ -677,9 +678,9 @@ function defineChecks(fixtures) {
       await page.evaluate(() => window.OSCILLA.measure.useLoopback());
       const v = H.verdict({
         disabledBefore: res.before.modesDisabled && res.before.averagingDisabled
-          && res.before.button === 'Start live RTA',
+          && res.before.button === 'Spustit živé RTA',
         refused: !res.refused.running && !!res.refused.error && res.refused.modesDisabled
-          && res.refused.averagingDisabled && res.refused.button === 'Start live RTA',
+          && res.refused.averagingDisabled && res.refused.button === 'Spustit živé RTA',
         zero: idle(res.counts),
       });
       return { ...v, ...res };
@@ -706,7 +707,7 @@ function defineChecks(fixtures) {
     res.thirdUnder = third ? third.underResolved.filter(Boolean).length : null;
     res.sampleRate = await page.evaluate(() => window.OSCILLA.engine.ctx.sampleRate);
     res.thirdBands = thirdBandCount(res.sampleRate);
-    res.thirdUi = await H.until(ui, (u) => /highest band 1 kHz/.test(u.summary), 3000);
+    res.thirdUi = await H.until(ui, (u) => /nejvyšší pásmo 1 kHz/.test(u.summary), 3000);
     res.snapshot = await page.evaluate(() => window.OSCILLA.measure.liveRtaSnapshot());
     res.spl = await page.evaluate(splMentions);
     // Octave bands.
@@ -756,8 +757,10 @@ function defineChecks(fixtures) {
     for (const a of ['slow', 'instant', 'fast']) {
       await page.click(`[data-osc="measure.rtaAveraging"][data-value="${a}"]`);
       const l = await H.until(live, (x) => x && x.averaging === a && x.frames > 5, 4000);
-      const u = await H.until(ui, (x) => new RegExp(a.toUpperCase()).test(x.summary), 3000);
-      res.averaging[a] = !!l && l.averaging === a && new RegExp(a.toUpperCase()).test(u.summary);
+      // The shown averaging word (U115 7b: INSTANT reads OKAMŽITĚ; FAST and SLOW are IEC terms).
+      const word = { instant: 'OKAMŽITĚ', fast: 'FAST', slow: 'SLOW' }[a];
+      const u = await H.until(ui, (x) => x.summary.includes(word), 3000);
+      res.averaging[a] = !!l && l.averaging === a && u.summary.includes(word);
     }
     // Peak hold: every held peak is at or above its band's level.
     await page.click('[data-osc="measure.rtaPeak"]');
@@ -772,7 +775,7 @@ function defineChecks(fixtures) {
     const fz1 = await live();
     res.freeze = { frozen: fz1.frozen, held: fz0.frames === fz1.frames
       && JSON.stringify(fz0.values) === JSON.stringify(fz1.values),
-    ui: (await H.until(ui, (u) => /frozen\.$/.test(u.summary), 3000)).summary };
+    ui: (await H.until(ui, (u) => /zmrazeno\.$/.test(u.summary), 3000)).summary };
     await page.click('[data-osc="measure.rtaFreeze"]');
     const fz2 = await H.until(live, (l) => l && l.frames > fz1.frames + 5, 3000);
     res.unfreeze = !!fz2 && !fz2.frozen;
@@ -818,12 +821,12 @@ function defineChecks(fixtures) {
     const s = res.stops;
     const v = H.verdict({
       disabledBefore: res.before.modesDisabled && res.before.averagingDisabled
-        && res.before.button === 'Start live RTA',
+        && res.before.button === 'Spustit živé RTA',
       third: res.third.ok && res.third.bands === res.thirdBands,
-      thirdUi: res.thirdUi.summary.startsWith(`RTA, 1/3 OCTAVE, ${res.thirdBands} bands, FAST`)
-        && /^LIVE · microphone input/.test(res.thirdUi.source)
+      thirdUi: res.thirdUi.summary.startsWith(`RTA, 1/3 OKTÁVY, ${res.thirdBands} pásem, FAST`)
+        && /^ŽIVĚ · vstup mikrofonu/.test(res.thirdUi.source)
         && /dB relative \(dBFS-like\)/.test(res.thirdUi.source) && res.thirdUi.chart
-        && res.thirdUi.chip === '1/3 OCTAVE' && !res.thirdUi.modesDisabled,
+        && res.thirdUi.chip === '1/3 OKTÁVY' && !res.thirdUi.modesDisabled,
       underResolved: res.thirdUnder > 0,
       snapshot: !!res.snapshot && res.snapshot.algorithm === 'oscilla.rta.v2'
         && res.snapshot.windowAlgorithm === 'oscilla.window.hann.v1'
@@ -838,7 +841,7 @@ function defineChecks(fixtures) {
       fft: !!res.fft && res.fft.ok && /^RTA, FFT/.test(res.fftUi.summary),
       averaging: Object.values(res.averaging).every(Boolean),
       peaks: res.peaks,
-      freeze: res.freeze.frozen && res.freeze.held && /frozen\.$/.test(res.freeze.ui)
+      freeze: res.freeze.frozen && res.freeze.held && /zmrazeno\.$/.test(res.freeze.ui)
         && res.unfreeze,
       during: res.during.liveTap && res.during.tracks >= 1 && res.during.liveLoop === 1,
       stops: Object.values(s).every((x) => x.on && x.zero && !x.running),
@@ -939,13 +942,13 @@ function defineChecks(fixtures) {
     return { ...res, ...H.verdict({
       profile: res.bad === false && res.good === true && calibrated(res.freq)
         && /gate-mic/.test(res.name),
-      needsCapture: /Capture the reference first/.test(res.needsCapture),
+      needsCapture: /^Nejdřív zachyťte referenci/.test(res.needsCapture),
       scale: /mean-square scale/.test(res.scale),
       unboundRefused: /^Nejdřív spusťte kontrolu nastavení/.test(res.noInputNote)
         && /^Nejdřív spusťte kontrolu nastavení: kalibrace úrovně platí jen pro vstup/
           .test(res.unbound.error) && !res.unbound.stored && res.unbound.open
         && uncalibrated(res.unboundLevel),
-      checked: res.checked === 'READY' && /bound to the input checked last/.test(res.boundNote),
+      checked: res.checked === 'READY' && /vázaná na naposledy zkontrolovaný vstup/.test(res.boundNote),
       invalidRefused: !!res.refused,
       boundCalibrated: calibrated(res.level) && res.bound && res.dialogClosed
         && /zadaná ručně, vázaná na vstup zkontrolovaný při uložení/.test(res.state),
@@ -1068,7 +1071,7 @@ function defineChecks(fixtures) {
     // master gain 0.08 → about −25 dB on the band scale (a few dB for the limiter chain)
     return { ...res, ...H.verdict({
       captured: captured === true,
-      readingText: /^Reading −\d+\.\d\d dB relative, 1000 Hz one-third-octave band/.test(
+      readingText: /^Hodnota −\d+\.\d\d dB relativně, pásmo třetiny oktávy 1000 Hz/.test(
         res.reading),
       method: !!res.cal && res.cal.method === 'captured' && res.cal.scale === 'band-mean-square'
         && res.cal.schemaVersion === 2,
@@ -1081,7 +1084,7 @@ function defineChecks(fixtures) {
       // The reason as shown, built from its differences (U114 b): the state first, in Czech.
       reason: /^NEKALIBROVÁNO: vstup se od kalibrace úrovně liší \(jiné vstupní zařízení; vzorkovací frekvence při kalibraci/
         .test((res.voidText || '').trim()) && !ENGLISH_STATE.test(res.voidText || ''),
-      stopped: res.stopped === false && /stopped/.test(res.stopError),
+      stopped: res.stopped === false && /zastaveno/.test(res.stopError),
       clean: H.zero(res.counts),
     }) };
   });
@@ -1147,11 +1150,11 @@ function defineChecks(fixtures) {
     }));
     return { run, ...res, ...H.verdict({
       complete: run.state === 'COMPLETE',
-      noFailure: !res.alerts.includes('Measurement failed'),
+      noFailure: !res.alerts.includes('Měření selhalo'),
       reset: res.normalization === 'none',
-      disabled: res.disabled === true && res.avail.ok === false && /outside/.test(res.avail.reason),
+      disabled: res.disabled === true && res.avail.ok === false && /mimo změřený rozsah/.test(res.avail.reason),
       refused: res.refused === false,
-      response: /^Frequency response/.test(res.summary || ''),
+      response: /^Frekvenční odezva/.test(res.summary || ''),
       // Undecimated: every sample of the 22 ms span (1056 at 48 kHz, 970 at 44.1 kHz).
       irDirect: !!res.ir && res.ir.factor === 1
         && res.ir.inSpan >= Math.floor(0.022 * res.ir.sampleRate) - 1,
@@ -1287,8 +1290,8 @@ function defineChecks(fixtures) {
       staysSaved: res.afterLink.saved === true
         && res.afterLink.label === 'Aktualizovat název a poznámky',
       sameRun: res.again === res.id,
-      neverNotSaved: !res.alerts.some((t) => /not saved/.test(t))
-        && res.alerts.includes('Experiment updated'),
+      neverNotSaved: !res.alerts.some((t) => /nebyl uložen|není uložen/.test(t))
+        && res.alerts.includes('Experiment aktualizován'),
       annotated: res.stored.name === 'Gate resave renamed'
         && res.stored.notes === 'typed after the save',
       oneRecord: res.stored.records === 1,
@@ -1368,9 +1371,9 @@ function defineChecks(fixtures) {
       stored: res.after.ann === 'typed after the save'
         && /^at start\b/.test(res.after.env || ''),
       statedStored: /jsou uložené jako jeho anotace/.test(res.stated),
-      updated: res.alerts1.includes('Experiment updated'),
-      kept: res.kept.ann === 'from Experiments' && res.alerts2.includes('Nothing to update')
-        && !res.alerts2.some((t) => /not saved/.test(t)),
+      updated: res.alerts1.includes('Experiment aktualizován'),
+      kept: res.kept.ann === 'from Experiments' && res.alerts2.includes('Není co aktualizovat')
+        && !res.alerts2.some((t) => /nebyl uložen|není uložen/.test(t)),
     }) };
   });
 
@@ -1570,7 +1573,7 @@ function defineChecks(fixtures) {
       mode: document.querySelector('#osc-app').dataset.mode,
       shown: document.querySelector('[data-osc="measure.shown"]').textContent,
       banner: document.querySelector('[data-osc="measure.testContext"]').offsetParent !== null,
-    })), (x) => x.mode === 'measure' && /Saved experiment/.test(x.shown) && x.banner, 5000));
+    })), (x) => x.mode === 'measure' && /Uložený experiment/.test(x.shown) && x.banner, 5000));
     await H.workspace(page, 'experiments');
     // Explicit delete: the dialog asks first; Cancel keeps it, Delete removes it.
     await page.evaluate((id) => window.OSCILLA.app.experimentsOpen(id), res.dup);
@@ -1607,7 +1610,7 @@ function defineChecks(fixtures) {
       export: /\.oscilla\.json$/.test(res.exportName) && res.exportValid,
       csv: /\.csv$/.test(res.csv.name) && /^# OSCILLA/.test(res.csv.head) && !res.csv.spl
         && res.csv.unit,
-      inspect: res.inspect.mode === 'measure' && /Saved experiment/.test(res.inspect.shown)
+      inspect: res.inspect.mode === 'measure' && /Uložený experiment/.test(res.inspect.shown)
         && res.inspect.banner,
       deleted: res.deleted,
     });
@@ -3031,11 +3034,11 @@ function defineChecks(fixtures) {
     const loop = await view();
     await page.evaluate(() => window.OSCILLA.measure.useMicrophone());
     const before = await view();
-    const base = { loopChoice: !loop.disabled && /TEST CONTEXT/.test(loop.status)
+    const base = { loopChoice: !loop.disabled && /TESTOVACÍHO KONTEXTU/.test(loop.status)
         && loop.options.some((o) => o.testContext && o.value === loop.value),
       defaultFirst: before.options[0].value === '' && before.value === '' && !before.disabled
         // Listed only after a check opened the microphone (earlier checks may have done so).
-        && /Run the setup check to list the inputs|listed by the browser|lists no input/
+        && /aby se vstupy vypsaly|vypsané prohlížečem|nevypisuje žádný vstup/
           .test(before.status) };
     if (!FAKE_MIC.has(browserName) || origin !== 'http') {
       await page.evaluate(() => window.OSCILLA.measure.useLoopback());
@@ -3119,16 +3122,16 @@ function defineChecks(fixtures) {
     return { ...res, chosen, ...H.verdict({
       ...base,
       firstDefault: res.firstState === 'READY' && c[0] === null,
-      listed: !!chosen && !/Run the setup check/.test(res.listed.status),
+      listed: !!chosen && !/aby se vstupy vypsaly/.test(res.listed.status),
       selected: !!chosen && res.afterSelect.value === chosen.value
         && res.afterSelect.deviceId === chosen.value,
       exact: res.secondState === 'READY' && c.includes(chosen && chosen.value)
         && !!res.inputNow && res.inputNow.exact === chosen.value
         && res.ioDeviceId === chosen.value,
       goneShown: !!res.gone && res.gone.missing && res.gone.msg && res.gone.value === chosen.value
-        && /no longer available/.test(res.gone.message)
-        && /not available$/.test(res.gone.options.findLast((o) => !o.testContext).label),
-      goneAnnounced: (res.liveLog || []).some((t) => /no longer available/.test(t)),
+        && /už není k dispozici/.test(res.gone.message)
+        && /není k dispozici$/.test(res.gone.options.findLast((o) => !o.testContext).label),
+      goneAnnounced: (res.liveLog || []).some((t) => /už není k dispozici/.test(t)),
       goneRefused: res.goneState !== 'READY'
         && /selected input device is not available/.test(res.blockers || ''),
       backToDefault: res.defaultState === 'READY' && c.at(-1) === null,
@@ -3339,7 +3342,7 @@ function defineChecks(fixtures) {
     await ctx3.close();
 
     const quotaOk = !res.quota || (res.quota.hits >= 1 && !res.quota.saved
-      && res.quota.alerts.some((t) => /^Experiment not saved: .*browser storage is full/.test(t))
+      && res.quota.alerts.some((t) => /^Experiment nebyl uložen: .*browser storage is full/.test(t))
       && res.quota.state === 'COMPLETE' && res.quota.shown === 'result' && res.quota.saveEnabled
       && res.afterFree.saved === true);
     return { ...res, ...H.verdict({

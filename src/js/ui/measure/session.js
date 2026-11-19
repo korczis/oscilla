@@ -24,6 +24,7 @@ import {
 } from '../../calibration/level.js';
 import { REFERENCE_CAPTURE_S } from '../../calibration/reference.js';
 import { calibrationShown } from '../../calibration/display.js';
+import { measureShown } from '../../measurement/views/display.js';
 import { describeStimulus } from '../../experiments/schema.js';
 import { setupRecipe } from '../../experiments/definition.js';
 import { canonicalJson } from '../../experiments/canonical-json.js';
@@ -294,6 +295,7 @@ export function measureStatePart(ctx, svc, ops) {
     ROOM_NOTES,
     CHARACTERIZE_PLAYBACK_CHAIN,
     calibrationShown, // U114 b: a calibration state as the page shows it (data stays English)
+    measureShown, // U115 7b: a Measure state word as the page shows it (data stays English)
     LEVEL_LIMITS,
     LEVEL_SCALE,
     RESPONSE_QUANTITIES,

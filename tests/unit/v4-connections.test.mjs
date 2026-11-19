@@ -799,6 +799,6 @@ test('review 1.3 and 1.8: Studio\'s dialog follows entries through the verified 
   const panel = readFileSync(path.join(ROOT, 'src/js/ui/studio/patches-panel.js'), 'utf8');
   assert.match(panel, /svc\.follow\(/, 'a dialog link goes through connectionsVerifyAndGo');
   assert.ok(!/onClick: follow\b/.test(panel), 'no link is left to the browser alone');
-  assert.match(panel, /`Open \$\{r\.name\}`/, 'Open names its project');
+  assert.match(panel, /`Otevřít \$\{r\.name\}`/, 'Open (Otevřít) names its project');
   assert.match(panel, /svc\.dirty\(\)/, 'Open asks before it replaces unsaved changes');
 });

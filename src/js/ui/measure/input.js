@@ -7,7 +7,7 @@ import { hasMicrophoneApi } from '../../audio/microphone.js';
 import { initialQualityBar } from '../../measurement/views/quality-bar.js';
 import { initialAnnouncements } from '../../measurement/views/announcements.js';
 import {
-  inputDeviceView, TEST_CONTEXT_INPUT_VALUE,
+  inputDeviceView, TEST_CONTEXT_INPUT_VALUE, GONE_SUFFIX,
 } from '../../measurement/views/input-devices.js';
 import { rtaLiveAvailability } from './constants.js';
 
@@ -116,16 +116,16 @@ export function createInput(ctx, svc, ops) {
     ops.stopLive();
     if (ctx.result) {
       const tc = ctx.resultTest || !!ctx.result.testContext;
-      const noise = ctx.result.noise ? ' and its noise check' : '';
+      const noise = ctx.result.noise ? ' a jeho kontrola šumu' : '';
       if (ctx.result.state === S.INVALID) {
-        cleared.push(tc ? `the invalid TEST CONTEXT result${noise}`
-          : `the invalid result of the previous input${noise}`);
+        cleared.push(tc ? `neplatný výsledek TESTOVACÍHO KONTEXTU${noise}`
+          : `neplatný výsledek předchozího vstupu${noise}`);
       } else if (m.saved) {
-        cleared.push(`${tc ? 'the TEST CONTEXT result' : 'the result of the previous input'} `
-          + 'shown (its saved experiment is kept)');
+        cleared.push(`zobrazený ${tc ? 'výsledek TESTOVACÍHO KONTEXTU' : 'výsledek předchozího vstupu'} `
+          + '(jeho uložený experiment zůstává)');
       } else {
-        cleared.push(tc ? 'the unsaved TEST CONTEXT result'
-          : 'the unsaved result of the previous input');
+        cleared.push(tc ? 'neuložený výsledek TESTOVACÍHO KONTEXTU'
+          : 'neuložený výsledek předchozího vstupu');
       }
       ctx.result = null;
       ctx.resultTest = false;
@@ -134,7 +134,7 @@ export function createInput(ctx, svc, ops) {
       if (ctx.shown && ctx.shown.kind === 'result') ctx.shown = null;
       Object.assign(m, { saved: false, savedId: null, savedAnnotation: null, savedName: null });
     }
-    if (!on && (ctx.inputNow || ctx.preflight)) cleared.push('the input check');
+    if (!on && (ctx.inputNow || ctx.preflight)) cleared.push('kontrola vstupu');
     // A stored noise-check snapshot (its peak hold spans checks) goes with its result.
     ctx.rta = null;
     // The next Start on this side repeats nothing made on the other (provenance.repeatOf).
@@ -165,21 +165,21 @@ export function createInput(ctx, svc, ops) {
     const toTest = value === TEST_CONTEXT_INPUT_VALUE;
     if (toTest ? ctx.loopback : !ctx.loopback && value === (ctx.deviceId || '')) return true;
     if (inputInUse(cmp)) {
-      cmp.notify('warning', 'Input not changed', 'A measurement or a reference capture is using '
-        + 'the input; stop it before choosing another input.');
+      cmp.notify('warning', 'Vstup nezměněn', 'Vstup používá měření nebo zachycení reference; '
+        + 'před volbou jiného vstupu ho zastavte.');
       renderInputs(); // the select shows the input still in use
       return false;
     }
     if (toTest) {
       const cleared = setTestContext(cmp, true);
       syncContextUrl(true);
-      ops.announce({ politeness: 'polite', text: 'TEST CONTEXT: digital loopback, no microphone '
-        + 'and no acoustic path. Results test the software, not a physical setup.'
-        + (cleared.length ? ` Cleared: ${cleared.join('; ')}.` : '') });
+      ops.announce({ politeness: 'polite', text: 'TESTOVACÍ KONTEXT: digitální smyčka, bez mikrofonu '
+        + 'a bez akustické cesty. Výsledky testují software, ne fyzickou sestavu.'
+        + (cleared.length ? ` Vymazáno: ${cleared.join('; ')}.` : '') });
       // Not only for a screen reader: an unsaved measurement may be what went (as leaving).
       if (cleared.length) {
-        cmp.notify('info', 'Entered TEST CONTEXT', 'Cleared, so that nothing from before is '
-          + `read as the digital loopback's: ${cleared.join('; ')}.`);
+        cmp.notify('info', 'Vstup do TESTOVACÍHO KONTEXTU', 'Vymazáno, aby se nic z dřívějška '
+          + `nečetlo jako výsledek digitální smyčky: ${cleared.join('; ')}.`);
       }
       return true;
     }
@@ -188,18 +188,19 @@ export function createInput(ctx, svc, ops) {
       renderInputs();
       return false;
     }
-    const label = value ? opt.label.replace(/ — not available$/, '') : null;
+    const label = value && opt.label.endsWith(GONE_SUFFIX)
+      ? opt.label.slice(0, -GONE_SUFFIX.length) : value ? opt.label : null;
     if (ctx.loopback) {
       ctx.deviceId = value || null;
       ctx.deviceLabel = label;
       const cleared = setTestContext(cmp, false);
       syncContextUrl(false);
-      const what = cleared.length ? ` Cleared: ${cleared.join('; ')}.` : '';
-      ops.announce({ politeness: 'polite', text: `Left TEST CONTEXT. Input: ${label
-        || 'default input'}.${what} Run the setup check for this input.` });
+      const what = cleared.length ? ` Vymazáno: ${cleared.join('; ')}.` : '';
+      ops.announce({ politeness: 'polite', text: `Opuštěn TESTOVACÍ KONTEXT. Vstup: ${label
+        || 'výchozí vstup'}.${what} Spusťte pro tento vstup kontrolu nastavení.` });
       if (cleared.length) {
-        cmp.notify('info', 'Left TEST CONTEXT', 'Cleared, so that nothing from the digital '
-          + `loopback is read as this input's: ${cleared.join('; ')}.`);
+        cmp.notify('info', 'Opuštěn TESTOVACÍ KONTEXT', 'Vymazáno, aby se nic z digitální smyčky '
+          + `nečetlo jako výsledek tohoto vstupu: ${cleared.join('; ')}.`);
       }
       return true;
     }
@@ -211,8 +212,8 @@ export function createInput(ctx, svc, ops) {
     ctx.preflight = null;
     renderInputs();
     ops.refresh();
-    ops.announce({ politeness: 'polite', text: `Input: ${value ? ctx.deviceLabel
-      : 'default input'}. Run the setup check for this input.` });
+    ops.announce({ politeness: 'polite', text: `Vstup: ${value ? ctx.deviceLabel
+      : 'výchozí vstup'}. Spusťte pro tento vstup kontrolu nastavení.` });
     return true;
   }
 

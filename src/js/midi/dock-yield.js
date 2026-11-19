@@ -252,7 +252,7 @@ export function mountDockYield({ win, doc, cmp, dock, band = () => {}, release,
   // 44 px tall (a touch target, #444 review by 21), with a light that shows a held note while
   // the keys are folded, so a played letter still answers on screen.
   handle.className = `${buttonClass} w-full gap-2 min-h-11`;
-  handle.innerHTML = `<span>Keyboard</span>${CHEVRON}`;
+  handle.innerHTML = `<span>Klávesnice</span>${CHEVRON}`;
   const heldLight = doc.createElement('span');
   heldLight.setAttribute('data-osc', 'keyboard.handle.held');
   heldLight.setAttribute('aria-hidden', 'true');

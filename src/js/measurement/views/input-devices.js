@@ -29,13 +29,15 @@
 //          status }
 
 export const DEFAULT_INPUT_VALUE = '';
-export const DEFAULT_INPUT_LABEL = 'Default input (chosen by the browser and system)';
+export const DEFAULT_INPUT_LABEL = 'Výchozí vstup (volí prohlížeč a systém)';
 /** Chromium's aliases of real inputs; not separate devices. */
 export const PSEUDO_INPUT_IDS = Object.freeze(['default', 'communications']);
 export const INPUT_LIST_LIMIT = 32;
 /** The option value of TEST CONTEXT; never a deviceId (a device with this id is not listed). */
 export const TEST_CONTEXT_INPUT_VALUE = 'oscilla:test-context';
-export const TEST_CONTEXT_INPUT_LABEL = 'TEST CONTEXT · digital loopback (no microphone)';
+/** What follows the label of a selected input the browser no longer lists. */
+export const GONE_SUFFIX = ' — není k dispozici';
+export const TEST_CONTEXT_INPUT_LABEL = 'TESTOVACÍ KONTEXT · digitální smyčka (bez mikrofonu)';
 
 const clean = (s) => String(s || '').replace(/[\s\x00-\x1f\x7f]+/g, ' ').trim().slice(0, 120);
 
@@ -50,7 +52,7 @@ export function inputDeviceList(devices) {
       || seen.has(id)) continue;
     seen.add(id);
     const label = clean(d.label);
-    out.push({ id, label: label || `Input ${out.length + 1} (label not exposed by the browser)`,
+    out.push({ id, label: label || `Vstup ${out.length + 1} (název prohlížeč nesděluje)`,
       labelExposed: !!label });
     if (out.length >= INPUT_LIST_LIMIT) break;
   }
@@ -67,31 +69,32 @@ export function inputDeviceView({ devices = [], selectedId = null, selectedLabel
     ...list.map((d) => ({ value: d.id, label: d.label, missing: false }))];
   const gone = !!selectedId && enumerated && !list.some((d) => d.id === selectedId);
   const missing = gone && !loopback;
-  const name = clean(selectedLabel) || 'The selected input';
-  const who = clean(selectedLabel) ? `"${clean(selectedLabel)}"` : 'The selected input';
+  const name = clean(selectedLabel) || 'Zvolený vstup';
+  const who = clean(selectedLabel) ? `„${clean(selectedLabel)}“` : 'Zvolený vstup';
   if (selectedId && !list.some((d) => d.id === selectedId)) {
-    options.push({ value: selectedId, label: gone ? `${name} — not available` : name,
+    options.push({ value: selectedId, label: gone ? `${name}${GONE_SUFFIX}` : name,
       missing: gone });
   }
   options.push({ value: TEST_CONTEXT_INPUT_VALUE, label: TEST_CONTEXT_INPUT_LABEL,
     missing: false, testContext: true });
   let status;
   if (loopback) {
-    status = 'TEST CONTEXT loopback: no input device is used. Choose an input to leave TEST '
-      + 'CONTEXT; what was measured in it is cleared.';
+    status = 'Smyčka TESTOVACÍHO KONTEXTU: nepoužívá se žádné vstupní zařízení. Volbou vstupu '
+      + 'TESTOVACÍ KONTEXT opustíte; co se v něm naměřilo, se vymaže.';
   } else if (!available) {
-    status = 'This browser offers no microphone input here; TEST CONTEXT needs none.';
+    status = 'Tento prohlížeč tu nenabízí žádný mikrofonní vstup; TESTOVACÍ KONTEXT žádný '
+      + 'nepotřebuje.';
   } else if (!enumerated) {
-    status = 'Run the setup check to list the inputs (the browser shows them only after the '
-      + 'microphone permission); until then the default input is used.';
-  } else if (!list.length) status = 'The browser lists no input besides the default.';
-  else status = `${list.length} input${list.length === 1 ? '' : 's'} listed by the browser.`;
+    status = 'Spusťte kontrolu nastavení, aby se vstupy vypsaly (prohlížeč je ukáže až po '
+      + 'povolení mikrofonu); do té doby se použije výchozí vstup.';
+  } else if (!list.length) status = 'Prohlížeč kromě výchozího nevypisuje žádný vstup.';
+  else status = `Vstupy vypsané prohlížečem: ${list.length}.`;
   return {
     options,
     selected,
     missing,
-    message: missing ? `${who} is no longer available (unplugged or disabled). Choose another `
-      + 'input or the default input; nothing is switched for you.' : null,
+    message: missing ? `${who} už není k dispozici (odpojen nebo vypnut). Zvolte jiný `
+      + 'vstup nebo výchozí vstup; nic se nepřepne samo.' : null,
     status,
   };
 }

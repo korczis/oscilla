@@ -8,6 +8,7 @@ priority: p1
 profile: implementation
 objective: "Lands as feat(sequencer) last of the folds. The V2 Sequencer is the third sequencer and one of the few pages whose Play works today, so it stays until the M065 step sequencer in Synth Arrange (K068, K069; the step grid over the notes clip, ADR 0086) plays the same patterns with an import of every V2 sequence proven; its block sequence becomes a Studio timeline lane (G013). Its own oscillators (src/js/sequencer/compiler.js:681) move to the output owner earlier, in the bus work, independent of this fold. No loss before removal (Q090, b0's binding condition): the old page stays until everything it offers is live, reachable and sounding in its new home, proven by a browser check that walks each of the old page's controls to its new place in Chromium, Firefox and WebKit; only then is its #m= route redirected to the new home (the link keeps working, ADR 0045's one dispatcher) and its markup removed."
 why: "af nav-pages audit wf_ed1cc8d6-3e8 and Play audit wf_99782352-a93 on origin/main 6d5efa89 (v3.19.0), after the owner's complaint in the af session 2026-11-04/05: views feel lost, Play does not work on most pages, nothing runs through one bus, engines are not wrapped, many top-nav pages are obsolete, unconnected, not realtime, poor. Decided by af and b0 on 2026-11-05 under the owner's order of that day 'discuss answers with other llms, do not wait for human, be llm autonomous' (Q090)."
+current_state: "2026-11-18: F003's V2 Sequencer part moved here by the plan triage the owner approved in bulk (Q112: 'schvaluji vse', 2026-11-18T02:27Z, Claude Code session 980e22ee-d9d4-4dd0-8318-8b727f127ce9, oscilla-e5; triage derived from origin/main 4682eea4) as the 'From F003' criterion: this fold removes the page, so its Pro form is built once, in the new home."
 scope:
   - "src/js/sequencer"
   - "src/js/labs/sequencer-panel.js"
@@ -29,6 +30,7 @@ acceptance_criteria:
   - "Fail-first: the unit test and the browser check named here fail on the merge base (project.fail-first)."
   - "Browser checks run through tests/browser/lib/suite.cjs with lib/wait.cjs deadlines and assume no sample rate; tests/browser/timing-baseline.json and tests/unit/ui-flowbite-pro-baseline.json do not grow; the iphone.cjs census reach does not fall."
   - "Done only after each criterion is re-checked on a main commit (b0's rule of 2026-11-05)."
+  - "From F003 (moved by Q112): what the V2 Sequencer page carries into its new home is built on Flowbite Pro components: each panel a Pro card (reference.md section 6) with its title row and actions in the shell's page body, its controls Pro form controls (section 13: inputs, selects, toggles, range sliders), its buttons the Pro primary and secondary buttons, empty states the in-card variant of section 12; the sequencer grid keeps its drawing and the signal palette inside its card; the legacy primitives and selectors the fold leaves unused are removed and tests/unit/ui-flowbite-pro-baseline.json's debt falls (the surfaces move from pending to migrated); tests/browser/ui-flowbite-pro.cjs asserts it at both sizes in every gate browser from file:// and the sub-path; every data-osc hook and id is kept or moves with its reader."
 validation:
   - "node --test tests/unit/page-folds.test.mjs"
   - "node tests/browser/page-folds.cjs"
@@ -36,4 +38,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-05'
-updated_at: '2026-11-09'
+updated_at: 2026-11-18

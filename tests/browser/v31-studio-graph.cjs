@@ -1646,14 +1646,14 @@ function defineChecks() {
     const expAx = exp.region ? await axIgnored(`#osc-dlg-studio-patch [data-osc="${exp.region}"]`)
       : 'missing';
     await page.evaluate(() => document.getElementById('osc-dlg-studio-patch').close());
-    // Library, Delete, Confirm delete: the dialog stays open.
+    // Library, Smazat, Potvrdit smazání: the dialog stays open.
     await page.click('[data-osc="studio.open"]');
     await page.waitForSelector('#osc-dlg-studio-library[open] [data-osc="studio.saved.delete"]',
       { timeout: 10000 });
     await page.click('#osc-dlg-studio-library [data-osc="studio.saved.delete"]');
-    await page.waitForSelector('#osc-dlg-studio-library button[aria-label^="Confirm delete"]',
+    await page.waitForSelector('#osc-dlg-studio-library button[aria-label^="Potvrdit smazání"]',
       { timeout: 10000 });
-    await page.click('#osc-dlg-studio-library button[aria-label^="Confirm delete"]');
+    await page.click('#osc-dlg-studio-library button[aria-label^="Potvrdit smazání"]');
     const del = await H.settle(() => said('osc-dlg-studio-library', 'deleted|no longer|detached'),
       (v) => !!v.region, 'C4: Delete is said inside the Library');
     const delAx = del.region ? await axIgnored(`#osc-dlg-studio-library [data-osc="${del.region}"]`)

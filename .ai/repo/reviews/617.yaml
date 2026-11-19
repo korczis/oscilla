@@ -1,0 +1,53 @@
+# Review verdict for pull request #617 (fix/publish-tagged-wait): release:publish waits for the
+# tagged live page by a deadline instead of three fixed reads. Built by oscilla-43: 8a62d943
+# fix(release), 87cf2b2c merge of main e2993b14 (a clean merge: identical to git merge-tree's own
+# result). Judged at 87cf2b2c on base origin/main e2993b14, 2026-11-18, in the reviewer's own
+# detached worktree ~/dev/oscilla-wt/review-526; first read at 8a62d943 before the PR existed.
+#
+# Reviewer: rev-seat-2 (session oscilla-c3, claude-code c0f0687c), a separate top-level session
+# acting as rev-seat (Q108 A). It built none of this: oscilla-43 built every commit.
+#
+# The digest: origin/main's scripts/review-verdict.mjs --content --list at 87cf2b2c:
+# 535b2c2e7b43... over 2 guarded paths (scripts/release-publish.mjs,
+# tests/unit/release-publish.test.mjs), the same at 8a62d943: both files are byte-identical.
+#
+# How it was judged:
+# - Why: v3.41.5's first --yes read 'untagged' three times right after verify-deploy passed and
+#   the page said tagged two minutes later; 3 reads 10 s apart gave a CDN edge 20 s.
+# - The wait: TAGGED_WAIT_S 300 and TAGGED_DELAY_S 10, with TAGGED_ATTEMPTS derived
+#   (1 + floor(300 / 10) = 31). After verify-deploy each read goes through defaultFetchPage ->
+#   boundedFetch (bounded per call), the deadline is checked before every sleep against the
+#   injected clock (ms) with sleep in seconds, so the worst case is 300 s plus one bounded read,
+#   and the count is capped as well. Each read is cache-busted by its own number. A page still
+#   untagged at the end throws before the GitHub Release is created, as before, and the message
+#   names the reads over the wait. release:publish runs on the owner's machine, not in CI, so no
+#   workflow job budget is affected.
+# - Fail-first, measured by the reviewer: with origin/main's scripts/release-publish.mjs under the
+#   head's test file, release-publish.test fails (0 pass, 1 fail: the file imports TAGGED_WAIT_S,
+#   which main does not export); the head passes 46/46.
+# - Mutations, by the reviewer, in an exported 8a62d943 tree (release-publish.test):
+#   TAGGED_WAIT_S = 20 fails test 26 (a page tagged on its fourth read publishes); the deadline
+#   break removed fails test 26 (its second half: reads of 60 s end the wait after five);
+#   reads not cache-busted per read fails tests 20 and 26; a tagged read ignored fails 20 and 26.
+#   Restored: 46/46.
+#
+# Measured by the reviewer (Node 22.20.0, majordomus 1.0.1 first on PATH, ci.yml's pin), at
+# 87cf2b2c: build:check exit 0 (v3.41.6); GITHUB_BASE_REF=main npm test exit 0 (5932 tests, 5931
+# pass, 0 fail, 1 skipped). No browser suite reads release-publish; the CI legs run every one.
+# Not run by the reviewer: a live publish (owner-only); the change is proven through the
+# injected fetchPage, clock and sleep.
+#
+# THE CONDITION of this verdict: it binds once the reviewer has read the six "Browser leg N
+# (browser)" logs of this pull request's run at this verdict's commit and found each leg's
+# suite list equal to shards.cjs --plan at this head, "run-suites: all K suites passed" and no
+# FAIL line (a flake is judged against main before any rerun). Auto-merge is armed only after the
+# reviewer reports "legs OK" and after v3.41.7 is published (oscilla-43's freeze); otherwise a
+# superseding verdict.
+#
+# Verdict: merge, under the condition above. No findings.
+schema: review-verdict/v1
+pr: 617
+verdict: merge
+reviewer: oscilla-c3 rev-seat-2 (claude-code c0f0687c, a separate top-level session; built none of 87cf2b2c)
+content: 535b2c2e7b43be1a384546bbca1b19690eaea27ebf4a2166a89bbb7d75c3a273
+findings: []

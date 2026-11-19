@@ -25,9 +25,9 @@ export function createCalibration(ctx, svc, ops) {
       ok: r.ok,
       referenceHz,
       observedDb: r.ok ? r.observedDbRelative : null,
-      text: r.ok ? `Reading ${db(r.observedDbRelative)} relative, ${r.band.nominal} Hz `
-        + `one-third-octave band (${(100 * r.bandFraction).toFixed(0)} % of the captured power, `
-        + `${r.durationS.toFixed(1)} s at ${r.sampleRate} Hz)` : null,
+      text: r.ok ? `Hodnota ${db(r.observedDbRelative)} relativně, pásmo třetiny oktávy `
+        + `${r.band.nominal} Hz (${(100 * r.bandFraction).toFixed(0)} % zachyceného výkonu, `
+        + `${r.durationS.toFixed(1)} s při ${r.sampleRate} Hz)` : null,
       errors: r.errors.slice(),
       warnings: r.warnings.slice(),
     };
@@ -37,12 +37,12 @@ export function createCalibration(ctx, svc, ops) {
     const f = cmp.meas.levelForm;
     if (ctx.refCapture) return false;
     if (ctx.me && isActiveState(ctx.me.state) && ctx.me.state !== S.READY) {
-      f.error = 'A measurement is running; stop it before capturing the reference.';
+      f.error = 'Běží měření; před zachycením reference ho zastavte.';
       return false;
     }
     const referenceHz = Number(f.referenceHz);
     if (!(referenceHz >= LEVEL_LIMITS.minReferenceHz && referenceHz <= LEVEL_LIMITS.maxReferenceHz)) {
-      f.error = `The reference frequency must be ${LEVEL_LIMITS.minReferenceHz}–`
+      f.error = `Referenční frekvence musí být ${LEVEL_LIMITS.minReferenceHz}–`
         + `${LEVEL_LIMITS.maxReferenceHz} Hz.`;
       return false;
     }
@@ -72,8 +72,8 @@ export function createCalibration(ctx, svc, ops) {
       return r.ok;
     } catch (e) {
       const aborted = e && (e.code === 'ABORTED' || e.name === 'AbortError');
-      f.error = aborted ? 'Reference capture stopped; nothing was stored.'
-        : `Reference capture failed: ${e && e.message ? e.message : String(e)}`;
+      f.error = aborted ? 'Zachycení reference zastaveno; nic se neuložilo.'
+        : `Zachycení reference selhalo: ${e && e.message ? e.message : String(e)}`;
       return false;
     } finally {
       try { io.cancel('reference-done'); } catch (err) { /* already released */ }
@@ -137,7 +137,7 @@ export function measureCalibrationPart(ctx, svc, ops) {
         return this.measureImportCalibrationText(text, file.name);
       } catch (err) {
         this.meas.cal.errors = [err.message || String(err)];
-        this.notify('error', 'Calibration not imported', err.message || String(err));
+        this.notify('error', 'Kalibrace nebyla importována', err.message || String(err));
         return false;
       }
     },
@@ -152,9 +152,9 @@ export function measureCalibrationPart(ctx, svc, ops) {
       const r = parseCalibrationText(text, { name, importedAt: new Date().toISOString(),
         convention });
       if (!r.ok) {
-        this.meas.cal.errors = r.errors.slice(0, 5).map((x) => (x.line ? `line ${x.line}: `
+        this.meas.cal.errors = r.errors.slice(0, 5).map((x) => (x.line ? `řádek ${x.line}: `
           : '') + x.text);
-        this.notify('error', 'Calibration not imported', this.meas.cal.errors.join(' '));
+        this.notify('error', 'Kalibrace nebyla importována', this.meas.cal.errors.join(' '));
         return false;
       }
       if (r.needsConvention) {
@@ -251,16 +251,16 @@ export function measureCalibrationPart(ctx, svc, ops) {
         } else {
           const ref = ctx.reference;
           if (!ref || !ref.reading.ok) {
-            throw new Error('Capture the reference first (or enter the reading by hand under '
-              + 'Advanced).');
+            throw new Error('Nejdřív zachyťte referenci (nebo zadejte hodnotu ručně pod '
+              + 'Pokročilé).');
           }
           if (ref.referenceHz !== referenceHz) {
-            throw new Error(`The reference was captured at ${ref.referenceHz} Hz; capture it `
-              + `again at ${referenceHz} Hz.`);
+            throw new Error(`Reference byla zachycena na ${ref.referenceHz} Hz; zachyťte ji `
+              + `znovu na ${referenceHz} Hz.`);
           }
           if (!inputBinding(ref.input)) {
-            throw new Error('The capture did not report its input, so the reading could not be '
-              + 'bound to it. Run the setup check, then capture the reference again.');
+            throw new Error('Záznam nenahlásil svůj vstup, takže hodnotu k němu nešlo vázat. '
+              + 'Spusťte kontrolu nastavení a pak referenci zachyťte znovu.');
           }
           observed = ref.reading.observedDbRelative;
           input = ref.input;
@@ -273,8 +273,8 @@ export function measureCalibrationPart(ctx, svc, ops) {
           const typed = typeof conditions === 'string' ? conditions.trim() : '';
           const room = ops.conditionsRoom(label);
           if (typed.length > room) {
-            throw new Error(`Conditions can be at most ${room} characters in TEST CONTEXT (the `
-              + `TEST CONTEXT label is stored with them); ${typed.length} were entered.`);
+            throw new Error(`Podmínky mohou mít v TESTOVACÍM KONTEXTU nejvýš ${room} znaků (ukládá `
+              + `se s nimi štítek TEST CONTEXT); zadáno ${typed.length}.`);
           }
           conditions = typed ? `${label} ${typed}` : label;
         }
