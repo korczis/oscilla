@@ -25,7 +25,7 @@
     }
   },
   "caps": {
-    "src/index.html": 316000,
+    "src/index.html": 317000,
     "src/js/audio/audio-engine.js": 73000,
     "src/js/core/instrument.js": 64000,
     "src/js/experiments/validate.js": 64000,
@@ -276,6 +276,12 @@
       "cap": 316000,
       "pr": 572,
       "reason": "V510 (owner orders 2026-11-15; plan V510): the MIDI section's output select 'Hodiny a transport na výstup' with its help line; measured 313455 -> 314593 B over #570, next 1 000 above with room for pass 6's +382 in its train"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 317000,
+      "pr": 601,
+      "reason": "F002 (owner order 2026-11-17, Q110; plan F002): one Pro page frame for every surface, merged over the Czech passes 7b/7c/8 and U118/U119; measured main 315962 -> merged 316371 B, next 1 000 above"
     }
   ]
 }

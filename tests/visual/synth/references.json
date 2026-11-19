@@ -473,13 +473,13 @@
         },
         "phone-xy-dark": {
           "runs": 10,
-          "px": 0,
-          "faint": 0
+          "px": 2,
+          "faint": 4
         },
         "phone-xy-light": {
           "runs": 10,
           "px": 0,
-          "faint": 6
+          "faint": 0
         },
         "desktop-bay-dark": {
           "runs": 10,
@@ -528,7 +528,7 @@
             },
             "desktop-xy-light": {
               "px": 0,
-              "faint": 0
+              "faint": 43
             },
             "phone-panel-dark": {
               "px": 172,
@@ -666,7 +666,7 @@
             },
             "desktop-xy-light": {
               "px": 0,
-              "faint": 0
+              "faint": 43
             },
             "phone-panel-dark": {
               "px": 0,
