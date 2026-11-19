@@ -61,6 +61,10 @@ export const PRO = Object.freeze({
   /** The frame with its bottom gutter: what every view of its own binds (the Synth, whose
    *  bottom keeps the docked keys' band, binds PRO.page). */
   pageView: `${PAGE} pb-6`,
+  /** F002b (shell.js PHONE_PRE_FRAME): below md the Synth's and the Studio's own inset as it
+   *  was before F002; from md up both stand in PRO.page / PRO.pageView like every view. */
+  phoneSynth: 'max-md:pt-0',
+  phoneStudio: 'max-md:!px-0 max-md:!pt-0',
 });
 
 /** The Alpine part: PRO for the markup's :class bindings. */

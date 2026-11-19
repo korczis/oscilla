@@ -1,0 +1,37 @@
+id: F014
+milestone: M055
+serves:
+  - "ui-flowbite-pro#pro-shell"
+title: "The Synth's and the Studio's phone first screen stand in the one Pro page frame (F002b)"
+slug: synth-and-studio-phone-first-screen-under-the-pro-frame
+priority: p1
+profile: implementation
+objective: "Finish Q110's one Pro page frame for every surface below md. F002 (#601) landed the frame everywhere but carved the Synth and the Studio out below md (src/js/ui/shell.js PHONE_PRE_FRAME, issue F002b): those two views keep their pre-F002 phone geometry because their phone contracts were built on it. Under the frame as F002 first had it, CI run 44445904760 (#601 at 5eadead1, merged over U118 and U119) failed exactly these phone checks: ui-current phone-whole-edge-studio-320 (studio.graph.minimapToggle 4 px beyond the edge), phone-whole-overlap-studio-375 (keyboard.handle x studio.find), phone-whole-overlap-synth-320-pairs, phone-whole-covered-synth-375 and phone-whole-overlap-synth-375, u108-alert-on-top-320-open-collapsed; iphone reach-studio@iPhone SE (minimap toggle offscreen); step-grid sg-mount (rows 1, head C4, 4 cells); xy-pad x-view-phone (the touch point not drawn as sent); qa-regressions safety-notice. After: the carve-out is empty and every one of those checks passes with the frame applied below md too."
+why: "Q110 (owner decision 2026-11-17) asks for one Pro page frame on every surface; the split that let F002 land (an LLM decision of oscilla-c3 and oscilla-43 under Q090, 2026-11-19) keeps that target open here rather than re-recording the phone debts it would have moved."
+current_state: "Filed 2026-11-19 by oscilla-43 with F002's landing (#601), as the carve-out's named issue (F002b in shell.js and tests/unit/pro-page-frame.test.mjs). Nothing built yet."
+scope:
+  - "src/index.html"
+  - "src/js/ui/shell.js"
+  - "src/js/ui/pro-classes.js"
+  - "src/js/synth"
+  - "src/js/ui/studio"
+  - "tests/unit/pro-page-frame.test.mjs"
+  - "tests/browser/ui-current.cjs"
+depends_on:
+  - F002
+acceptance_criteria:
+  - "src/js/ui/shell.js PHONE_PRE_FRAME is empty (and with it PRO.phoneSynth and PRO.phoneStudio); tests/unit/pro-page-frame.test.mjs then asserts every surface carries the Pro frame at every width, and fails on the base, which still carves the two views out."
+  - "With the frame applied below md, in chromium, firefox and webkit: ui-current's phone-whole-edge-studio-320, phone-whole-overlap-studio-375, phone-whole-overlap-synth-320-pairs, phone-whole-covered-synth-375, phone-whole-overlap-synth-375 and u108-alert-on-top-320-open-collapsed pass with ui-current's recorded debt not grown (R320, R375 and U108_DEBT only shrink); iphone reach-studio, step-grid sg-mount, xy-pad x-view-phone and qa-regressions safety-notice pass."
+  - "The four visual scripts pass in the linux-x64 container; any view the frame moves is re-accepted with its reason, noise and seeds (the SYN recipe of #618), and a reviewer judges the before/after set."
+  - "A reviewer's verdict (oscilla-c3 or another non-builder seat) for the change."
+validation:
+  - "npm test"
+  - "node tests/browser/ui-current.cjs"
+  - "node tests/browser/iphone.cjs"
+  - "node tests/browser/step-grid.cjs"
+  - "node tests/browser/xy-pad.cjs"
+  - "node tests/browser/qa-regressions.cjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-19'
+updated_at: 2026-11-19

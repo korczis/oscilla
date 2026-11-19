@@ -2726,14 +2726,19 @@
          src/js/ui/studio/workspace.js): every module plate, knob, switch and jack is generated
          from src/js/synth/panels/semi-mono.js and the registry's node descriptors. The keyboard
          docks at the bottom here and plays the panel. -->
-    <section class="pb-[max(1.5rem,var(--osc-dock-h,20rem))]" :class="PRO.page" id="osc-view-synth" data-osc="synth-view"
+    <section class="pb-[max(1.5rem,var(--osc-dock-h,20rem))]" :class="[PRO.page, PRO.phoneSynth]" id="osc-view-synth" data-osc="synth-view"
       data-osc-modes="synth" hidden :hidden="workspace !== 'synth'"
       aria-labelledby="osc-synth-title" tabindex="-1">
       <!-- U108: below md the insert alert comes first (order), clear of the dock. -->
       <div class="flex flex-col md:block">
       <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h2 id="osc-synth-title" class="sr-only" x-text="synth.title">Semimodulární monofonní hlas</h2>
+          <!-- F002b: below md the Synth keeps its pre-F002 crumb and visible title (shell.js
+               PHONE_PRE_FRAME); from md up the page header's title is the one shown (Q110). -->
+          <nav aria-label="Breadcrumb" class="text-xs text-gray-500 md:hidden dark:text-gray-400"
+            x-text="'Synth / ' + synth.tabs.find((t) => t.id === synth.tab).label">Synth / Panel</nav>
+          <h2 id="osc-synth-title" class="text-xl font-semibold text-gray-900 md:sr-only dark:text-white"
+            x-text="synth.title">Semimodulární monofonní hlas</h2>
           <p class="hidden max-w-3xl text-sm text-gray-600 sm:block dark:text-gray-300"
             x-text="synth.description"></p>
         </div>
@@ -2819,7 +2824,7 @@
          editor, node library, Inspector and compact widget are rendered by their modules from
          the ONE Studio store; the timeline region belongs to src/js/ui/studio/timeline-editor.js
          (spec §131-§136). Below 768 px one of GRAPH / TIMELINE / INSPECTOR is shown at a time. -->
-    <section class="osc-view osc-view--studio box-border max-md:!px-0 max-md:!pt-0 !pb-[max(0px,calc(var(--osc-dock-h,0px)_-_var(--osc-statusbar-h)))]" :class="PRO.pageView" id="osc-view-studio" data-osc="studio-view"
+    <section class="osc-view osc-view--studio box-border !pb-[max(0px,calc(var(--osc-dock-h,0px)_-_var(--osc-statusbar-h)))]" :class="[PRO.pageView, PRO.phoneStudio]" id="osc-view-studio" data-osc="studio-view"
       data-osc-modes="studio" hidden :hidden="workspace !== 'studio'" :data-subview="studio.subview"
       aria-labelledby="osc-studio-title" tabindex="-1">
       <h2 class="osc-sr-only" id="osc-studio-title">Studio</h2>

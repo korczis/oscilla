@@ -259,7 +259,32 @@ export const FRAME_SCROLL_PT = 'scroll-pt-6';
 export function mainFrameOf(id) {
   const frame = ownsViewOf(id) ? [] : [PRO.pageView];
   if (!OWN_SCROLL_PADDING.includes(id)) frame.push(FRAME_SCROLL_PT);
+  const carved = PHONE_PRE_FRAME[id];
+  if (carved) frame.push(carved.main);
   return frame.join(' ');
+}
+
+/**
+ * F002b, plan issue F014 (an LLM decision of oscilla-c3 and oscilla-43 under Q090,
+ * 2026-11-19): below md these two views keep the phone geometry they had before F002, because
+ * their phone contracts (U108, the step grid, the XY pad, the keyboard dock's recorded
+ * overlaps) were built on it; from md up they stand in the Pro frame like every surface. Q110's one frame for every surface stays
+ * the target and F002b closes it. `main` is <main>'s padding below md before F002 (8 px sides,
+ * 12 px bottom; the Synth's top stays 0 by its own !pt-0), `view` the view's own inset below md.
+ * tests/unit/pro-page-frame.test.mjs holds the carve-out to exactly these two views.
+ */
+export const PHONE_PRE_FRAME = Object.freeze({
+  synth: Object.freeze({
+    issue: 'F014', main: 'max-md:px-2 max-md:pb-3', view: PRO.phoneSynth,
+  }),
+  studio: Object.freeze({
+    issue: 'F014', main: 'max-md:p-2 max-md:pb-3', view: PRO.phoneStudio,
+  }),
+});
+
+/** A view's own classes below md under the F002b carve-out ('' for every other view). */
+export function phoneViewFrameOf(id) {
+  return (PHONE_PRE_FRAME[id] && PHONE_PRE_FRAME[id].view) || '';
 }
 
 /**

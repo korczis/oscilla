@@ -8,7 +8,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { mainFrameOf, ownsViewOf, WORKSPACE_IDS } from '../../src/js/ui/shell.js';
+import {
+  mainFrameOf, ownsViewOf, PHONE_PRE_FRAME, phoneViewFrameOf, WORKSPACE_IDS,
+} from '../../src/js/ui/shell.js';
 import { PRO } from '../../src/js/ui/pro-classes.js';
 import {
   boundProClasses, openingTags, PRO_STRUCTURE,
@@ -80,7 +82,8 @@ test('the frame has one source: every view binds a PRO token, none repeats its c
     }
     const via = /PRO\.(pageView|page)\b/.exec(attrs[':class'] || '');
     assert.ok(via, `#osc-view-${id} binds PRO.pageView or PRO.page`);
-    assert.deepEqual(boundProClasses(attrs), PRO[via[1]].split(/\s+/),
+    const carved = phoneViewFrameOf(id).split(/\s+/).filter(Boolean); // F002b's own, below md
+    assert.deepEqual(boundProClasses(attrs), [...PRO[via[1]].split(/\s+/), ...carved],
       `#osc-view-${id} binds PRO.${via[1]} unconditionally (the measure resolves it)`);
   }
   const literal = /\bpx-4 pt-6\b/;
@@ -151,14 +154,19 @@ test('the visible page title is the page header\'s alone', () => {
   assert.doesNotMatch(HTML, /PRO\.pageTitle/, 'no page heading class in the content');
   assert.ok(!('pageTitle' in PRO), 'PRO has no page heading class');
   const main = HTML.slice(HTML.indexOf(MAIN), HTML.indexOf('</main>'));
-  assert.doesNotMatch(main, /aria-label="(Breadcrumb|Drobečková navigace)"/,
-    'no breadcrumb of a page\'s own in <main>');
+  // F002b: below md the Synth keeps its own crumb (md:hidden), the one carved-out breadcrumb.
+  const crumbs = [...main.matchAll(
+    /<nav\b[^>]*aria-label="(Breadcrumb|Drobečková navigace)"[^>]*>/g)];
+  assert.ok(crumbs.every((c) => /\bmd:hidden\b/.test(c[0])),
+    'no breadcrumb of a page\'s own in <main> from md up');
+  assert.ok(crumbs.length <= 1, 'at most the Synth\'s phone crumb (F002b)');
   for (const [id, tag] of VIEWS) {
     const label = (tag.match(/aria-labelledby="([^"]+)"/) || [])[1];
     assert.ok(label, `#osc-view-${id} is labelled by its heading`);
     const h = HTML.match(new RegExp(`<h[1-6]\\b[^>]*\\bid="${label}"[^>]*>`))[0];
     // About's hero names the brand ("O aplikaci" unseen before OSCILLA), not the page.
     if (id === 'about') continue;
+    if (Object.hasOwn(PHONE_PRE_FRAME, id) && /\bmd:sr-only\b/.test(h)) continue; // F002b
     assert.match(h, /class="(osc-)?sr-only"/, `#${label} heads #osc-view-${id} unseen`);
   }
   // The Synth's tab, once an in-view "Synth / <tab>", is the page header's last crumb.
@@ -167,4 +175,31 @@ test('the visible page title is the page header\'s alone', () => {
   assert.match(header,
     /aria-current="page" x-show="workspaceTabLabel\(\)"[\s\S]*?x-text="workspaceTabLabel\(\)"/);
   assert.match(read('src/js/ui/app.js'), /workspaceTabLabel\(\) \{[\s\S]*?synth\.tabs\.find/);
+});
+
+test('F002b: exactly the Synth and the Studio keep their pre-F002 phone geometry, below md',
+  () => {
+  // The carve-out of the LLM decision under Q090 (oscilla-c3 and oscilla-43, 2026-11-19): a third
+  // view joining it fails here, and each entry names the issue that closes it.
+  assert.deepEqual(Object.keys(PHONE_PRE_FRAME).sort(), ['studio', 'synth']);
+  for (const [id, carve] of Object.entries(PHONE_PRE_FRAME)) {
+    assert.equal(carve.issue, 'F014', `${id} names F014 (F002b)`);
+    for (const part of [carve.main, carve.view]) {
+      for (const c of part.split(/\s+/).filter(Boolean)) {
+        assert.match(c, /^max-md:/, `${id}: ${c} acts below md only`);
+      }
+    }
+    assert.ok(mainFrameOf(id).includes(carve.main), `<main> carries ${id}'s phone padding`);
+    assert.equal(phoneViewFrameOf(id), carve.view);
+    const tag = VIEWS.get(id);
+    assert.ok(tag, `#osc-view-${id} exists`);
+    const key = Object.entries(PRO).find(([, v]) => v === carve.view)?.[0];
+    assert.ok(key && tag.includes(`PRO.${key}`), `#osc-view-${id} binds its carve-out from PRO`);
+  }
+  for (const id of WORKSPACE_IDS.filter((w) => !Object.hasOwn(PHONE_PRE_FRAME, w))) {
+    assert.ok(!/max-md:/.test(mainFrameOf(id)), `${id}: the frame at every width, no carve-out`);
+    assert.equal(phoneViewFrameOf(id), '');
+    const tag = VIEWS.get(id);
+    if (tag) assert.doesNotMatch(tag, /PRO\.phone[A-Z]/, `#osc-view-${id} binds no carve-out`);
+  }
 });
