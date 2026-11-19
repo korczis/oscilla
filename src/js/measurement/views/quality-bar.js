@@ -34,8 +34,8 @@ import {
 } from './common.js';
 
 /** Clipping is judged against digital full scale only. */
-const ANALOG_CLIP_NOTE = 'clipping before the converter, in a preamp or by automatic gain, '
-  + 'cannot be seen';
+const ANALOG_CLIP_NOTE = 'ořez před převodníkem, v předzesilovači nebo automatickým ziskem '
+  + 'vidět není';
 
 /**
  * Margin (dB) by which the live capture RMS must exceed the measured background for SIGNAL
@@ -62,7 +62,7 @@ const item = (status, value, detail = null) => ({ status, value, detail });
 export function initialQualityBar() {
   return Object.freeze({
     state: S.IDLE,
-    input: item('pending', UNAVAILABLE.UNKNOWN, 'Run the setup check.'),
+    input: item('pending', UNAVAILABLE.UNKNOWN, 'Spusťte kontrolu nastavení.'),
     noise: item('pending', UNAVAILABLE.NOT_MEASURED),
     clipping: item('pending', 'NOT CHECKED YET'),
     signal: item('pending', UNAVAILABLE.NOT_MEASURED),
@@ -107,11 +107,11 @@ export function reduceQualityBar(state, event) {
         s.capture = item('pending', 'ARMED', runText(s));
       }
       if (event.to === S.MEASURING && !s.signalLive)
-        s.signal = item('pending', 'STIMULUS PLAYING', 'Input level not reported live; '
-          + 'the capture is checked when the run ends.');
+        s.signal = item('pending', 'STIMULUS PLAYING', 'Úroveň vstupu se živě nehlásí; '
+          + 'záznam se zkontroluje po skončení běhu.');
       if (event.to === S.ANALYZING) {
         s.runs = event.info && Number.isInteger(event.info.runs) ? event.info.runs : s.runs;
-        s.capture = item('pending', 'ANALYZING', 'Offline analysis of the captured audio.');
+        s.capture = item('pending', 'ANALYZING', 'Dodatečná analýza zaznamenaného zvuku.');
       }
       if (event.to === S.COMPLETE) s.capture = item('ok', 'COMPLETE', runText(s));
       if (event.to === S.ABORTED) s.capture = item('unknown', 'STOPPED');
@@ -119,11 +119,11 @@ export function reduceQualityBar(state, event) {
       if (event.to === S.INVALID) {
         const codes = codesOf(event.info && event.info.reasons);
         if (codes.some((c) => CLIP_CODES.has(c))) {
-          s.clipping = item('fail', 'DETECTED', 'The input reached full scale: lower the input '
-            + 'gain or the output level and measure again.');
+          s.clipping = item('fail', 'DETECTED', 'Vstup dosáhl plného rozsahu: snižte zisk vstupu '
+            + 'nebo výstupní úroveň a měřte znovu.');
         }
         if (event.info && event.info.quality === 'INVALID')
-          s.capture = item('fail', 'INVALID', 'The quality assessment rejected the data.');
+          s.capture = item('fail', 'INVALID', 'Posouzení kvality data odmítlo.');
         else if (s.capture.status !== 'fail') s.capture = item('fail', 'INVALID', codes.join(', '));
       }
       return s;
@@ -136,9 +136,9 @@ export function reduceQualityBar(state, event) {
       if (blocker) s.input = item('fail', blocker.code === 'MIC_DENIED' ? 'DENIED' : 'NONE',
         blocker.text);
       else if (facts.input && facts.input.ok === false) s.input = item('fail', 'NONE');
-      else if (warn) s.input = item('warn', 'OK', `${label || 'Input device'}: ${warn.text}`);
+      else if (warn) s.input = item('warn', 'OK', `${label || 'Vstupní zařízení'}: ${warn.text}`);
       else if (event.ready || (facts.input && facts.input.ok))
-        s.input = item('ok', 'OK', label || 'Input device (label not exposed by the browser)');
+        s.input = item('ok', 'OK', label || 'Vstupní zařízení (název prohlížeč nesděluje)');
       const lvl = facts.inputLevel;
       if (lvl && Number.isFinite(lvl.rmsDb)) {
         const high = lvl.rmsDb > PREFLIGHT_THRESHOLDS.noisyRmsDb;
@@ -146,10 +146,10 @@ export function reduceQualityBar(state, event) {
         const out = facts.output || null;
         const own = !!out && (out.otherAudio === true || out.audibleVoices > 0);
         s.noise = item(high ? 'warn' : 'pending', high ? 'HIGH' : 'PRE-CHECK', own
-          ? `Preflight input ${formatDb(lvl.rmsDb)} includes the app's own output, which is `
-            + 'playing, so it is not the background level; the noise check measures that '
-            + 'after Measure stops it.'
-          : `Preflight background ${formatDb(lvl.rmsDb)}; the noise check measures it.`);
+          ? `Předběžný vstup ${formatDb(lvl.rmsDb)} obsahuje vlastní výstup aplikace, který `
+            + 'hraje, takže to není úroveň pozadí; tu změří kontrola šumu, '
+            + 'až ho Měření zastaví.'
+          : `Předběžné pozadí ${formatDb(lvl.rmsDb)}; změří ho kontrola šumu.`);
       }
       const clip = first(event.warnings, CLIP_CODES);
       if (clip) s.clipping = item('warn', 'AT INPUT', clip.text);
@@ -164,11 +164,12 @@ export function reduceQualityBar(state, event) {
         s.clipping = item('fail', 'DETECTED', clip.text);
         s.clipSeen = true;
       } else if (!Number.isFinite(rms)) {
-        s.noise = item('unknown', 'SILENT', 'Digital silence: no input signal or a muted input.');
+        s.noise = item('unknown', 'SILENT',
+          'Digitální ticho: žádný vstupní signál nebo ztlumený vstup.');
       } else {
         const high = rms > PREFLIGHT_THRESHOLDS.noisyRmsDb;
         s.noise = item(high ? 'warn' : 'ok', high ? 'HIGH' : 'GOOD',
-          `Background ${formatDb(rms)} (threshold ${formatDb(PREFLIGHT_THRESHOLDS.noisyRmsDb)}).`);
+          `Pozadí ${formatDb(rms)} (práh ${formatDb(PREFLIGHT_THRESHOLDS.noisyRmsDb)}).`);
       }
       return s;
     }
@@ -180,9 +181,9 @@ export function reduceQualityBar(state, event) {
       if (Number.isInteger(event.run)) s.run = event.run;
       const phase = event.phase;
       if (phase === 'analysis') {
-        s.capture = item('pending', 'ANALYZING', `${pct(event.overall)} overall`);
+        s.capture = item('pending', 'ANALYZING', `${pct(event.overall)} celkem`);
       } else if (phase === 'noise') {
-        s.capture = item('pending', pct(event.overall), 'Noise-floor check');
+        s.capture = item('pending', pct(event.overall), 'Kontrola šumového pozadí');
       } else if (phase) {
         s.capture = item('pending', pct(event.overall), [runText(s), phaseWord(phase)]
           .filter(Boolean).join(' · '));
@@ -204,7 +205,7 @@ export function reduceQualityBar(state, event) {
       }
       if (empty) s.signal = item('fail', 'NONE', empty.text);
       else if (!event.invalid && s.signal.status !== 'ok')
-        s.signal = item('ok', 'RECEIVED', `Run ${s.run + 1} captured.`);
+        s.signal = item('ok', 'RECEIVED', `Běh ${s.run + 1} zaznamenán.`);
       if (cap) s.capture = item('fail', 'DEFECT', cap.text);
       return s;
     }
@@ -226,27 +227,27 @@ export function reduceQualityBar(state, event) {
  * peak stayed below the threshold. Severity never drops within a measurement.
  */
 function runClipping(s, peak) {
-  const run = `Run ${s.run + 1}`;
+  const run = `Běh ${s.run + 1}`;
   if (peak !== null && peak >= CLIP_THRESHOLD) {
     if (!s.railSeen) {
-      s.clipping = item('warn', 'AT RAIL', `${run}: peak ${fixedText(peak, 3)} reaches the rail `
-        + `(≥ ${CLIP_THRESHOLD}) without a ${CLIP_MIN_RUN}-sample flat top: brief clipping `
-        + `is not excluded (${ANALOG_CLIP_NOTE}).`);
+      s.clipping = item('warn', 'AT RAIL', `${run}: špička ${fixedText(peak, 3)} dosahuje meze `
+        + `(≥ ${CLIP_THRESHOLD}) bez plochého vrcholu ${CLIP_MIN_RUN} vzorků: krátký ořez `
+        + `není vyloučen (${ANALOG_CLIP_NOTE}).`);
     }
     s.railSeen = true;
   } else if (s.railSeen) {
     // A later clean run does not clear the warning.
   } else if (peak === null) {
-    s.clipping = item('unknown', 'NOT CHECKED', `${run}: the capture peak was not reported, `
-      + 'so clipping was not checked.');
+    s.clipping = item('unknown', 'NOT CHECKED', `${run}: špička záznamu nebyla hlášena, `
+      + 'takže ořez nebyl zkontrolován.');
     s.peakUnchecked = true;
   } else if (!s.peakUnchecked) {
     // A peak just below the threshold (0.97996) is truncated, never rounded up to "0.980".
     const rounded = fixedText(peak, 3);
     const shown = Number(rounded) < CLIP_THRESHOLD ? rounded
       : fixedText(Math.floor(peak * 1000) / 1000, 3);
-    s.clipping = item('ok', 'NONE', `${run}: peak ${shown}, no sample at or above `
-      + `${CLIP_THRESHOLD} of digital full scale (${ANALOG_CLIP_NOTE}).`);
+    s.clipping = item('ok', 'NONE', `${run}: špička ${shown}, žádný vzorek na ani nad `
+      + `${CLIP_THRESHOLD} digitálního plného rozsahu (${ANALOG_CLIP_NOTE}).`);
   }
 }
 
@@ -256,37 +257,37 @@ function isTerminal(st) {
 
 function runText(s) {
   if (!Number.isInteger(s.run)) return null;
-  return s.runs ? `Run ${s.run + 1}/${s.runs}` : `Run ${s.run + 1}`;
+  return s.runs ? `Běh ${s.run + 1}/${s.runs}` : `Běh ${s.run + 1}`;
 }
 
 function phaseWord(phase) {
-  return { 'pre-roll': 'pre-roll', sweep: 'sweep', tail: 'tail', gap: 'gap', armed: 'armed',
-    preflight: 'setup check' }[phase] || null;
+  return { 'pre-roll': 'předběh', sweep: 'sweep', tail: 'doznění', gap: 'mezera',
+    armed: 'připraveno', preflight: 'kontrola nastavení' }[phase] || null;
 }
 
 function liveChunk(s, c, phase) {
   const clipped = c.clipped === true || (Number.isFinite(c.clipped) && c.clipped > 0)
     || (Number.isFinite(c.peak) && c.peak >= CLIP_THRESHOLD);
   if (clipped) {
-    s.clipping = item('fail', 'DETECTED', 'The live input reached full scale.');
+    s.clipping = item('fail', 'DETECTED', 'Živý vstup dosáhl plného rozsahu.');
     s.clipSeen = true;
   } else if (Number.isFinite(c.peak) && !s.clipSeen && !s.railSeen && !s.peakUnchecked
     && s.clipping.status !== 'fail') {
     // A live chunk never clears an earlier run's AT RAIL or NOT CHECKED (T016).
-    s.clipping = item('ok', 'NONE', `Live peak ${fixedText(c.peak, 3)} of digital full scale so `
-      + `far (${ANALOG_CLIP_NOTE}).`);
+    s.clipping = item('ok', 'NONE', `Živá špička zatím ${fixedText(c.peak, 3)} digitálního plného `
+      + `rozsahu (${ANALOG_CLIP_NOTE}).`);
   }
   if (Number.isFinite(c.rmsDb) && phase === 'sweep') {
     s.signalLive = true;
     if (s.noiseRmsDb === null) {
-      s.signal = item('unknown', 'LEVEL ONLY', `Input ${formatDb(c.rmsDb)}; no background `
-        + 'measured to compare with.');
+      s.signal = item('unknown', 'LEVEL ONLY', `Vstup ${formatDb(c.rmsDb)}; chybí změřené pozadí `
+        + 'pro porovnání.');
     } else {
       const margin = c.rmsDb - s.noiseRmsDb;
       const active = margin >= SIGNAL_ACTIVE_MARGIN_DB;
       s.signal = item(active ? 'ok' : 'warn', active ? 'ACTIVE' : 'WEAK',
-        `${ratioDbText(margin, { decimals: 0 })} above the background `
-        + `(${SIGNAL_ACTIVE_MARGIN_DB} dB needed).`);
+        `${ratioDbText(margin, { decimals: 0 })} nad pozadím `
+        + `(potřeba ${SIGNAL_ACTIVE_MARGIN_DB} dB).`);
     }
   }
 }
@@ -330,7 +331,7 @@ export function qualityPanel(assessment) {
     const p = qualityStatusPresentation('NOT_ASSESSED');
     return { status: 'NOT_ASSESSED', statusText: p.text, glyph: p.glyph, icon: p.icon,
       shape: p.shape, className: p.className, role: p.role, algorithm: null,
-      summary: `Measurement quality: ${p.word}.`, reasons: [],
+      summary: `Kvalita měření: ${p.word}.`, reasons: [],
       groups: { quality: [], calibration: [] }, metrics: [] };
   }
   const p = qualityStatusPresentation(assessment.status);
@@ -405,32 +406,32 @@ function metricRows(a) {
     : UNAVAILABLE.NOT_MEASURED);
   const range = (r) => (Array.isArray(r) ? `${hz(r[0])}–${hz(r[1])}` : UNAVAILABLE.NOT_MEASURED);
   const rows = [
-    ['snrMedian', 'Median SNR', db(m.snrMedianDb)],
-    ['snrMin', 'Minimum SNR (1/6-octave pooled, in valid range)', db(m.snrMinDb)],
-    ['clipping', 'Clipped samples', Number.isFinite(m.clippingRatio)
-      ? `${Number((m.clippingRatio * 100).toPrecision(2))} % of samples`
+    ['snrMedian', 'Medián SNR', db(m.snrMedianDb)],
+    ['snrMin', 'Minimální SNR (sloučeno po 1/6 oktávy, v platném rozsahu)', db(m.snrMinDb)],
+    ['clipping', 'Oříznuté vzorky', Number.isFinite(m.clippingRatio)
+      ? `${Number((m.clippingRatio * 100).toPrecision(2))} % vzorků`
       : UNAVAILABLE.NOT_MEASURED],
-    ['dropouts', 'Dropouts', Array.isArray(m.dropouts) ? String(m.dropouts.length)
+    ['dropouts', 'Výpadky', Array.isArray(m.dropouts) ? String(m.dropouts.length)
       : (Number.isFinite(m.dropouts) ? String(m.dropouts) : UNAVAILABLE.NOT_MEASURED)],
-    ['repeatability', 'Repeatability (median run-to-run spread, as judged)',
+    ['repeatability', 'Opakovatelnost (medián rozptylu mezi běhy, jak se posuzuje)',
       repeatabilityText(a, m, db)],
-    ['runs', 'Runs', Number.isInteger(m.runs) ? String(m.runs) : UNAVAILABLE.UNKNOWN],
-    ['requested', 'Requested range', range(m.requestedRange)],
-    ['coverage', 'Valid range', range(m.coverage)],
-    ['calibrated', 'Calibrated range', m.calibratedRange ? range(m.calibratedRange)
+    ['runs', 'Běhy', Number.isInteger(m.runs) ? String(m.runs) : UNAVAILABLE.UNKNOWN],
+    ['requested', 'Požadovaný rozsah', range(m.requestedRange)],
+    ['coverage', 'Platný rozsah', range(m.coverage)],
+    ['calibrated', 'Kalibrovaný rozsah', m.calibratedRange ? range(m.calibratedRange)
       : UNAVAILABLE.UNCALIBRATED],
-    ['level', 'Level calibration', m.levelCalibrated ? 'CALIBRATED' : UNAVAILABLE.UNCALIBRATED],
-    ['resolution', 'Frequency resolution', res ? `${Number(res.toPrecision(3))} Hz`
+    ['level', 'Kalibrace úrovně', m.levelCalibrated ? 'CALIBRATED' : UNAVAILABLE.UNCALIBRATED],
+    ['resolution', 'Frekvenční rozlišení', res ? `${Number(res.toPrecision(3))} Hz`
       : UNAVAILABLE.UNKNOWN],
   ];
   // confidence.v3: the noise estimate's resolution (1/T_noise) and where the SNR is assessed.
-  if ('snrResolutionHz' in m) rows.push(['snrResolution', 'SNR resolution (1/noise-check time)',
+  if ('snrResolutionHz' in m) rows.push(['snrResolution', 'Rozlišení SNR (1/délka kontroly šumu)',
     m.snrResolutionHz > 0 ? `${Number(m.snrResolutionHz.toPrecision(3))} Hz`
       : UNAVAILABLE.NOT_MEASURED]);
-  if ('snrAssessedFromHz' in m) rows.push(['snrAssessed', 'SNR assessed from',
+  if ('snrAssessedFromHz' in m) rows.push(['snrAssessed', 'SNR posuzováno od',
     Number.isFinite(m.snrAssessedFromHz) ? hz(m.snrAssessedFromHz) : UNAVAILABLE.NOT_MEASURED]);
-  if ('outputChainLimitHz' in m) rows.push(['chain', 'Output-chain limit',
-    m.outputChainLimitHz ? hz(m.outputChainLimitHz) : 'none reported']);
-  rows.push(['algorithm', 'Quality rules', a.algorithm || UNAVAILABLE.UNKNOWN]);
+  if ('outputChainLimitHz' in m) rows.push(['chain', 'Mez výstupního řetězce',
+    m.outputChainLimitHz ? hz(m.outputChainLimitHz) : 'nehlášena']);
+  rows.push(['algorithm', 'Pravidla kvality', a.algorithm || UNAVAILABLE.UNKNOWN]);
   return rows.map(([id, label, text]) => ({ id, label, text }));
 }

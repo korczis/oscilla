@@ -133,7 +133,7 @@ test('W7f route B: the input of a TEST CONTEXT result shown outside loopback is 
       constraints: MIC_A.constraints }]) {
       const { cmp, seam } = makeUi({ loopback: false });
       assert.equal(seam.showResult({ ...a.result, input }), true);
-      assert.equal(cmp.meas.shownTitle, 'TEST CONTEXT result', 'shown, and labelled');
+      assert.equal(cmp.meas.shownTitle, 'Výsledek TESTOVACÍHO KONTEXTU', 'shown, and labelled');
       assertNothingToBindTo(cmp, seam, 'after showResult() outside loopback');
     }
   });
@@ -249,11 +249,11 @@ test('P2 of #169: leaving a context drops the result and the noise-check snapsho
     const { a } = await fx();
     const { cmp, seam } = makeUi({ loopback: true });
     assert.equal(seam.showResult({ ...a.result }), true);
-    assert.equal(cmp.meas.shownTitle, 'TEST CONTEXT result');
+    assert.equal(cmp.meas.shownTitle, 'Výsledek TESTOVACÍHO KONTEXTU');
     assert.ok(cmp.meas.rta, 'the noise-check snapshot is in the RTA panel');
     // The same context again keeps it.
     assert.equal(seam.useLoopback(), true);
-    assert.equal(cmp.meas.shownTitle, 'TEST CONTEXT result');
+    assert.equal(cmp.meas.shownTitle, 'Výsledek TESTOVACÍHO KONTEXTU');
     assert.ok(cmp.meas.rta);
     // On the microphone nothing of TEST CONTEXT is left to read as a measurement.
     assert.equal(seam.useMicrophone(), true);
@@ -285,7 +285,7 @@ test('P2 of #169: the conditions field takes what Store accepts, with the TEST C
     cmp.measureClearLevelCalibration();
     cmp.meas.levelForm.conditions = 'x'.repeat(max + 1);
     assert.equal(cmp.measureSaveLevelCalibration(), false);
-    assert.match(cmp.meas.levelForm.error, new RegExp(`at most ${max} characters in TEST CONTEXT`));
+    assert.match(cmp.meas.levelForm.error, new RegExp(`v TESTOVACÍM KONTEXTU nejvýš ${max} znaků`));
     assert.equal(seam.levelCalibration, null);
   });
 
@@ -316,7 +316,7 @@ test('inject: a TEST CONTEXT result is shown and saved as one', async () => {
   const result = { ...a.result };
   assert.equal(seam.showResult(result), true);
   assert.equal(seam.result, result);
-  assert.equal(cmp.meas.shownTitle, 'TEST CONTEXT result');
+  assert.equal(cmp.meas.shownTitle, 'Výsledek TESTOVACÍHO KONTEXTU');
   assert.equal(cmp.meas.testContext, a.result.testContext.label);
   const id = await cmp.measureSave();
   assert.ok(id, 'saved');

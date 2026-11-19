@@ -154,10 +154,20 @@ test('B6: the logo opens the Playground, and says so', () => {
   const name = textOf(brand.attrs['aria-label']);
   assert.ok(contentOf(brand).split(' ').every((w) => name.includes(w)),
     `"${name}" keeps the visible text "${contentOf(brand)}" (WCAG 2.5.3)`);
-  // The name is the brand (a title surface of tests/unit/positioning-consistency.test.mjs); the
-  // description, shown on hover, says where the link goes.
+  // The name is the brand (a title surface of tests/unit/positioning-consistency.test.mjs), kept
+  // English with lang="en"; the description says where the link goes, in Czech (U120): a hidden
+  // span outside the link, so it takes the page's lang, read through aria-describedby.
   assert.equal(name, 'OSCILLA · Interactive Sound & Frequency Lab');
-  assert.equal(brand.attrs.title, 'Open the Playground', 'the description says where it goes');
+  assert.equal(brand.attrs.lang, 'en', 'the kept name is marked English');
+  assert.equal(brand.attrs.title, undefined, 'no title: the description is not a hover tooltip');
+  assert.equal(brand.attrs['aria-describedby'], 'osc-brand-desc');
+  const desc = TAGS.find((t) => t.attrs.id === 'osc-brand-desc');
+  assert.ok(desc && desc.tag === 'span' && 'hidden' in desc.attrs, 'the description is hidden');
+  assert.equal(contentOf(desc), 'Otevřít Playground', 'the description says where it goes');
+  assert.equal(desc.attrs.lang, undefined, 'it takes the page\'s lang (cs)');
+  const at = HTML.indexOf('data-osc="header.brand"');
+  assert.ok(HTML.indexOf('id="osc-brand-desc"') > HTML.indexOf('</a>', at),
+    'it is outside the lang="en" link');
   assert.equal(brand.attrs['x-bind'], 'homeLink()');
   const ui = app.createOscillaUi({ storedAnalysisTab: null });
   const calls = [];

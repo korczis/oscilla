@@ -113,7 +113,8 @@ const SAFETY = Object.freeze({
   stop: 'Escape nebo Zastavit zvuk okamžitě ukončí.',
   headphones: 'Vysoká výstupní úroveň: před použitím sluchátek ji snižte.',
   lowFrequency: 'Velmi nízké frekvence mohou rozkmitat reproduktor do velké výchylky a '
-    + 'zkreslení dřív, než jsou zřetelně slyšet; nezvyšujte úroveň, dokud je neuslyšíte.',
+    + 'zkreslení dřív, než jsou zřetelně slyšet; nezvyšujte úroveň jen proto, abyste je '
+    + 'uslyšeli.',
   highFrequency: 'Slabé vnímání velmi vysokých frekvencí neznamená slabý výstup; mikrofon a '
     + 'jeho kalibrace tam také mohou být slabé.',
 });
@@ -373,7 +374,7 @@ function primaryAction({ state, preflight, blockers, saved, expert, quality }) {
   const a = (id, label, enabled = true, reason = null) => ({ id, label, enabled, reason });
   switch (state) {
     case S.IDLE:
-      return expert ? a('measure', 'Měřit (nejdřív proběhne kontrola nastavení)')
+      return expert ? a('measure', 'Měřit (s kontrolou nastavení)')
         : a('preflight', 'Zkontrolovat nastavení');
     case S.PREFLIGHT:
     case S.NOISE_CHECK:

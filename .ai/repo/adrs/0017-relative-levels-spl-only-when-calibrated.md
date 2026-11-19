@@ -164,3 +164,5 @@ coordinating Claude session) — implemented as described; evidence: claims
 `spectrum-peak-accuracy`; rule `project.no-fake-science` v2; the refinements its resolution
 notes record (`tests/unit/v4-measurement-truth.test.mjs`, `tests/unit/v4-review-139.test.mjs`,
 `tests/unit/v4-seam-contract.test.mjs`).
+
+Since U115 (Q104) the caption is shown in Czech, with the meaning unchanged.

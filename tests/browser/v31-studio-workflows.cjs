@@ -828,7 +828,7 @@ function defineChecks(fx) {
         status: st && !st.hidden ? st.textContent : '',
         dialog: document.getElementById('osc-dlg-studio-library').open,
         model: JSON.stringify({ ...window.OSCILLA.studio.model, view: null }) };
-    }, ROW), (x) => x.text === 'Replace unsaved changes', 8000);
+    }, ROW), (x) => x.text === 'Nahradit neuložené změny', 8000);
     await page.evaluate(() => window.OSCILLA.app.closeModal('osc-dlg-studio-library'));
     // Leave nothing behind: the run and the project.
     await page.evaluate(async ({ run, pid }) => {
@@ -856,14 +856,14 @@ function defineChecks(fx) {
       // The focus target names the project and is not a button that replaces the graph.
       focusNamed: res.dialog.focus.tag === 'SUMMARY'
         && res.dialog.focus.label === `Connected records of ${project.name}`
-        && res.dialog.openLabel === `Open ${project.name}`,
+        && res.dialog.openLabel === `Otevřít ${project.name}`,
       linkRefused: res.refused.ws === 'studio' && res.refused.dialog === true
         && res.refused.links === 0 && /was not opened/.test(res.refused.status)
         && res.refused.alerts.some((t) => /Experiment not opened: .*no longer stored here/.test(t)),
       openAsks: res.unsaved.dispatched && res.unsaved.dirty === true && res.asked.dialog === true
         && res.asked.model === res.unsaved.before
-        && /^Replace the unsaved changes in Studio with /.test(res.asked.label)
-        && /Studio has unsaved changes/.test(res.asked.status),
+        && /^Nahradit neuložené změny ve Studiu projektem /.test(res.asked.label)
+        && /Studio má neuložené změny/.test(res.asked.status),
     }), ...res, unsaved: { ...res.unsaved, before: undefined },
     asked: { ...res.asked, model: undefined } };
   });
@@ -1038,7 +1038,7 @@ function defineChecks(fx) {
     await page.click(row('studio.saved.delete'));
     await page.waitForFunction((sel) => {
       const b = document.querySelector(sel);
-      return b && b.textContent === 'Confirm delete';
+      return b && b.textContent === 'Potvrdit smazání';
     }, row('studio.saved.delete'), { timeout: 15000 });
     await page.click(row('studio.saved.delete'));
     await H.until(() => page.evaluate(() => window.OSCILLA.studio.projectId), (v) => v === null);

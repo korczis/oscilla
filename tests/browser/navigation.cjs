@@ -73,7 +73,8 @@
 //                     timeline keys and the note on keyboard paths) and the global ones; no key
 //                     is listed twice in one view and a kbd holds keys only
 //   control-names     (H004) each control reaches what its name says: the logo, described as
-//                     "Open the Playground", opens it from Measure; the skip link names the workspace shown
+//                     "Otevřít Playground" (U120), opens it from Measure; the skip link names
+//                     the workspace shown
 //                     in the Playground, Measure and Studio and moves focus to the main region
 //                     that holds it; the header "?", named "Keyboard shortcuts", opens the dialog
 //                     of that title; the Export menu has no Import item, and More's "Import
@@ -639,12 +640,12 @@ function defineChecks() {
     return { ...H.verdict({
       idleClean: idle.listeners === 0 && !idle.armed && !idleIndicator,
       completeArmed: done.listeners === 1 && done.armed && done.lost.length === 1
-        && /^measure: A completed measurement that is not saved$/.test(done.lost[0]),
+        && /^measure: Dokončené měření, které není uložené$/.test(done.lost[0]),
       indicator: indicator && /Zatím neuloženo/.test(hint),
       unsavedAsks: unsavedReload.dialog === 'beforeunload' && unsavedReload.stayed,
       savedDisarmed: saved.listeners === 0 && !saved.armed && !savedIndicator,
       calibrationArmed: calibrated === true && withCal.listeners === 1
-        && withCal.lost.some((x) => /^measure: The level calibration/.test(x)),
+        && withCal.lost.some((x) => /^measure: Kalibrace úrovně/.test(x)),
       clearedDisarmed: cleared.listeners === 0 && !cleared.armed,
     }), idle, done, hint, unsavedReload, saved, withCal: withCal.lost, cleared: cleared.lost };
   });
@@ -995,11 +996,11 @@ function defineChecks() {
     const has = (s, re) => s.lost.some((x) => re.test(x));
     return { ...H.verdict({
       savedClean: !saved.armed && saved.listeners === 0,
-      typedArmed: typed.armed && typed.listeners === 1 && has(typed, /^measure: A name or notes/)
+      typedArmed: typed.armed && typed.listeners === 1 && has(typed, /^measure: Název nebo poznámky/)
         && badge === 'neuložený název nebo poznámky',
       updatedClean: !updated.armed && updated.listeners === 0,
-      failedStaysArmed: failedUpdate.armed && has(failedUpdate, /^measure: A name or notes/)
-        && failedUpdate.alerts.includes('Experiment name and notes not updated'),
+      failedStaysArmed: failedUpdate.armed && has(failedUpdate, /^measure: Název nebo poznámky/)
+        && failedUpdate.alerts.includes('Název a poznámky experimentu nebyly aktualizovány'),
       droppedClean: !dropped.armed,
       renameArmed: renaming.armed && has(renaming, /^experiments: A rename being typed$/),
       renameCancelled: !cancelled.armed && cancelled.listeners === 0,
@@ -1472,8 +1473,15 @@ function defineChecks() {
     }, sel);
     // B6: the logo goes home.
     const BRAND = '[data-osc="header.brand"]'; // the Pro navbar's logo (F002)
+    // U120: the description is a hidden Czech span outside the lang="en" link (aria-describedby).
     const logo = { name: await nameOf(BRAND),
-      title: await page.getAttribute(BRAND, 'title') };
+      title: await page.getAttribute(BRAND, 'title'),
+      description: await page.evaluate((s) => {
+      const el = document.querySelector(s);
+      const d = el && document.getElementById(el.getAttribute('aria-describedby') || '');
+      return d ? { text: d.textContent.trim(), hidden: d.hidden, inside: el.contains(d),
+        lang: d.closest('[lang]')?.getAttribute('lang') ?? null } : null;
+    }, BRAND) };
     await page.click(BRAND);
     logo.reached = await reach(() => page.evaluate(() => (window.OSCILLA.app.workspace
       === 'playground' ? new URLSearchParams(window.location.hash.slice(1)).get('m') : null)),
@@ -1531,7 +1539,9 @@ function defineChecks() {
     const picker = chooser ? await chooser.element().evaluate((x) => x.id) : null;
     await page.close();
     return { ...H.verdict({
-      logoNamed: /^OSCILLA · /.test(logo.name || '') && logo.title === 'Open the Playground',
+      logoNamed: /^OSCILLA · /.test(logo.name || '') && logo.title === null
+        && logo.description?.text === 'Otevřít Playground' && logo.description.hidden
+        && !logo.description.inside && logo.description.lang === 'cs',
       logoOpensPlayground: logo.reached === 'playground',
       skipNamed: skip.playground.name === 'Přeskočit na hlavní obsah: Playground'
         && skip.measure.name === 'Přeskočit na hlavní obsah: Měření'

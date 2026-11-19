@@ -4,6 +4,7 @@ slug: release-engineering
 order: 11
 priority: p0
 problem: "V2 is public but its version has several authorities, the deployed page cannot prove which commit produced it, a Pages mismatch only warns, visual and specialised suites are not gated, and Majordomus does not model the product."
+current_state: "Paused on 2026-11-18 by the plan triage the owner approved in bulk (Q112: 'schvaluji vse', 2026-11-18T02:27Z, Claude Code session 980e22ee-d9d4-4dd0-8318-8b727f127ce9, oscilla-e5; triage derived from origin/main 4682eea4): release engineering runs as operations; the landed R032, R034, R035 and R050 are still stamped, and Q108/R054 lose their inverted edge. The milestone schema stores no status, so the pause is this recorded hold, not a field: no new slice of it is started until a later plan change lifts the hold; work already in flight lands, and landed issues are still stamped."
 outcome: "One canonical product version; every public page proves its version, source digest and commit; deployment mismatch is fatal; the release gate runs every authoritative suite including visual; Majordomus answers what OSCILLA is and why; v2.0.0 tagged, released and verified at the public URL."
 acceptance_criteria:
   - "One canonical product version; every public page proves its version, source digest and commit; deployment mismatch is fatal; the release gate runs every authoritative suite including visual; Majordomus answers what OSCILLA is and why; v2.0.0 tagged, released and verified at the public URL."
@@ -14,7 +15,7 @@ validation:
 evidence_required:
   - "milestone_verified"
 created_at: 2026-10-02
-updated_at: 2026-10-02T13:46:50Z
+updated_at: 2026-11-18
 evidence:
   - covers: milestone_verified
     type: ci

@@ -1,5 +1,5 @@
 id: H010
-milestone: M079
+milestone: "M090"
 serves:
 - "v31-studio#click-free-live-edit"
 title: "The Inspector waveform edit of the Basic Synth is heard to 3 s, beside its no-edit and Level-edit legs"

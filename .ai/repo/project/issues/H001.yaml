@@ -1,5 +1,5 @@
 id: H001
-milestone: M079
+milestone: "M090"
 serves:
   - "v31-studio#click-free-live-edit"
 title: "A waveform change in the Studio Inspector while playing keeps the oscillator sounding"

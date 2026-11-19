@@ -3,7 +3,9 @@ title: "Audio-band signal lab: readable spectrogram, linked scrolling spectrogra
 slug: audio-band-signal-lab-readable-spectrogram-linked-scrolling
 order: 60
 priority: p2
+superseded_by: "M062"
 problem: "The spectrogram has no readout and no unsmoothed feed (analysis/spectrogram.js rowFrequency is unused); there is no linked spectrum and scrolling spectrogram, no analytic-signal demodulation and no heterodyne template."
+current_state: "Merged into M062 on 2026-11-18 by the plan triage the owner approved in bulk (Q112: 'schvaluji vse', 2026-11-18T02:27Z, Claude Code session 980e22ee-d9d4-4dd0-8318-8b727f127ce9, oscilla-e5; triage derived from origin/main 4682eea4): 2 done and 1 blocked on the spectrogram line, none ready: the tail joins the charts line. Its open issues (K025) moved to M062, its done and cancelled issues stay here as history, and intent audio-band-signal-lab now names M062 as well, so their serves entries still hold. M062's acceptance criteria carry what is left of this outcome. Undo: remove superseded_by, move the issues back and drop M062 from the intent."
 outcome: "SDR-style views of audio-band digital signals, each stated as such, with figures checked against known test-signal plans (intent audio-band-signal-lab)."
 acceptance_criteria:
   - "K015, K024 and K025 are done with their evidence; npm run release-gate passes at the last one."
@@ -17,4 +19,4 @@ risks:
   - "K025 waits on F002 of #251 and on K053 of M062 (the chart cursor bus and census), and through K053 and K028 on the charts owner decisions Q014 and Q016 (M063); K029 and K033 of M062 follow K015 and K025; K015's validation runs the tests named K015 in tests/unit/analysis-spectrogram.test.mjs."
   - "Demodulator, Test Signal and I/Q constellation nodes are Wave 3 and not issued."
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-18

@@ -289,7 +289,7 @@ test('live RTA view: fixed axis, live badges, under-resolved bands, no SPL uncal
   assert.deepEqual(v.axes.y.range, [...LIVE_RTA_Y_RANGE.bands]);
   assert.ok(v.badges.includes('LIVE') && v.badges.includes('UNCALIBRATED'));
   assert.ok(v.bars.filter((b) => b.underResolved).length > 0, 'low bands span < 2 bins');
-  assert.match(v.summary, /^RTA, 1\/3 OCTAVE, 31 bands, FAST .*highest band 1 kHz at −23\.0 dB/);
+  assert.match(v.summary, /^RTA, 1\/3 OKTÁVY, 31 pásem, FAST .*nejvyšší pásmo 1 kHz na −23\.0 dB/);
   assert.doesNotMatch(JSON.stringify(v), /SPL/);
   live.setMode('fft');
   live.push(tones(sr, N, [{ f: 1000, a: 0.1 }]), 0.016);
@@ -297,7 +297,7 @@ test('live RTA view: fixed axis, live badges, under-resolved bands, no SPL uncal
   assert.equal(fv.mode, 'fft');
   assert.deepEqual(fv.axes.y.range, [...LIVE_RTA_Y_RANGE.fft]);
   assert.ok(fv.badges.includes('UNCALIBRATED (frequency)'));
-  assert.match(fv.notes.join(' '), /mean-square power per bin/);
+  assert.match(fv.notes.join(' '), /střední kvadratický výkon na bin/);
   assert.doesNotMatch(JSON.stringify(fv), /SPL/);
   // Calibrated: dB SPL, the axis shifted by the offset, the corrected peaks drawn.
   const cal = createLiveRta({ sampleRate: sr, mode: 'third', averaging: 'fast',
@@ -346,8 +346,8 @@ test('live RTA: expert FFT size and window keep the band scale; resolution follo
       const fft = createLiveRta({ sampleRate: sr, fftSize, window, mode: 'fft',
         averaging: 'instant' });
       const v = buildRtaView(fft.viewInput());
-      assert.match(v.notes[0], window === 'hann' ? /Hann window.*1\.8-3\.2 dB/
-        : /Blackman-Harris window.*3\.0-3\.9 dB/);
+      assert.match(v.notes[0], window === 'hann' ? /okno Hann.*1\.8-3\.2 dB/
+        : /okno Blackman-Harris.*3\.0-3\.9 dB/);
     }
     // V382: under-resolved below underResolvedBins(window) (Hann 6): fewer as N grows, and at
     // 32768 points only the third-octave bands below 40 Hz (about 3 bins of 1.46 Hz)
@@ -465,7 +465,7 @@ test('V383: the live view text shows the same SPL as the drawn frame under a pro
       const i = v.bars.findIndex((b) => b.nominal === 1000);
       assert.ok(Math.abs(f.values[i] - 94) < 1e-6, `drawn ${f.values[i]}`);
       assert.match(v.bars[i].text, /^94\.0 dB SPL/, v.bars[i].text);
-      assert.match(v.summary, /1 kHz at 94\.0 dB SPL/, v.summary);
+      assert.match(v.summary, /1 kHz na 94\.0 dB SPL/, v.summary);
     } else {
       // FFT: the strongest bin reads the frame's value, drawn and in text alike
       const k = f.values.indexOf(Math.max(...f.values));

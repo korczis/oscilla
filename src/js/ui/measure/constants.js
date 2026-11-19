@@ -26,16 +26,16 @@ export function rtaLiveAvailability(available) {
 
 /** Result tabs (role=tab via the shell's tab binding is not used: these are measure-local). */
 export const MEASURE_RESULT_TABS = Object.freeze([
-  Object.freeze({ id: 'response', label: 'Frequency response' }),
-  Object.freeze({ id: 'ir', label: 'Impulse response' }),
+  Object.freeze({ id: 'response', label: 'Frekvenční odezva' }),
+  Object.freeze({ id: 'ir', label: 'Impulsní odezva' }),
   Object.freeze({ id: 'rta', label: 'RTA' }),
 ]);
 
 /** IR zoom spans in ms re the direct peak (view only; the IR is kept whole). */
 export const IR_SPANS = Object.freeze([
-  Object.freeze({ id: 'direct', label: 'Direct', range: Object.freeze([-2, 20]) }),
-  Object.freeze({ id: 'early', label: 'Early', range: Object.freeze([-5, 200]) }),
-  Object.freeze({ id: 'full', label: 'Full', range: null }),
+  Object.freeze({ id: 'direct', label: 'Přímá', range: Object.freeze([-2, 20]) }),
+  Object.freeze({ id: 'early', label: 'Raná', range: Object.freeze([-5, 200]) }),
+  Object.freeze({ id: 'full', label: 'Celá', range: null }),
 ]);
 
 /** RTA modes (segmented choice of the RTA tab; spec §44). */
@@ -44,7 +44,7 @@ export const RTA_MODE_CHOICES = Object.freeze(['fft', 'octave', 'third'].map((id
 
 /** RTA averaging (segmented choice; time constants from rta.js RTA_MODES, spec §49). */
 export const RTA_AVERAGING_CHOICES = Object.freeze(['instant', 'fast', 'slow'].map((id) => Object
-  .freeze({ id, label: id === 'instant' ? 'Instant' : id === 'fast' ? 'Fast' : 'Slow',
+  .freeze({ id, label: id === 'instant' ? 'Okamžité' : id === 'fast' ? 'Rychlé' : 'Pomalé',
     detail: averagingLabel({ mode: id }) })));
 
 /** Live RTA view-model rebuild interval (summary, badges, readout text); bars repaint per frame. */
@@ -52,8 +52,8 @@ export const LIVE_VIEW_INTERVAL_MS = 250;
 
 /** Response chart quantities (phase is an expert view, m3). */
 export const RESPONSE_QUANTITIES = Object.freeze([
-  Object.freeze({ id: 'magnitude', label: 'Magnitude' }),
-  Object.freeze({ id: 'phase', label: 'Phase' }),
+  Object.freeze({ id: 'magnitude', label: 'Velikost' }),
+  Object.freeze({ id: 'phase', label: 'Fáze' }),
 ]);
 
 /** Window region shown on the IR chart (view only) when enabled, ms re the direct peak. */

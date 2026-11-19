@@ -10,6 +10,7 @@ invariants:
 milestones:
   - "M098"
   - "M099"
+  - "M122"
 satisfaction:
   - id: "readme-front-page"
     criterion: "README carries the tagline after the sentence, an original docs/assets illustration labelled not a measurement with alt text, a native mermaid flowchart whose edges end on declared nodes, and landing deep links that route"
@@ -56,4 +57,4 @@ non_goals:
   - "Bundling a visualization engine because it was named, or a second mutable Studio graph"
   - "Rewriting the positioning sentence or the tagline (Q002)"
 created_at: 2026-10-30
-updated_at: 2026-11-09
+updated_at: 2026-11-18

@@ -60,9 +60,8 @@ import {
 } from '../audio/patterns.js';
 import { micErrorMessage, MIC_PRIVACY_NOTICE } from '../audio/microphone.js';
 import { OWNER, playOwnerOf, requestMasterLevel } from './output-bus.js';
-import {
-  BUILTIN_PRESETS, PRESET_CATEGORIES, describeConfig, presetMaxFrequency,
-} from '../data/presets.js';
+import { describeConfig, presetMaxFrequency } from '../data/presets.js';
+import { CATEGORIES_SHOWN, historyTimeShown, presetsShown } from '../data/presets-display.js';
 import { LEARN_TOPICS } from '../data/learn.js';
 import { presetLoadedNotice } from './preset-notice.js';
 import { statusPlayHint, statusPlayTitle } from './play-hints.js';
@@ -132,7 +131,7 @@ export function createInstrument(deps = {}) {
     // The Czech display names (Q104); the V1 labels above stay the frozen data.
     WAVEFORM_NAMES, PATTERN_NAMES, PATTERN_DESCS, PATTERN_GROUP_NAMES, RANGE_NAMES,
     shownText, // U114: a frozen V1 sentence as the page shows it
-    PRESET_CATEGORIES, LEARN_TOPICS, SAFETY_LIMIT_OPTIONS, APP_VERSION,
+    PRESET_CATEGORIES: CATEGORIES_SHOWN, LEARN_TOPICS, SAFETY_LIMIT_OPTIONS, APP_VERSION, // U116
     WAVE_PATHS: {
       sine: 'M1 8 Q5 0 9 8 T17 8 T25 8 T31 4',
       triangle: 'M1 8 L5 2 L13 14 L21 2 L29 14 L31 11',
@@ -924,15 +923,8 @@ export function createInstrument(deps = {}) {
 
 
     // ============================== presets
-    // V1: oscillaApp: presetsFor (index.html@a7b7a23)
-    presetsFor(cat) {
-      if (cat === 'custom') {
-        return this.customPresets.map((p) => ({ id: p.id, cat: 'custom', name: p.name, custom: true,
-          desc: `Saved ${new Date(p.created).toLocaleString()}`, params: this.describeConfig(p.cfg),
-          cfg: p.cfg, ...(p.labs ? { labs: p.labs } : {}) }));
-      }
-      return BUILTIN_PRESETS.filter((p) => p.cat === cat);
-    },
+    // V1: oscillaApp: presetsFor (index.html@a7b7a23), in Czech since U116
+    presetsFor(cat) { return presetsShown(cat, this.customPresets); },
     // V1: oscillaApp.describeConfig, presetMaxFrequency -> data/presets.js; presetDisabled,
     //   presetDisabledReason -> safety.js (index.html@a7b7a23)
     describeConfig(cfg) { return describeConfig(cfg); },
@@ -1053,7 +1045,7 @@ export function createInstrument(deps = {}) {
       this.history = [];
       sessionStore.remove(STORAGE_KEYS.history);
     },
-    historyTime(ts) { return new Date(ts).toLocaleTimeString(); },
+    historyTime(ts) { return historyTimeShown(ts); },
     historyFreqs(h) { return h.freqs.slice(0, 4).map((f) => formatFrequency(f)).join(', ') + (h.freqs.length > 4 ? ' …' : ''); },
 
 

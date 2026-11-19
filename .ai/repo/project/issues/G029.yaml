@@ -11,7 +11,7 @@ objective: "Lands as feat(ui), the first slice of G027 and G028. src/js/ui/model
 why: "Owner order of 2026-11-05 (in session oscilla-21), verbatim: \"must be connected with pannels, asdr envelope modeler, filter modeler / integrated into studio, sequencer ... / one way - dry - everything bus connected + integrated + mj way / deduplicate functionality / components - modularize / generalize - infer / derive\". Settled among the LLM sessions without the owner (the owner's order of the same day): af's critique (binding, not a parameter layer; the V1 voice transitional; computed vs live labelled), 26's answers (the store as the only write path through a gesture; bind on the store's selection change) and dev-53's (the sequencer target after K189 slice 3)."
 depends_on:
   - "G021"
-  - "K105"
+  - "N001"
 scope:
   - "src/js/ui/modelers"
   - "src/js/labs/envelope.js"
@@ -37,4 +37,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-05
-updated_at: 2026-11-05
+updated_at: 2026-11-18

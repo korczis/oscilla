@@ -24,7 +24,9 @@ import { chartTheme, withAlpha, uplotAxis, canvasFont, observeSize } from './cha
 import { onFrame } from './frame-loop.js';
 import { octaveCMarkers, layoutMarkerLabels } from '../visualization/spectrum-data.js';
 
-export const SPECTRUM_Y_LABEL = 'RELATIVE LEVEL (dBFS-like, uncalibrated)';
+// ADR 0017's caption, shown in Czech since U115 (Q104) with its meaning unchanged: relative,
+// dBFS-like (never a bare dBFS), uncalibrated. Nothing exports or stores it.
+export const SPECTRUM_Y_LABEL = 'RELATIVNÍ ÚROVEŇ (obdoba dBFS, nekalibrováno)';
 
 const DEFAULTS = {
   mode: 'single', // 'single' | 'dual'

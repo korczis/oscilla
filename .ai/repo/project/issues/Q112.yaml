@@ -1,0 +1,32 @@
+id: Q112
+milestone: M046
+serves:
+  - "engineering-integrity#done-after-evidence"
+title: "Owner decision: the plan triage of 2026-11-17 is approved in bulk ('schvaluji vse')"
+slug: owner-decision-plan-triage-approved-in-bulk
+priority: p1
+profile: routine
+owner: "repository owner"
+objective: "Record the owner's bulk approval of the plan triage that Q110 put to the owner, and the plan change that applies it. Asked by oscilla-e5 (Claude Code session 980e22ee-d9d4-4dd0-8318-8b727f127ce9) on the private claude.ai page https://claude.ai/artifact/2UwgnkbiTYKw1Z5ePunty1 ('OSCILLA triáž plánu', heading 'Triáž plánu k hromadnému schválení'), generated from the session's triage.json over origin/main 4682eea4. The page's question, verbatim (section 'Jak schválit'): 'Odpověz v chatu: schvaluji vše, nebo schvaluji kromě S084, K105, případně po sekcích (razítka, zrušení, sloučení, milníky, intenty, duplicity).' Options, as the page offered them: 'schvaluji vše' (approve every item), 'schvaluji kromě <ids>' (approve all but the named items), or approval by section ('razítka', 'zrušení', 'sloučení', 'milníky', 'intenty', 'duplicity'). Answer, verbatim, in the chat at 2026-11-18T02:27Z: 'schvaluji vse'. Meaning: every item of the triage is approved with no exception: the 79 done stamps (each only where its criteria hold on main), the cancellation of S083 and S084, the five duplicate merges (K115 into W007, K085 into V504, N010 into G014, K105 into N001, F003's Synthesis and Sequencer parts into U069 and U074), the rewiring of L001, Q108 and Q094, the milestone actions (six kept active, eleven and M046 paused, six merged into their targets, M005 closed) and the three intents marked satisfied."
+why: "Q110 (owner decisions of 2026-11-17) holds that the cancel and merge of plan items follow the owner's bulk approval of the triage, never before it; this record is that approval, kept in the repository in the session that received it (owner answers live in the repository)."
+current_state: "Decided 2026-11-18T02:27Z: 'schvaluji vse'. Applied by the chore(plan) pull request that adds this record: S083 and S084 cancelled, the five merges, the three rewires, the milestone pauses (current_state holds, the milestone schema has no pause field), merges (superseded_by) and the closing of M005 (cancelled), the K153 helpRows gap, and the done stamps of the decided owner questions whose records quote the owner's answer verbatim (Q104, Q106, Q109). The three intents cannot be marked satisfied by a field: the intent schema (majordomus.intent/v1) stores no status, satisfaction is derived from the evidence ledger, and a criterion with command evidence is never counted as met, so they are left as they are. The landed-but-unmet stamps are oscilla-d9's and train B is oscilla-43's, outside this record."
+scope:
+  - ".ai/repo/project"
+depends_on: []
+acceptance_criteria:
+  - "The owner's answer is recorded as evidence (covers owner_decision) quoting the question, the options and the answer with the date, time and session id."
+  - "Every plan change made under it names Q112 in its current_state, and every issue it cancels or merges has each of its dependants rewired, so majordomus plan validate and majordomus intent validate report no failure."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: '2026-11-18'
+updated_at: 2026-11-18T03:26:49Z
+evidence:
+  - covers: "owner_decision"
+    type: manual
+    command: "Owner reply in the chat of Claude Code session 980e22ee-d9d4-4dd0-8318-8b727f127ce9 (oscilla-e5), 2026-11-18T02:27Z, to the page https://claude.ai/artifact/2UwgnkbiTYKw1Z5ePunty1"
+    result: "Owner decision of 2026-11-18T02:27Z, session 980e22ee-d9d4-4dd0-8318-8b727f127ce9 (oscilla-e5). Question (verbatim, the page 'Triáž plánu k hromadnému schválení', section 'Jak schválit'): 'Odpověz v chatu: schvaluji vše, nebo schvaluji kromě S084, K105, případně po sekcích (razítka, zrušení, sloučení, milníky, intenty, duplicity).' Options: 'schvaluji vše', 'schvaluji kromě <ids>', or approval by section. Answer (verbatim): 'schvaluji vse'. Every item of the triage (generated from origin/main 4682eea4) is approved with no exception."
+    artifact: "https://claude.ai/artifact/2UwgnkbiTYKw1Z5ePunty1"
+    commit: 8e087873968df0438165b474684d6dee7ac7e5ff
+    recorded_at: 2026-11-18T03:26:49Z

@@ -12,6 +12,7 @@ invariants:
   - "The AudioEngine stays the only audio lifecycle owner and the UI is Flowbite Pro with the ratchet only falling (project.audio-engine-discipline, project.ui-uses-flowbite-pro)"
 milestones:
   - "M060"
+  - "M062"
 satisfaction:
   - id: "spectrogram-readout"
     criterion: "Hovering the spectrogram reads frequency and relative dB drawn on the canvas, the readout bin matches a synthetic tone within +-1 bin, the label says relative dB, and on synthetic frames the unsmoothed feed from readTime() smears a transient less than the 0.55-smoothing feed"
@@ -44,4 +45,4 @@ non_goals:
   - "A single-sideband frequency shift: it needs an AudioWorklet (ADR 0026) and is out of scope; the heterodyne template is ring modulation with both sidebands"
   - "Absolute levels in dBm or field strength, and any bandwidth beyond the context's Nyquist frequency"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-18

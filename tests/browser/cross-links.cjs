@@ -14,8 +14,8 @@
 //   labels          (B6, B7, B8) the skip link says "Skip to main content: Playground" (H004
 //                   names the workspace shown); the "?" button is
 //                   named "Keyboard shortcuts" and opens that dialog; the logo keeps the
-//                   product's name, its title says "Open the Playground" (H004), and it goes to the
-//                   Playground from another workspace, Back returns
+//                   product's name, its description says "Otevřít Playground" (H004, U120),
+//                   and it goes to the Playground from another workspace, Back returns
 //   filter-toggle   (B1) the Filter Lab ⤢ button is not shown on the lighter Playground (#278);
 //                   in Filter Lab, opened through the navigation, it is named "Back to the
 //                   Playground" and returns to the Playground; Back reopens Filter Lab
@@ -41,7 +41,7 @@
 //                   focused in the same task; two frames later Back still has focus (on the
 //                   code before the fix the graph viewport took it and Enter went there)
 //   learn-tool      (P5, one-way link 2) a Learn topic's "Open <tool>" opens the tool; its
-//                   notice carries "Back to the lesson: <topic>", which returns to Learn with
+//                   notice carries "Zpět na lekci: <topic>", which returns to Learn with
 //                   the topic current; a topic without a tool has no link; A1: the topics the
 //                   page audit found unlinked (Nyquist, AM, Logarithmic perception, Ultrasound)
 //                   link to theirs
@@ -100,14 +100,14 @@ const ACTION_NOTICE_MS = 15000;
 const INPUTS = ['pointer', 'keyboard', 'touch'];
 
 // [data-osc, the workspace that shows it, Studio template id, template title, Back label, the
-// link's text when it is not "Open <title> in Studio" (G013: the Sequencer's row is Czech)]
+// link's text when it is not "Otevřít šablonu <title> ve Studiu" (U118: one fallback)]
 const LAB_STUDIO = [
   ['filter.toStudio', 'filter', 'filter-automation', 'Filter Automation', 'Zpět na Filtry'],
   ['envelope.toStudio', 'synthesis', 'subtractive-synth', 'Subtractive Synth',
     'Zpět na Syntézu'],
   ['dual.toStudio', 'synthesis', 'stereo-beat', 'Stereo Beat', 'Zpět na Syntézu'],
   ['seq.toStudioTemplate', 'sequencer', 'sweep-sequence', 'Sweep Sequence',
-    'Zpět na Sekvencer', 'Šablona Sweep Sequence ve Studiu'],
+    'Zpět na Sekvencer'],
   ['measure.toStudio', 'measure', 'measurement-sweep', 'Measurement Sweep', 'Zpět na Měření'],
 ];
 
@@ -242,6 +242,8 @@ const H = {
     return {
       label: el.getAttribute('aria-label'),
       title: el.getAttribute('title'),
+      description: (document.getElementById(el.getAttribute('aria-describedby') || '')
+        || { textContent: '' }).textContent.trim() || null,
       text: el.textContent.replace(/\s+/g, ' ').trim(),
       href: el.getAttribute('href'),
       shown: el.getClientRects().length > 0,
@@ -303,7 +305,7 @@ async function runLeg(name, origin) {
         skip && skip.text === 'Přeskočit na hlavní obsah: Playground'
         && help && help.label === 'Klávesové zkratky' && help.title === 'Klávesové zkratky'
         && brand && brand.href === '#m=playground' && /OSCILLA/.test(brand.label)
-        && brand.title === 'Open the Playground',
+        && brand.title === null && brand.description === 'Otevřít Playground',
         JSON.stringify({ skip, help, brand }));
       const wrong = [];
       for (const input of INPUTS) {
@@ -447,7 +449,7 @@ async function runLeg(name, origin) {
         await H.setWorkspace(page, from);
         const link = await H.name(page, sel);
         if (!link || link.href !== `#m=studio&st=${template}`
-          || link.text !== (text || `Open ${title} in Studio`)) {
+          || link.text !== (text || `Otevřít šablonu ${title} ve Studiu`)) {
           wrong.push(`${osc}: ${JSON.stringify(link)}`);
         }
         const s = await H.roundTrip(page, { label: osc, from, to: 'studio', selector: sel, input,
@@ -606,9 +608,10 @@ async function runLeg(name, origin) {
       if (withTool.length < 5 || withTool.length === tools.length) {
         wrong.push(`tool links on ${withTool.length} of ${tools.length} topics`);
       }
-      const cases = [['Harmonics', 'analyzer'], ['Beating', 'synthesis'],
-        ['Speaker limitations', 'measure'], ['Nyquist limit', 'analyzer'], ['AM', 'synth'],
-        ['Logarithmic perception', 'measure'], ['Ultrasound', 'compare']];
+      // The card titles as the page shows them, in Czech since U116 (data/learn-display.js).
+      const cases = [['Harmonické', 'analyzer'], ['Zázněje', 'synthesis'],
+        ['Omezení reproduktorů', 'measure'], ['Nyquistův limit', 'analyzer'], ['AM', 'synth'],
+        ['Logaritmické vnímání', 'measure'], ['Ultrazvuk', 'compare']];
       for (let k = 0; k < cases.length; k += 1) {
         const [topic, ws] = cases[k];
         const input = INPUTS[k % INPUTS.length];
@@ -627,7 +630,7 @@ async function runLeg(name, origin) {
           const a = document.querySelector('[data-osc="alert.action"]');
           return a && a.getClientRects().length ? a.textContent.trim() : null;
         }), { ms: NAV_MS, what: `${topic}: the notice offers the way back` }).catch(() => null);
-        if (action !== `Back to the lesson: ${topic}`) {
+        if (action !== `Zpět na lekci: ${topic}`) {
           wrong.push(`${topic}: notice action ${JSON.stringify(action)}`);
           continue;
         }
@@ -663,7 +666,7 @@ async function runLeg(name, origin) {
       const wrong = [];
       for (const input of INPUTS) {
         await H.setWorkspace(page, 'learn');
-        await H.activate(page, '#osc-view-learn li[data-topic]:has(> h3:text-is("Frequency")) '
+        await H.activate(page, '#osc-view-learn li[data-topic]:has(> h3:text-is("Frekvence")) '
           + '[data-osc="learn.demo"]', input);
         const s = await H.until(page, 'playground', (x) => x.workspace === 'playground',
           `Demo (${input}) opens the Playground`);
@@ -675,7 +678,7 @@ async function runLeg(name, origin) {
           const a = document.querySelector('[data-osc="alert.action"]');
           return a && a.getClientRects().length ? a.textContent.trim() : null;
         }), { ms: NAV_MS, what: 'the demo notice offers the way back' }).catch(() => null);
-        if (!action || !/^Back to the lesson: /.test(action)) {
+        if (action !== 'Zpět na lekci: Frekvence') {
           wrong.push(`${input}: notice action ${JSON.stringify(action)}`);
           continue;
         }
@@ -688,7 +691,7 @@ async function runLeg(name, origin) {
       // The notices are in flow: one that never closed would push the page down until
       // dismissed. Untouched (focus on Hold to Play, the pointer away), it closes on its own.
       await H.setWorkspace(page, 'learn');
-      await H.activate(page, '#osc-view-learn li[data-topic]:has(> h3:text-is("Frequency")) '
+      await H.activate(page, '#osc-view-learn li[data-topic]:has(> h3:text-is("Frekvence")) '
         + '[data-osc="learn.demo"]', 'keyboard');
       const offered = await until(() => page.evaluate(() =>
         !!document.querySelector('[data-osc="alert.action"]')),
