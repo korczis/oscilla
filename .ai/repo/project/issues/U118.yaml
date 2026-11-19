@@ -41,7 +41,7 @@ evidence:
   - covers: "verified"
     type: ci
     command: "npm test; node tests/browser/cross-links.cjs; node tests/browser/v31-studio-workflows.cjs"
-    result: "Landed by PR 613 (e2993b14, oscilla-c3's review and legs OK), released in v3.41.7; its last AC1 gap, the header brand's English title, closed by U120 (PR 625, c22e42f1), released in v3.41.9 (e6f50a0e). Re-checked on e6f50a0e: no 'Open … in Studio' or 'Open the …' action-link text and no title='Open the Playground' in src/index.html or src/js; the action links read 'Otevřít šablonu … ve Studiu' and 'Otevřít Synth' from their two fallbacks; AC2-AC4 held as oscilla-43 recorded on 0cb38ae3."
+    result: "Landed by PR 613 (e2993b14, oscilla-c3's review and legs OK), released in v3.41.7; its last AC1 gap, the header brand's English title, closed by U120 (PR 625, c22e42f1), released in v3.41.9 (e6f50a0e). Re-checked on e6f50a0e: no 'Open … in Studio' or 'Open the …' action-link text and no title='Open the Playground' in src/index.html or src/js; the action links read 'Otevřít šablonu … ve Studiu' and 'Otevřít Synth' from their two fallbacks; AC2-AC4 held as oscilla-43 recorded on 0cb38ae3. Review: the base program found no guarded path in PR 613 (digest e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855), so no verdict needed; oscilla-c3's read and legs OK stand instead."
     artifact: ".ai/repo/releases/v3.41.9.yaml"
     commit: e6f50a0e8d2dcb96b5a3b00698ed800843aa7075
     recorded_at: 2026-11-19T16:57:36Z
