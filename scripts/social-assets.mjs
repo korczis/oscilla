@@ -31,9 +31,15 @@ export const SITE_URL = 'https://korczis.github.io/oscilla/';
 export const OG_WIDTH = 1200;
 export const OG_HEIGHT = 630;
 const TITLE = 'OSCILLA · Interactive Sound & Frequency Lab';
-// The positioning sentence Q002 chose; tests/unit/positioning-consistency.test.mjs holds every
-// self-description to it.
-export const DESCRIPTION = 'A zero-install, scientifically honest acoustic laboratory in your '
+// The positioning sentence. Q002 chose it in English (DESCRIPTION_EN: the README's opening line
+// and package.json's description, developer surfaces); Q113 (an LLM decision of oscilla-0b,
+// oscilla-c3 and oscilla-43 under Q090, for Q104) renders it in Czech for the app's own
+// surfaces (DESCRIPTION: the first screen's h1, the About lede, the meta, og and twitter
+// descriptions). tests/unit/positioning-consistency.test.mjs holds each surface to its sentence.
+export const DESCRIPTION = 'Vědecky poctivá akustická laboratoř v prohlížeči bez instalace: '
+  + 'generujte, měřte a opakujte zvukové experimenty a zjistěte, nakolik lze kterému výsledku '
+  + 'věřit.';
+export const DESCRIPTION_EN = 'A zero-install, scientifically honest acoustic laboratory in your '
   + 'browser: generate, measure and reproduce sound experiments, and know how far each result '
   + 'can be trusted.';
 const IMAGE_ALT = 'The OSCILLA laboratory playing a tone, with its waveform, spectrum and '
@@ -236,7 +242,7 @@ export function socialBlock(touchIconPng) {
     `<meta property="og:title" content="${esc(TITLE)}">`,
     `<meta property="og:description" content="${esc(DESCRIPTION)}">`,
     `<meta property="og:url" content="${SITE_URL}">`,
-    '<meta property="og:locale" content="en_US">',
+    '<meta property="og:locale" content="cs_CZ">',
     `<meta property="og:image" content="${image}">`,
     '<meta property="og:image:type" content="image/png">',
     `<meta property="og:image:width" content="${OG_WIDTH}">`,

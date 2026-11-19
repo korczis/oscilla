@@ -1,0 +1,29 @@
+id: K254
+milestone: M064
+serves:
+- "connected-instrument#performance-pad"
+title: "Both performance pads on the phone as the criterion states, and pad R's arrow keys proven"
+slug: both-performance-pads-on-the-phone-and-pad-r-arrows
+priority: p2
+profile: implementation
+objective: "Lands as fix(synth) or test(synth). Either the pads stack at 390 px, or a recorded decision says the R2-K220-2 L/R toggle replaces stacking and restates the criterion; in both cases s-pads (tests/browser/synth.cjs) asserts an arrow key moving pad R's point (aria-valuenow of its axis) in every leg."
+why: "Split from K220 (criteria 2, copied verbatim) by the audit-and-stamp follow-up train of 2026-11-18 (oscilla-d9, under the triage the owner approved on 2026-11-18, relayed by oscilla-e5, Q112). Re-run on main 8e087873: s-pads is ok in three engines (CI run 44135531351), desktop side by side and phone one at a time, Stop releasing both; but the phone uses an L/R toggle (synth.cjs:1001-1023, review R2-K220-2) rather than stacking, the criterion was never amended, and only pad L's ArrowRight is asserted."
+current_state: "Filed 2026-11-18 by oscilla-d9 in the audit-and-stamp follow-up train; not started."
+scope:
+- tests/browser/synth.cjs
+- src/js/synth/ui.js
+- src/js/synth/panels/xy.js
+- src/index.html
+- tests/README.md
+- dist
+depends_on: []
+acceptance_criteria:
+- "Browser (chromium, firefox, webkit): both pads are on the Synth face at 1536 px and stacked at 390 px, each answers pointer and keyboard (arrows move the point), Stop releases both."
+- "(added) If the toggle is kept, the decision is recorded (with R2-K220-2 as its reason) and the criterion restated before this issue is done; the check asserts whichever layout the record states."
+- "(added) s-pads asserts an arrow key on pad R moving its point (aria-valuenow of its axis), in every leg."
+validation:
+- node tests/browser/synth.cjs
+evidence_required:
+- verified
+created_at: '2026-11-18'
+updated_at: '2026-11-18'

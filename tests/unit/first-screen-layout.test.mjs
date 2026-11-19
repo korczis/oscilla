@@ -52,7 +52,7 @@ function at(s, re, what) {
   return m.index;
 }
 
-test('the page h1 is the Q002 sentence, shown on the Playground, above every panel', () => {
+test('the page h1 is the positioning sentence (Q113 Czech of Q002), shown on the Playground, above every panel', () => {
   const main = mainMarkup();
   const h1s = [...main.matchAll(/<h1\b([^>]*)>([\s\S]*?)<\/h1>/g)];
   assert.equal(h1s.length, 1, 'one h1 in the main region');

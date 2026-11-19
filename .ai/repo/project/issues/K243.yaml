@@ -21,4 +21,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-11'
-updated_at: '2026-11-11'
+updated_at: 2026-11-18T06:23:37Z
+started_at: 2026-11-18T06:19:33Z
+started_event: sha256:eb6fbba9690ef109deac3330c04d75481ae92a24a784825047eac09d8c8e52c0
+verified_at: 2026-11-18T06:20:08Z
+verified_event: sha256:f34d9b2a570fb1824e6d1d6b5579fe83f68bc8216076dd4b430b719a334b712b
+completed_at: 2026-11-18T06:23:37Z
+completed_event: sha256:34b908d4d0aba9c2a61c7bc910586b54c702e9a740a82302d33ebe4fbf9b04a5
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/synth-link.test.mjs tests/unit/k235-q-ceiling-diagnostic.test.mjs"
+    result: "Audit-and-stamp train B (oscilla-43, 2026-11-18), re-checked on main f525fff0: synth-link.test.mjs:132-138 asserts a skipped mg.control -> sh.rate reads 'MG Control -> S&H Rate' with no raw id; ui.js:713 passes the bay's own jackName (ui.js:116, used by the bay lists at :254/:266); 15/15 on trunk, the K243 test fails on d0c1abc1^; #529 fail-first passed, verdict merge (529.yaml)."
+    artifact: ".ai/repo/reviews/529.yaml"
+    commit: f525fff055b02e648ad4acedf5f45366f2fff380
+    recorded_at: 2026-11-18T06:22:33Z

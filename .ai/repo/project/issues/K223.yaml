@@ -9,6 +9,7 @@ priority: p1
 profile: implementation
 objective: "Lands as feat(synth). A Record button beside the one transport's Play, shown in the Drums view (K222) and, through the same component, wherever a notes clip is edited by the step-grid kind: while the transport plays and Record is armed, every live note the note router delivers to the clip's target (K222's pads, the piano keys, MIDI) is written into that notes clip at the audio-clock playhead, quantised to the clip grid's stepBeats (an exported quantise function, nearest step, a hit exactly between two steps goes to the later one), vel from the hit, len one step; a take (arm to disarm, or Stop) is one undoable CLIP_UPDATE built once at the take's end, so the history holds one entry per take and undo removes the whole take; a hit that lands on a step that is already on replaces its vel and keeps one note. The button is role=switch with aria-checked and the R key listed in the Keyboard shortcuts dialog. Before: live hits sound and are not kept. After: a pass played on the pads is a pattern in the clip. Negative cases: Record while stopped (armed, nothing written until Play); a hit after the clip's end on a loop pass (wrapped into the clip by the loop, never written past its length); a take with no hit (no history entry). Rollback: revert; notes written stay valid model data."
 why: "Owner direction of 2026-11-07 recorded by Q103: the drum machine view has a record button. Carved from K073 on 2026-11-07 by oscilla-21 with oscilla-2b, after K222, so the first drum grid is not held by recording."
+current_state: "Re-checked on main f525fff0 in audit-and-stamp train B (oscilla-43, 2026-11-18; browser legs from CI run 44221274253 on #598, whose tree differs from f525fff0 only under .ai/); left open. Size: #515 gives no figure; scripts/size-report.mjs on its five commits sums to about 1539 B gzip, over the 1.5 KB cap. Record the figure and the overage decision. Every other criterion holds (notes-record 9/9, dr-record, 515.yaml)."
 scope:
   - "src/js/ui/synth"
   - "src/js/ui/kinds"
@@ -34,4 +35,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-07
-updated_at: 2026-11-07
+updated_at: 2026-11-18

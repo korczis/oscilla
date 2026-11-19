@@ -1,0 +1,31 @@
+id: K250
+milestone: M067
+serves:
+- "connected-instrument#step-sequencer"
+- "connected-instrument#modulation-everywhere"
+- "connected-instrument#one-transport"
+title: "Step-voltage sequencer in the Synth by its own UI: cabled by pointer, keyboard and touch, played with the drums, its step values, role, skip and Step on every input"
+slug: step-voltage-sequencer-in-the-synth-by-its-own-ui
+priority: p2
+profile: implementation
+objective: "Lands as test(synth), or fix if a defect is found. s-svs in tests/browser/synth.cjs (or a sibling check) follows the user's path: insert the node from the library; cable cvA to a VCO and gate/trigN to an EG by pointer, keyboard and touch; PLAY with the Drums clip, both sounding; a step edit changes the store and the sound on the next pass; role, skip and Step work by pointer, keyboard and touch, on desktop and phone."
+why: "Split from K226 (criteria 4, copied verbatim) by the audit-and-stamp follow-up train of 2026-11-18 (oscilla-d9, under the triage the owner approved on 2026-11-18, relayed by oscilla-e5, Q112). Re-run on main 8e087873: s-svs passes in three engines (CI run 44135531351) but builds the node and its cables with st.dispatch, cables only VCO 1's pitch, has no drums, step-knob, role or skip check, and runs on desktop only (not in PHONE_CHECKS)."
+current_state: "Filed 2026-11-18 by oscilla-d9 in the audit-and-stamp follow-up train; not started."
+scope:
+- tests/browser/synth.cjs
+- tests/README.md
+- tests/browser/timing-baseline.json
+- src/js/ui/studio
+- src/js/synth
+- dist
+depends_on: []
+acceptance_criteria:
+- "A browser check in tests/browser/synth.cjs (run by npm run test:synth) proves it linked, real-time and interactive: inserted from the Studio, cabled by pointer, keyboard and touch into the Synth panel's VCO and EG, it plays on PLAY with the drums on the same transport; turning a step knob changes that step's value in the Studio store and in the sound at the next pass; a row's role, a step's skip and the Step button work by pointer, keyboard and touch; every wait through tests/browser/lib/wait.cjs until() with a named deadline, inside tests/browser/lib/suite.cjs, and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+- "(added) It runs on desktop and phone in chromium, firefox and webkit, with touch on the phone, and no st.dispatch creates the node or its cables in the check."
+validation:
+- npm run test:synth
+- npm test
+evidence_required:
+- verified
+created_at: '2026-11-18'
+updated_at: '2026-11-18'

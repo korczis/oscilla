@@ -9,6 +9,7 @@ priority: p3
 profile: implementation
 objective: "Lands as feat(studio). A fm-voice node type with the notes (or, for the modal drum, hits) capability: operators 2-4 with ratio, level and their own envelopes, an algorithm table of fixed operator routings, linear frequency modulation into the carriers' frequency (the index stated), voices as Q021 records; operator self-feedback is refused until K094. It renders natively in Web Audio and appears as a panel in the Synth workspace's Engines sub-view and in the instrument picker. Before: no FM instrument. After: an FM engine. User-value tier 4 of 4 (synth-design.md section 17). Rollback: revert the pull request; a document saved with the new node type is then refused by the import pipeline with its unknown-type sentence, never dropped silently, so a revert after a release ships it keeps the registry entry and removes only the UI."
 why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
+current_state: "Re-checked on main f525fff0 in audit-and-stamp train B (oscilla-43, 2026-11-18; browser legs from CI run 44221274253 on #598, whose tree differs from f525fff0 only under .ai/); left open. AC1: instrument-dsp.cjs has no FM check (the J1/J0 figure lives in synth-engines e-fm at 2 dB on the realtime analyser, not 1 dB offline) and engine-fm.test.mjs has no node census. AC3: tests/browser/engines.cjs does not exist. AC9: no per-issue size figure (#367 states the whole train)."
 scope:
   - "src/js/studio/nodes"
   - "src/js/studio/registry.js"
@@ -44,4 +45,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-18

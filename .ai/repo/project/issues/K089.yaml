@@ -10,6 +10,7 @@ priority: p3
 profile: implementation
 objective: "Lands as feat(audio). vco gains mode option sync (an enum option) rendered by a band-limited (PolyBLEP) worklet oscillator; a vcf-nl node type, a nonlinear two-pole filter whose peak self-oscillates at high settings, is offered as the panel's Low-pass variant, its help saying it is a digital nonlinear filter model of no product. Before: no hard sync and no self-oscillation. After: sync and a nonlinear filter on the worklet. User-value tier 4 of 4 (synth-design.md section 17). Rollback: revert the pull request; a document saved with the new node type is then refused by the import pipeline with its unknown-type sentence, never dropped silently, so a revert after a release ships it keeps the registry entry and removes only the UI."
 why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
+current_state: "Re-checked on main f525fff0 in audit-and-stamp train B (oscilla-43, 2026-11-18; browser legs from CI run 44221274253 on #598, whose tree differs from f525fff0 only under .ai/); left open. Not delivered: 2126f83b shipped only the wavetable sync bank. tests/unit/synth-sync-vcf.test.mjs and tests/browser/engines.cjs do not exist; no vcf-nl or PolyBLEP worklet oscillator in src/js. All ten criteria unmet."
 scope:
   - "src/js/audio"
   - "src/js/studio/adapters"
@@ -42,4 +43,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-18

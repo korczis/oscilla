@@ -609,11 +609,11 @@ async function firstPlay(ctx) {
 }
 
 // ------------------------------------------------------------------------------ Q004 layout
-// The positioning sentence Q002 recorded (scripts/social-assets.mjs DESCRIPTION; the unit test
-// tests/unit/positioning-consistency.test.mjs holds the two equal).
-const SENTENCE = 'A zero-install, scientifically honest acoustic laboratory in your browser: '
-  + 'generate, measure and reproduce sound experiments, and know how far each result can be '
-  + 'trusted.';
+// The positioning sentence in the app's Czech rendering (Q113 of Q002's sentence;
+// scripts/social-assets.mjs DESCRIPTION; tests/unit/positioning-consistency.test.mjs holds the
+// two equal).
+const SENTENCE = 'Vědecky poctivá akustická laboratoř v prohlížeči bez instalace: generujte, měřte '
+  + 'a opakujte zvukové experimenty a zjistěte, nakolik lze kterému výsledku věřit.';
 // What the first screen shows (in its rows) and what leaves it, by element id.
 const SHOWN = ['osc-panel-source', 'osc-panel-analysis', 'osc-panel-mic', 'osc-panel-device',
   'osc-measure-flow', 'osc-panel-sequencer', 'osc-panel-studio'];

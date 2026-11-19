@@ -23,7 +23,7 @@ scope:
 - tests/unit/source-size-baseline.json
 - tests/README.md
 - dist
-current_state: "Criteria audit on main 04d33aaf (2026-11-11) by oscilla-0b with a read-only audit agent, each finding read at its source: not stamped. Landed by #371 (cc97d77f) inside the lane-A train #386 (bc4b1545, verdict 386.yaml), released in v3.22.0. The catalogue contract holds at 04d33aaf (ui-catalog.test.mjs 24/24; scripts/ui-catalog/check.mjs \"the contract holds\"). Unmet: the interlinks criterion (each declaration names its links and related views, read by G014 and G016). links and related are optional in src/js/ui/catalog/define.js (:127-134); about 11 of 200 declarations name links and 22 related; G014 and G016 are BLOCKED. Also: the size criterion's base and head figures are not in the PR (#371 says only a 0 B delta). Restate the interlinks clause to an optional, validated field read later by G014/G016, or meet it."
+current_state: "Re-checked on main 8e087873 in the audit-and-stamp follow-up train (oscilla-d9, 2026-11-18). Stamped done in this train; the evidence names what was re-run and which criteria moved to which follow-up issue. Before this audit: Criteria audit on main 04d33aaf (2026-11-11) by oscilla-0b with a read-only audit agent, each finding read at its source: not stamped. Landed by #371 (cc97d77f) inside the lane-A train #386 (bc4b1545, verdict 386.yaml), released in v3.22.0. The catalogue contract holds at 04d33aaf (ui-catalog.test.mjs 24/24; scripts/ui-catalog/check.mjs \"the contract holds\"). Unmet: the interlinks criterion (each declaration names its links and related views, read by G014 and G016). links and related are optional in src/js/ui/catalog/define.js (:127-134); about 11 of 200 declarations name links and 22 related; G014 and G016 are BLOCKED. Also: the size criterion's base and head figures are not in the PR (#371 says only a 0 B delta). Restate the interlinks clause to an optional, validated field read later by G014/G016, or meet it."
 acceptance_criteria:
 - "tests/unit/ui-catalog.test.mjs fails on the merge base (the catalogue does not exist) and, with a fixture per clause, refuses an undeclared hook, a non-literal data-osc value without a pattern declaration, a declaration without docs or test, a docs sentence equal to its label or repeated, a test file that names the hook only in a comment or that no script runs, a state path sources.js does not resolve (an invented ui.* path included), state none on a kind that does not allow it or without a reason, an action or open declaration with state none and no effect, a dangling link and an invalid default, each with a message naming the id."
 - "The no-inert-controls check of tests/browser/qa-regressions.cjs fails on a data-osc value of the running page that neither the registry nor the allowance holds (a fixture hook injected by the check proves it), in every gate browser."
@@ -50,4 +50,25 @@ validation:
 evidence_required:
 - verified
 created_at: '2026-10-29'
-updated_at: '2026-11-01'
+updated_at: 2026-11-18T04:23:53Z
+started_at: 2026-11-18T02:56:48Z
+started_event: sha256:f9ca24402dda065433b0e23dbda50d855aa42bc1014f9b0fc59530189e36e86a
+verified_at: 2026-11-18T02:59:32Z
+verified_event: sha256:56e8a7ad464fc5659c2e1aab55afec58eeb502ebc70f8f7e34da76ba3bb3eb3a
+completed_at: 2026-11-18T03:05:42Z
+completed_event: sha256:8f4734c40897925bc34c6da956d85656983eefe46a2a57f8e9b95cabafd4b7de
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/ui-catalog.test.mjs"
+    result: "Audit-and-stamp follow-up train (oscilla-d9, 2026-11-18), re-run on main 8e087873: tests/unit/ui-catalog.test.mjs 24/0, failing on merge base d8ee8925 (ERR_MODULE_NOT_FOUND src/js/ui/catalog/registry.js, HEAD's test in a git-archive copy of the base); scripts/ui-catalog/check.mjs 'the contract holds' (undeclared section 510 entries, 52 families, every reason at least 3 words); ui-flowbite-pro-record --check equal; ui-flowbite-pro 31/0; browser-timing 31/0; build:check up to date; npm test in CI 44210690542 (same tree) 5912 pass, 0 fail. CI 44135531351 (src, tests and dist identical) passed the no-inert-controls hook census in chromium, firefox and webkit (724 hooks, qa.fixture.undeclared flagged) and tests/browser/labs.cjs in all three. Lab defaults moved unchanged; no G001 path is guarded. Size: size-report --base-branch 66635acc --head b7500f08 918 867 -> 918 848 B gzip (-19 B), base and head figures added to #371's body on 2026-11-18; 63.1 B gzip per declaration (61.9 B on trunk), Q037 answered with it. Landed in #371 (cc97d77f) through #386 (bc4b1545), released in v3.22.0. The interlinks criterion (each declaration names its links and related views, read by G014 and G016) moved verbatim to G031."
+    artifact: "tests/unit/ui-catalog.test.mjs"
+    commit: 8e087873968df0438165b474684d6dee7ac7e5ff
+    recorded_at: 2026-11-18T03:03:30Z
+  - covers: "verified"
+    type: ci
+    command: "node scripts/review-verdict.mjs (base d8ee8925 GUARDED)"
+    result: "No verdict needed for #371 (G001): the base program's GUARDED list (scripts/review-verdict.mjs:76-113 at merge base d8ee8925) matches none of G001's paths (src/js/ui/catalog, src/js/labs/lab-defaults.js and the four labs' re-exports, scripts/ui-catalog, tests/unit/ui-catalog*, tests/browser/qa-regressions.cjs, tests/README.md, dist); re-checked 2026-11-18 by oscilla-d9 in the audit-and-stamp follow-up train."
+    artifact: "scripts/review-verdict.mjs"
+    commit: 8e087873968df0438165b474684d6dee7ac7e5ff
+    recorded_at: 2026-11-18T04:23:53Z
