@@ -23,8 +23,20 @@
 //   const keys = createKeyRegistry();
 //   const unbind = keys.bind({ id, keys: ['Space'], scope: { workspace: 'synth', view: 'xy' },
 //     run(e), up?(e), when?(), repeat?: false, label, group });
+//   keys.declare({ id, keys?: [chord], shown?, scope, label, ... }) -> undeclare
+//     a help-only declaration: a key whose listener is still outside this registry (the
+//     keyboard's notes, the Sequencer timeline, the step grid, Studio). It is listed by
+//     helpRows and never resolved, so it owns no chord and cannot conflict with a binding.
 //   keys.resolve(chord, { workspace, view, focus }) -> binding | null
-//   keys.list() -> [binding]   (the shortcuts help reads it: helpRows)
+//   keys.list() -> [binding and declaration, in order]   (the shortcuts help reads it: helpRows)
+//
+// What the help shows of a binding or a declaration (ui/shortcuts.js declares the dialog's):
+//   row      the help row's id (data-osc-shortcut), when two declarations share one
+//   shown    the keys as the help writes them ('Ctrl/⌘ C, X, V'); else its chords' labels
+//   place    where it applies, the words beside the keys
+//   shownIn  the workspaces whose help lists it; else its scope's (every one for '*')
+//   section  'space' (the Space meaning), 'everywhere' or 'workspace'; else derived: a '*'
+//            scope listed in no named workspaces is 'everywhere'
 //   chordOf(event) -> chord;  keyLabel(chord) -> 'Shift+R', '[', 'Space', '←'
 
 const MODS = ['Ctrl', 'Meta', 'Alt', 'Shift'];
@@ -75,10 +87,13 @@ const specificity = (s) => (s.view ? 4 : s.workspace === '*' ? 0 : 2) + (s.focus
 const same = (a, b) => a.workspace === b.workspace && (a.view || null) === (b.view || null)
   && a.focus === b.focus;
 
-function checkBinding(b) {
+function checkBinding(b, { help = false } = {}) {
   if (!b || typeof b.id !== 'string' || !b.id) throw new TypeError('keys: a binding needs an id');
-  if (!Array.isArray(b.keys) || !b.keys.length) throw new TypeError(`keys: ${b.id} has no keys`);
-  if (typeof b.run !== 'function') throw new TypeError(`keys: ${b.id} has no run()`);
+  const chords = Array.isArray(b.keys) && b.keys.length;
+  if (!chords && !(help && typeof b.shown === 'string' && b.shown)) {
+    throw new TypeError(`keys: ${b.id} has no keys`);
+  }
+  if (!help && typeof b.run !== 'function') throw new TypeError(`keys: ${b.id} has no run()`);
   const s = b.scope || {};
   if (typeof s.workspace !== 'string' || !s.workspace) {
     throw new TypeError(`keys: ${b.id} needs scope.workspace (an id or '*')`);
@@ -88,18 +103,22 @@ function checkBinding(b) {
   if (typeof b.label !== 'string' || !b.label) {
     throw new TypeError(`keys: ${b.id} needs a label (the shortcuts help shows it)`);
   }
-  return Object.freeze({ ...b, keys: Object.freeze(b.keys.map(normalizeChord)),
+  return Object.freeze({ ...b, keys: Object.freeze(chords ? b.keys.map(normalizeChord) : []),
     scope: Object.freeze({ workspace: s.workspace, view: s.view || null, focus }),
-    repeat: !!b.repeat, prevent: b.prevent !== false, group: b.group || 'General' });
+    repeat: !!b.repeat, prevent: b.prevent !== false, group: b.group || 'General',
+    shownIn: Array.isArray(b.shownIn) ? Object.freeze([...b.shownIn]) : null, help });
 }
 
 export function createKeyRegistry() {
   const byChord = new Map(); // chord -> [binding]
   const ids = new Map();
+  const unique = (id) => {
+    if (ids.has(id)) throw new Error(`keys: the id "${id}" is already bound`);
+  };
 
   function bind(input) {
     const b = checkBinding(input);
-    if (ids.has(b.id)) throw new Error(`keys: the id "${b.id}" is already bound`);
+    unique(b.id);
     for (const chord of b.keys) {
       const other = (byChord.get(chord) || []).find((x) => same(x.scope, b.scope));
       if (other) {
@@ -119,6 +138,14 @@ export function createKeyRegistry() {
     };
   }
 
+  /** A help-only declaration (no run, never resolved): the help lists it as it lists a binding. */
+  function declare(input) {
+    const b = checkBinding(input, { help: true });
+    unique(b.id);
+    ids.set(b.id, b);
+    return () => { if (ids.get(b.id) === b) ids.delete(b.id); };
+  }
+
   /** The owner of chord in this context: the most specific match whose when() holds. */
   function resolve(chord, { workspace, view = null, focus = 'none' } = {}) {
     let best = null;
@@ -133,19 +160,35 @@ export function createKeyRegistry() {
     return best;
   }
 
-  return Object.freeze({ bind, resolve, list: () => [...ids.values()],
+  return Object.freeze({ bind, declare, resolve, list: () => [...ids.values()],
     get size() { return ids.size; } });
 }
 
-/** The shortcuts help rows, grouped and ordered as bound: { group, rows: [{ keys, label, where }] }. */
-export function helpRows(registry, workspaceLabel = (w) => w) {
+/** True when the help of `workspace` lists `b`: its shownIn, else its scope's workspace. */
+export function listedIn(b, workspace) {
+  if (b.shownIn) return b.shownIn.includes(workspace);
+  return b.scope.workspace === '*' || b.scope.workspace === workspace;
+}
+
+/**
+ * The shortcuts help rows, grouped and ordered as bound or declared:
+ * { group, rows: [{ id, keys, shown, label, where, place, section }] }. `keys` are the chords'
+ * labels, `shown` what the help writes for them, `where` the scope's name and `place` the
+ * declared words beside the keys (or null). With `workspace`, only what its help lists.
+ */
+export function helpRows(registry, workspaceLabel = (w) => w, { workspace = null } = {}) {
   const groups = new Map();
   for (const b of registry.list()) {
+    if (workspace !== null && !listedIn(b, workspace)) continue;
     const s = b.scope;
     const where = s.workspace === '*' ? 'Everywhere'
       : `${workspaceLabel(s.workspace)}${s.view ? ` (${s.view})` : ''}`;
+    const keys = b.keys.map(keyLabel);
+    const section = b.section
+      || (s.workspace === '*' && !b.shownIn ? 'everywhere' : 'workspace');
     if (!groups.has(b.group)) groups.set(b.group, []);
-    groups.get(b.group).push({ id: b.id, keys: b.keys.map(keyLabel), label: b.label, where });
+    groups.get(b.group).push({ id: b.row || b.id, keys, shown: b.shown || keys.join(' / '),
+      label: b.label, where, place: b.place || null, section });
   }
   return [...groups].map(([group, rows]) => ({ group, rows }));
 }
