@@ -78,14 +78,26 @@ test('the frame has one source: every view binds a PRO token, none repeats its c
     for (const c of [...FRAME, 'pb-6']) {
       assert.ok(!own.has(c), `#osc-view-${id} repeats the frame class ${c} literally`);
     }
-    const via = /PRO\.(pageView|page)\b/.exec(attrs[':class'] || '');
-    assert.ok(via, `#osc-view-${id} binds PRO.pageView or PRO.page`);
+    const via = /PRO\.(pageView|pageEditor|pageDocked|page)\b/.exec(attrs[':class'] || '');
+    assert.ok(via, `#osc-view-${id} binds a PRO page token`);
     assert.deepEqual(boundProClasses(attrs), PRO[via[1]].split(/\s+/),
       `#osc-view-${id} binds PRO.${via[1]} unconditionally (the measure resolves it)`);
   }
   const literal = /\bpx-4 pt-6\b/;
   for (const m of HTML.matchAll(/<section\b[^>]*\bid="osc-view-[\w-]+"[^>]*>/g)) {
     assert.doesNotMatch(m[0], literal, 'no view writes the frame literally');
+  }
+});
+
+test('a phone variant of the frame is the desktop frame plus max-md: overrides only', () => {
+  // The Studio (PRO.pageEditor) and the Synth (PRO.pageDocked) keep the one frame from md up;
+  // below it the docked keys and 44 px controls take a tighter inset (#601's phone legs).
+  for (const [key, base] of [['pageEditor', PRO.pageView], ['pageDocked', PRO.page]]) {
+    const cls = PRO[key].split(/\s+/);
+    for (const c of base.split(/\s+/)) assert.ok(cls.includes(c), `PRO.${key} keeps ${c}`);
+    for (const c of cls.filter((x) => !base.split(/\s+/).includes(x))) {
+      assert.match(c, /^max-md:!p[xt]-\d+$/, `PRO.${key}: ${c} is a phone inset override`);
+    }
   }
 });
 

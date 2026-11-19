@@ -61,6 +61,13 @@ export const PRO = Object.freeze({
   /** The frame with its bottom gutter: what every view of its own binds (the Synth, whose
    *  bottom keeps the docked keys' band, binds PRO.page). */
   pageView: `${PAGE} pb-6`,
+  /** The Studio's frame: an editor that fills the viewport keeps an 8 px gutter on a phone, so
+   *  its 44 px controls fit (the step grid's eight steps at 390 px, the graph's view controls
+   *  at 320 px) and its header actions stay clear of the docked keys' handle at 375 px. */
+  pageEditor: `${PAGE} pb-6 max-md:!px-2 max-md:!pt-2`,
+  /** The Synth's frame: the docked keys play it, so on a phone its top is 12 px and its insert
+   *  alert stays above the dock at 320 px (U108, oscilla-c3's Q090 criterion). */
+  pageDocked: `${PAGE} max-md:!pt-3`,
 });
 
 /** The Alpine part: PRO for the markup's :class bindings. */
