@@ -71,7 +71,7 @@ test('the frame has one source: every view binds a PRO token, none repeats its c
   // The review of 2c0fcf43 (P1 DRY): the frame's classes are written once, in
   // src/js/ui/pro-classes.js; a view binds PRO.pageView (the Synth PRO.page: its bottom keeps
   // the docked keys' band) unconditionally on its root, where the Pro measure reads it.
-  assert.equal(PRO.pageView, `${PRO.page} pb-6`);
+  assert.ok(PRO.pageView.startsWith(`${PRO.page} pb-6`), 'PRO.pageView is PRO.page with pb-6');
   for (const [id, tag] of VIEWS) {
     const attrs = attrsOf(tag);
     const own = classesOf(tag);
@@ -92,7 +92,8 @@ test('the frame has one source: every view binds a PRO token, none repeats its c
 test('a phone variant of the frame is the desktop frame plus max-md: overrides only', () => {
   // The Studio (PRO.pageEditor) and the Synth (PRO.pageDocked) keep the one frame from md up;
   // below it the docked keys and 44 px controls take a tighter inset (#601's phone legs).
-  for (const [key, base] of [['pageEditor', PRO.pageView], ['pageDocked', PRO.page]]) {
+  for (const [key, base] of [['pageView', `${PRO.page} pb-6`], ['pageEditor', PRO.pageView],
+    ['pageDocked', PRO.page]]) {
     const cls = PRO[key].split(/\s+/);
     for (const c of base.split(/\s+/)) assert.ok(cls.includes(c), `PRO.${key} keeps ${c}`);
     for (const c of cls.filter((x) => !base.split(/\s+/).includes(x))) {

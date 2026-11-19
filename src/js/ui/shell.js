@@ -247,7 +247,7 @@ const OWN_SCROLL_PADDING = Object.freeze(['synth']);
 /** <main>'s scroll padding: the frame's top padding (PRO.page's pt-6, a literal Tailwind can
  *  see; tests/unit/page-frame.test.mjs holds the two equal), so a card scrolled into view keeps
  *  the gap it has unscrolled, in a view of its own as on <main>'s grid (#598). */
-export const FRAME_SCROLL_PT = 'scroll-pt-6';
+export const FRAME_SCROLL_PT = 'scroll-pt-6 max-md:scroll-pt-2';
 
 /**
  * The classes <main> carries in a workspace: the Pro page frame (PRO.pageView) where the

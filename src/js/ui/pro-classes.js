@@ -12,6 +12,9 @@ const BTN_XS = 'inline-flex items-center justify-center px-2 text-xs font-medium
   + 'focus:outline-none focus:ring-4';
 // The one Pro page frame (PRO_STRUCTURE.page of scripts/ui-flowbite-pro-measure.mjs).
 const PAGE = 'px-4 pt-6';
+// Below md the frame's top is 8 px, as <main>'s was before F002: a phone's first screen keeps
+// its controls (the Playground's HOLD above the fold at 375 x 667, qa safety-notice).
+const PHONE_TOP = 'max-md:!pt-2';
 const SECONDARY = 'text-gray-900 bg-white border border-gray-200 hover:bg-gray-100 '
   + 'hover:text-primary-700 focus:ring-gray-100 dark:bg-gray-800 dark:text-gray-400 '
   + 'dark:border-gray-600 dark:hover:text-white dark:hover:bg-gray-700 dark:focus:ring-gray-700';
@@ -58,13 +61,13 @@ export const PRO = Object.freeze({
    *  it for a workspace whose panels stand in its grid (shell.js mainFrameOf). The page's
    *  visible title is the page header's alone. */
   page: PAGE,
-  /** The frame with its bottom gutter: what every view of its own binds (the Synth, whose
-   *  bottom keeps the docked keys' band, binds PRO.page). */
-  pageView: `${PAGE} pb-6`,
+  /** The frame with its bottom gutter and the phone's 8 px top: what every view of its own
+   *  binds (the Synth, whose bottom keeps the docked keys' band, binds PRO.pageDocked). */
+  pageView: `${PAGE} pb-6 ${PHONE_TOP}`,
   /** The Studio's frame: an editor that fills the viewport keeps an 8 px gutter on a phone, so
    *  its 44 px controls fit (the step grid's eight steps at 390 px, the graph's view controls
    *  at 320 px) and its header actions stay clear of the docked keys' handle at 375 px. */
-  pageEditor: `${PAGE} pb-6 max-md:!px-2 max-md:!pt-2`,
+  pageEditor: `${PAGE} pb-6 max-md:!px-2 ${PHONE_TOP}`,
   /** The Synth's frame: the docked keys play it, so on a phone its top is 12 px and its insert
    *  alert stays above the dock at 320 px (U108, oscilla-c3's Q090 criterion). */
   pageDocked: `${PAGE} max-md:!pt-3`,

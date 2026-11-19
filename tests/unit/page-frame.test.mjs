@@ -53,7 +53,10 @@ test('a workspace scrolled into view keeps the frame\'s top padding as its gap',
   assert.ok(!/(?<![:\w-])class="[^"]*scroll-pt-/.test(tag),
     'no static scroll-pt competes with the bound one');
   const pt = PRO.page.split(/\s+/).find((c) => /^pt-/.test(c));
-  assert.equal(FRAME_SCROLL_PT, `scroll-${pt}`, 'the scroll padding is the frame\'s pt');
+  // Below md the frame's top is PRO.pageView's max-md:!pt-N, and the scroll padding follows it.
+  const phone = PRO.pageView.split(/\s+/).find((c) => /^max-md:!pt-/.test(c)).replace('!', '');
+  assert.equal(FRAME_SCROLL_PT, `scroll-${pt} ${phone.replace('pt-', 'scroll-pt-')}`,
+    'the scroll padding is the frame\'s pt, on a phone too');
   const panels = WORKSPACE_IDS.filter((id) => !ownsViewOf(id));
   const views = WORKSPACE_IDS.filter((id) => ownsViewOf(id) && id !== 'synth');
   assert.ok(panels.length > 0 && views.length > 0, 'the registry has both kinds');
