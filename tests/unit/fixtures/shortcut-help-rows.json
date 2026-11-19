@@ -1,0 +1,968 @@
+{
+  "playground": {
+    "workspace": "playground",
+    "title": "Playground",
+    "space": {
+      "id": "space",
+      "keys": "Space",
+      "where": "(hold)",
+      "text": "Hold to play: sounds while held, stops on release (a programmed pattern: trigger once)"
+    },
+    "rows": [
+      {
+        "id": "trigger",
+        "keys": "Enter",
+        "where": "na Podržet a hrát nebo Spustit, kde jsou",
+        "text": "Spustit jednou"
+      },
+      {
+        "id": "octave",
+        "keys": "PgUp / PgDn",
+        "where": "na posuvníku frekvence, kde je",
+        "text": "O oktávu výš / níž"
+      },
+      {
+        "id": "keyboard-notes",
+        "keys": "A W S E D F T G Y H U J K O L P ; '",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Play notes, C to the next F: a note sounds while its key is held"
+      },
+      {
+        "id": "keyboard-octave",
+        "keys": "Z / X",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Octave down / up"
+      },
+      {
+        "id": "keyboard-velocity",
+        "keys": "C / V",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Velocity down / up (steps of 20)"
+      }
+    ],
+    "timeline": null,
+    "note": null,
+    "global": [
+      {
+        "id": "escape",
+        "keys": "Esc",
+        "text": "Stop immediately; close menus and dialogs"
+      },
+      {
+        "id": "roving",
+        "keys": "← →",
+        "where": "on tabs and segments",
+        "text": "Move and select"
+      },
+      {
+        "id": "tab",
+        "keys": "Tab",
+        "text": "Move focus (never taken by a shortcut)"
+      }
+    ]
+  },
+  "measure": {
+    "workspace": "measure",
+    "title": "Měření",
+    "space": {
+      "id": "space",
+      "keys": "Space",
+      "text": "Nothing: Space starts no sound in this workspace"
+    },
+    "rows": [
+      {
+        "id": "measure-abort",
+        "keys": "Esc",
+        "text": "Stop immediately and abort a running measurement; close menus and dialogs"
+      },
+      {
+        "id": "keyboard-notes",
+        "keys": "A W S E D F T G Y H U J K O L P ; '",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Play notes, C to the next F: a note sounds while its key is held"
+      },
+      {
+        "id": "keyboard-octave",
+        "keys": "Z / X",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Octave down / up"
+      },
+      {
+        "id": "keyboard-velocity",
+        "keys": "C / V",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Velocity down / up (steps of 20)"
+      }
+    ],
+    "timeline": null,
+    "note": null,
+    "global": [
+      {
+        "id": "roving",
+        "keys": "← →",
+        "where": "on tabs and segments",
+        "text": "Move and select"
+      },
+      {
+        "id": "tab",
+        "keys": "Tab",
+        "text": "Move focus (never taken by a shortcut)"
+      }
+    ]
+  },
+  "experiments": {
+    "workspace": "experiments",
+    "title": "Experimenty",
+    "space": {
+      "id": "space",
+      "keys": "Space",
+      "text": "Nothing: Space starts no sound in this workspace"
+    },
+    "rows": [
+      {
+        "id": "keyboard-notes",
+        "keys": "A W S E D F T G Y H U J K O L P ; '",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Play notes, C to the next F: a note sounds while its key is held"
+      },
+      {
+        "id": "keyboard-octave",
+        "keys": "Z / X",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Octave down / up"
+      },
+      {
+        "id": "keyboard-velocity",
+        "keys": "C / V",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Velocity down / up (steps of 20)"
+      }
+    ],
+    "timeline": null,
+    "note": null,
+    "global": [
+      {
+        "id": "escape",
+        "keys": "Esc",
+        "text": "Stop immediately; close menus and dialogs"
+      },
+      {
+        "id": "roving",
+        "keys": "← →",
+        "where": "on tabs and segments",
+        "text": "Move and select"
+      },
+      {
+        "id": "tab",
+        "keys": "Tab",
+        "text": "Move focus (never taken by a shortcut)"
+      }
+    ]
+  },
+  "analyzer": {
+    "workspace": "analyzer",
+    "title": "Analyzátor",
+    "space": {
+      "id": "space",
+      "keys": "Space",
+      "where": "(hold)",
+      "text": "Hold to play: sounds while held, stops on release (a programmed pattern: trigger once)"
+    },
+    "rows": [
+      {
+        "id": "trigger",
+        "keys": "Enter",
+        "where": "na Podržet a hrát nebo Spustit, kde jsou",
+        "text": "Spustit jednou"
+      },
+      {
+        "id": "octave",
+        "keys": "PgUp / PgDn",
+        "where": "na posuvníku frekvence, kde je",
+        "text": "O oktávu výš / níž"
+      },
+      {
+        "id": "keyboard-notes",
+        "keys": "A W S E D F T G Y H U J K O L P ; '",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Play notes, C to the next F: a note sounds while its key is held"
+      },
+      {
+        "id": "keyboard-octave",
+        "keys": "Z / X",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Octave down / up"
+      },
+      {
+        "id": "keyboard-velocity",
+        "keys": "C / V",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Velocity down / up (steps of 20)"
+      }
+    ],
+    "timeline": null,
+    "note": null,
+    "global": [
+      {
+        "id": "escape",
+        "keys": "Esc",
+        "text": "Stop immediately; close menus and dialogs"
+      },
+      {
+        "id": "roving",
+        "keys": "← →",
+        "where": "on tabs and segments",
+        "text": "Move and select"
+      },
+      {
+        "id": "tab",
+        "keys": "Tab",
+        "text": "Move focus (never taken by a shortcut)"
+      }
+    ]
+  },
+  "filter": {
+    "workspace": "filter",
+    "title": "Filtry",
+    "space": {
+      "id": "space",
+      "keys": "Space",
+      "where": "(hold)",
+      "text": "Hold to play: sounds while held, stops on release (a programmed pattern: trigger once)"
+    },
+    "rows": [
+      {
+        "id": "trigger",
+        "keys": "Enter",
+        "where": "na Podržet a hrát nebo Spustit, kde jsou",
+        "text": "Spustit jednou"
+      },
+      {
+        "id": "octave",
+        "keys": "PgUp / PgDn",
+        "where": "na posuvníku frekvence, kde je",
+        "text": "O oktávu výš / níž"
+      },
+      {
+        "id": "keyboard-notes",
+        "keys": "A W S E D F T G Y H U J K O L P ; '",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Play notes, C to the next F: a note sounds while its key is held"
+      },
+      {
+        "id": "keyboard-octave",
+        "keys": "Z / X",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Octave down / up"
+      },
+      {
+        "id": "keyboard-velocity",
+        "keys": "C / V",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Velocity down / up (steps of 20)"
+      }
+    ],
+    "timeline": null,
+    "note": null,
+    "global": [
+      {
+        "id": "escape",
+        "keys": "Esc",
+        "text": "Stop immediately; close menus and dialogs"
+      },
+      {
+        "id": "roving",
+        "keys": "← →",
+        "where": "on tabs and segments",
+        "text": "Move and select"
+      },
+      {
+        "id": "tab",
+        "keys": "Tab",
+        "text": "Move focus (never taken by a shortcut)"
+      }
+    ]
+  },
+  "compare": {
+    "workspace": "compare",
+    "title": "Porovnání",
+    "space": {
+      "id": "space",
+      "keys": "Space",
+      "where": "(hold)",
+      "text": "Hold to play: sounds while held, stops on release (a programmed pattern: trigger once)"
+    },
+    "rows": [
+      {
+        "id": "trigger",
+        "keys": "Enter",
+        "where": "na Podržet a hrát nebo Spustit, kde jsou",
+        "text": "Spustit jednou"
+      },
+      {
+        "id": "octave",
+        "keys": "PgUp / PgDn",
+        "where": "na posuvníku frekvence, kde je",
+        "text": "O oktávu výš / níž"
+      },
+      {
+        "id": "keyboard-notes",
+        "keys": "A W S E D F T G Y H U J K O L P ; '",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Play notes, C to the next F: a note sounds while its key is held"
+      },
+      {
+        "id": "keyboard-octave",
+        "keys": "Z / X",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Octave down / up"
+      },
+      {
+        "id": "keyboard-velocity",
+        "keys": "C / V",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Velocity down / up (steps of 20)"
+      }
+    ],
+    "timeline": null,
+    "note": null,
+    "global": [
+      {
+        "id": "escape",
+        "keys": "Esc",
+        "text": "Stop immediately; close menus and dialogs"
+      },
+      {
+        "id": "roving",
+        "keys": "← →",
+        "where": "on tabs and segments",
+        "text": "Move and select"
+      },
+      {
+        "id": "tab",
+        "keys": "Tab",
+        "text": "Move focus (never taken by a shortcut)"
+      }
+    ]
+  },
+  "synthesis": {
+    "workspace": "synthesis",
+    "title": "Syntéza",
+    "space": {
+      "id": "space",
+      "keys": "Space",
+      "where": "(hold)",
+      "text": "Hold to play: sounds while held, stops on release (a programmed pattern: trigger once)"
+    },
+    "rows": [
+      {
+        "id": "trigger",
+        "keys": "Enter",
+        "where": "na Podržet a hrát nebo Spustit, kde jsou",
+        "text": "Spustit jednou"
+      },
+      {
+        "id": "octave",
+        "keys": "PgUp / PgDn",
+        "where": "na posuvníku frekvence, kde je",
+        "text": "O oktávu výš / níž"
+      },
+      {
+        "id": "keyboard-notes",
+        "keys": "A W S E D F T G Y H U J K O L P ; '",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Play notes, C to the next F: a note sounds while its key is held"
+      },
+      {
+        "id": "keyboard-octave",
+        "keys": "Z / X",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Octave down / up"
+      },
+      {
+        "id": "keyboard-velocity",
+        "keys": "C / V",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Velocity down / up (steps of 20)"
+      }
+    ],
+    "timeline": null,
+    "note": null,
+    "global": [
+      {
+        "id": "escape",
+        "keys": "Esc",
+        "text": "Stop immediately; close menus and dialogs"
+      },
+      {
+        "id": "roving",
+        "keys": "← →",
+        "where": "on tabs and segments",
+        "text": "Move and select"
+      },
+      {
+        "id": "tab",
+        "keys": "Tab",
+        "text": "Move focus (never taken by a shortcut)"
+      }
+    ]
+  },
+  "sequencer": {
+    "workspace": "sequencer",
+    "title": "Sekvencer",
+    "space": {
+      "id": "space",
+      "keys": "Space",
+      "where": "(hold)",
+      "text": "Hold to play: sounds while held, stops on release (a programmed pattern: trigger once)"
+    },
+    "rows": [
+      {
+        "id": "trigger",
+        "keys": "Enter",
+        "where": "na Podržet a hrát nebo Spustit, kde jsou",
+        "text": "Spustit jednou"
+      },
+      {
+        "id": "octave",
+        "keys": "PgUp / PgDn",
+        "where": "na posuvníku frekvence, kde je",
+        "text": "O oktávu výš / níž"
+      },
+      {
+        "id": "sequencer-space",
+        "keys": "Space",
+        "where": "na časové ose Sekvenceru",
+        "text": "Přehrání / zastavení sekvence"
+      },
+      {
+        "id": "sequencer-timeline",
+        "keys": "Šipky, Alt + šipky, Del, Ctrl/⌘ D",
+        "where": "na časové ose Sekvenceru",
+        "text": "Výběr, posun, smazání a duplikace bloků"
+      },
+      {
+        "id": "sequencer-history",
+        "keys": "Ctrl/⌘ Z, Shift + Ctrl/⌘ Z",
+        "where": "na časové ose Sekvenceru",
+        "text": "Zpět, znovu"
+      },
+      {
+        "id": "sequencer-clipboard",
+        "keys": "Ctrl/⌘ C, Ctrl/⌘ V",
+        "where": "na časové ose Sekvenceru",
+        "text": "Kopírování vybraného bloku a vložení za výběr"
+      },
+      {
+        "id": "keyboard-notes",
+        "keys": "A W S E D F T G Y H U J K O L P ; '",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Play notes, C to the next F: a note sounds while its key is held"
+      },
+      {
+        "id": "keyboard-octave",
+        "keys": "Z / X",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Octave down / up"
+      },
+      {
+        "id": "keyboard-velocity",
+        "keys": "C / V",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Velocity down / up (steps of 20)"
+      }
+    ],
+    "timeline": null,
+    "note": null,
+    "global": [
+      {
+        "id": "escape",
+        "keys": "Esc",
+        "text": "Stop immediately; close menus and dialogs"
+      },
+      {
+        "id": "roving",
+        "keys": "← →",
+        "where": "on tabs and segments",
+        "text": "Move and select"
+      },
+      {
+        "id": "tab",
+        "keys": "Tab",
+        "text": "Move focus (never taken by a shortcut)"
+      }
+    ]
+  },
+  "presets": {
+    "workspace": "presets",
+    "title": "Předvolby",
+    "space": {
+      "id": "space",
+      "keys": "Space",
+      "where": "(hold)",
+      "text": "Hold to play: sounds while held, stops on release (a programmed pattern: trigger once)"
+    },
+    "rows": [
+      {
+        "id": "trigger",
+        "keys": "Enter",
+        "where": "na Podržet a hrát nebo Spustit, kde jsou",
+        "text": "Spustit jednou"
+      },
+      {
+        "id": "octave",
+        "keys": "PgUp / PgDn",
+        "where": "na posuvníku frekvence, kde je",
+        "text": "O oktávu výš / níž"
+      },
+      {
+        "id": "keyboard-notes",
+        "keys": "A W S E D F T G Y H U J K O L P ; '",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Play notes, C to the next F: a note sounds while its key is held"
+      },
+      {
+        "id": "keyboard-octave",
+        "keys": "Z / X",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Octave down / up"
+      },
+      {
+        "id": "keyboard-velocity",
+        "keys": "C / V",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Velocity down / up (steps of 20)"
+      }
+    ],
+    "timeline": null,
+    "note": null,
+    "global": [
+      {
+        "id": "escape",
+        "keys": "Esc",
+        "text": "Stop immediately; close menus and dialogs"
+      },
+      {
+        "id": "roving",
+        "keys": "← →",
+        "where": "on tabs and segments",
+        "text": "Move and select"
+      },
+      {
+        "id": "tab",
+        "keys": "Tab",
+        "text": "Move focus (never taken by a shortcut)"
+      }
+    ]
+  },
+  "learn": {
+    "workspace": "learn",
+    "title": "Výuka",
+    "space": {
+      "id": "space",
+      "keys": "Space",
+      "text": "Nothing: Space starts no sound in this workspace"
+    },
+    "rows": [
+      {
+        "id": "keyboard-notes",
+        "keys": "A W S E D F T G Y H U J K O L P ; '",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Play notes, C to the next F: a note sounds while its key is held"
+      },
+      {
+        "id": "keyboard-octave",
+        "keys": "Z / X",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Octave down / up"
+      },
+      {
+        "id": "keyboard-velocity",
+        "keys": "C / V",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Velocity down / up (steps of 20)"
+      }
+    ],
+    "timeline": null,
+    "note": null,
+    "global": [
+      {
+        "id": "escape",
+        "keys": "Esc",
+        "text": "Stop immediately; close menus and dialogs"
+      },
+      {
+        "id": "roving",
+        "keys": "← →",
+        "where": "on tabs and segments",
+        "text": "Move and select"
+      },
+      {
+        "id": "tab",
+        "keys": "Tab",
+        "text": "Move focus (never taken by a shortcut)"
+      }
+    ]
+  },
+  "studio": {
+    "workspace": "studio",
+    "title": "Studio",
+    "space": {
+      "id": "space",
+      "keys": "Space",
+      "text": "Play / stop the Studio transport"
+    },
+    "rows": [
+      {
+        "id": "escape",
+        "keys": "Esc",
+        "text": "Cancel a drag or connection, close a picker, else stop"
+      },
+      {
+        "id": "delete",
+        "keys": "Delete / Backspace",
+        "text": "Delete the selected nodes or connection"
+      },
+      {
+        "id": "delete-bridge",
+        "keys": "Shift Delete / Backspace",
+        "text": "Delete the selected node and connect its input to its outputs where the types allow"
+      },
+      {
+        "id": "copy",
+        "keys": "Ctrl/⌘ C",
+        "text": "Copy the selected nodes"
+      },
+      {
+        "id": "cut",
+        "keys": "Ctrl/⌘ X",
+        "text": "Cut the selected nodes"
+      },
+      {
+        "id": "paste",
+        "keys": "Ctrl/⌘ V",
+        "text": "Paste (new ids, small offset)"
+      },
+      {
+        "id": "duplicate",
+        "keys": "Ctrl/⌘ D",
+        "text": "Duplicate the selected nodes"
+      },
+      {
+        "id": "undo",
+        "keys": "Ctrl/⌘ Z",
+        "text": "Undo"
+      },
+      {
+        "id": "redo",
+        "keys": "Ctrl/⌘ Shift Z, Ctrl Y",
+        "text": "Redo"
+      },
+      {
+        "id": "select-all",
+        "keys": "Ctrl/⌘ A",
+        "text": "Select every node"
+      },
+      {
+        "id": "select-toggle",
+        "keys": "T",
+        "text": "Add the focused node to the selection, or take it out"
+      },
+      {
+        "id": "quick-add",
+        "keys": "N",
+        "text": "Add a node (searchable picker)"
+      },
+      {
+        "id": "find",
+        "keys": "/",
+        "text": "Find a node by name or type and frame it"
+      },
+      {
+        "id": "connect",
+        "keys": "C",
+        "text": "Connect the selected node (list of compatible inputs)"
+      },
+      {
+        "id": "frame-selection",
+        "keys": "F",
+        "text": "Frame the selection"
+      },
+      {
+        "id": "frame-all",
+        "keys": "A",
+        "text": "Frame the whole graph"
+      },
+      {
+        "id": "tidy",
+        "keys": "L",
+        "text": "Tidy the graph: signal order with the fewest crossings, in rows on a narrow screen"
+      },
+      {
+        "id": "mute",
+        "keys": "M",
+        "text": "Mute or unmute the selected connections"
+      },
+      {
+        "id": "zoom-in",
+        "keys": "+",
+        "text": "Zoom in"
+      },
+      {
+        "id": "zoom-out",
+        "keys": "−",
+        "text": "Zoom out"
+      },
+      {
+        "id": "nudge",
+        "keys": "Arrows (Shift: ×4)",
+        "text": "Move the selected nodes by the grid"
+      },
+      {
+        "id": "focus-next",
+        "keys": "Tab",
+        "text": "Move focus (never taken by Studio)"
+      },
+      {
+        "id": "step-grid-move",
+        "keys": "Šipky",
+        "where": "ve zaměřené krokové mřížce",
+        "text": "Posun po krocích a řadách"
+      },
+      {
+        "id": "step-grid-select",
+        "keys": "Shift + šipky",
+        "where": "ve zaměřené krokové mřížce",
+        "text": "Rozšíření výběru kroků v řadě"
+      },
+      {
+        "id": "step-grid-toggle",
+        "keys": "Enter",
+        "where": "ve zaměřené krokové mřížce",
+        "text": "Zapnutí nebo vypnutí kroku či výběru"
+      },
+      {
+        "id": "step-grid-clipboard",
+        "keys": "Ctrl/⌘ C, X, V",
+        "where": "ve zaměřené krokové mřížce",
+        "text": "Kopírování, vyjmutí a vložení kroků"
+      },
+      {
+        "id": "step-grid-clear",
+        "keys": "Delete",
+        "where": "ve zaměřené krokové mřížce",
+        "text": "Vypnutí vybraných kroků"
+      },
+      {
+        "id": "step-grid-transpose",
+        "keys": "PageUp / PageDown",
+        "where": "ve zaměřené krokové mřížce",
+        "text": "Posun noty o půltón, se Shiftem o oktávu"
+      },
+      {
+        "id": "step-grid-page",
+        "keys": "[ / ]",
+        "where": "ve zaměřené krokové mřížce",
+        "text": "Předchozí a další stránka kroků"
+      },
+      {
+        "id": "step-grid-menu",
+        "keys": "Shift + F10, klávesa nabídky",
+        "where": "ve zaměřené krokové mřížce",
+        "text": "Nabídka kroku: přízvuk, ratchet, pravděpodobnost, slide"
+      },
+      {
+        "id": "step-grid-record",
+        "keys": "R",
+        "where": "u přepínače Nahrávat",
+        "text": "Nahrávání živých úderů do notového klipu: zapnout nebo vypnout"
+      },
+      {
+        "id": "keyboard-notes",
+        "keys": "A W S E D F T G Y H U J K O L P ; '",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Play notes, C to the next F: a note sounds while its key is held"
+      },
+      {
+        "id": "keyboard-octave",
+        "keys": "Z / X",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Octave down / up"
+      },
+      {
+        "id": "keyboard-velocity",
+        "keys": "C / V",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Velocity down / up (steps of 20)"
+      }
+    ],
+    "timeline": "Space play or stop · Esc cancel or stop · Home return · ←/→ move (Shift fine) · ↑/↓ track or value · Enter edit · Delete remove · Ctrl/⌘ D duplicate · S split at playhead · M marker · L loop · [ ] previous / next marker",
+    "note": "They apply while Studio has focus and no text field is being edited. Every drag has a keyboard path: arrows move nodes, C lists the inputs a node can connect to, and the Inspector edits positions and clip times. A focused timeline item is activated by Enter; Space plays or stops there too.",
+    "global": [
+      {
+        "id": "roving",
+        "keys": "← →",
+        "where": "on tabs and segments",
+        "text": "Move and select"
+      }
+    ]
+  },
+  "synth": {
+    "workspace": "synth",
+    "title": "Synth",
+    "space": {
+      "id": "space",
+      "keys": "Space",
+      "text": "Nothing: Space starts no sound in this workspace"
+    },
+    "rows": [
+      {
+        "id": "step-grid-move",
+        "keys": "Šipky",
+        "where": "ve zaměřené krokové mřížce",
+        "text": "Posun po krocích a řadách"
+      },
+      {
+        "id": "step-grid-select",
+        "keys": "Shift + šipky",
+        "where": "ve zaměřené krokové mřížce",
+        "text": "Rozšíření výběru kroků v řadě"
+      },
+      {
+        "id": "step-grid-toggle",
+        "keys": "Enter",
+        "where": "ve zaměřené krokové mřížce",
+        "text": "Zapnutí nebo vypnutí kroku či výběru"
+      },
+      {
+        "id": "step-grid-clipboard",
+        "keys": "Ctrl/⌘ C, X, V",
+        "where": "ve zaměřené krokové mřížce",
+        "text": "Kopírování, vyjmutí a vložení kroků"
+      },
+      {
+        "id": "step-grid-clear",
+        "keys": "Delete",
+        "where": "ve zaměřené krokové mřížce",
+        "text": "Vypnutí vybraných kroků"
+      },
+      {
+        "id": "step-grid-transpose",
+        "keys": "PageUp / PageDown",
+        "where": "ve zaměřené krokové mřížce",
+        "text": "Posun noty o půltón, se Shiftem o oktávu"
+      },
+      {
+        "id": "step-grid-page",
+        "keys": "[ / ]",
+        "where": "ve zaměřené krokové mřížce",
+        "text": "Předchozí a další stránka kroků"
+      },
+      {
+        "id": "step-grid-menu",
+        "keys": "Shift + F10, klávesa nabídky",
+        "where": "ve zaměřené krokové mřížce",
+        "text": "Nabídka kroku: přízvuk, ratchet, pravděpodobnost, slide"
+      },
+      {
+        "id": "drum-pads",
+        "keys": "Enter, mezerník",
+        "where": "na kartě Drums",
+        "text": "Zaměřený pad zahraje úder své řady"
+      },
+      {
+        "id": "step-grid-record",
+        "keys": "R",
+        "where": "u přepínače Nahrávat",
+        "text": "Nahrávání živých úderů do notového klipu: zapnout nebo vypnout"
+      },
+      {
+        "id": "keyboard-notes",
+        "keys": "A W S E D F T G Y H U J K O L P ; '",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Play notes, C to the next F: a note sounds while its key is held"
+      },
+      {
+        "id": "keyboard-octave",
+        "keys": "Z / X",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Octave down / up"
+      },
+      {
+        "id": "keyboard-velocity",
+        "keys": "C / V",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Velocity down / up (steps of 20)"
+      }
+    ],
+    "timeline": null,
+    "note": null,
+    "global": [
+      {
+        "id": "escape",
+        "keys": "Esc",
+        "text": "Stop immediately; close menus and dialogs"
+      },
+      {
+        "id": "roving",
+        "keys": "← →",
+        "where": "on tabs and segments",
+        "text": "Move and select"
+      },
+      {
+        "id": "tab",
+        "keys": "Tab",
+        "text": "Move focus (never taken by a shortcut)"
+      }
+    ]
+  },
+  "about": {
+    "workspace": "about",
+    "title": "O aplikaci",
+    "space": {
+      "id": "space",
+      "keys": "Space",
+      "text": "Nothing: Space starts no sound in this workspace"
+    },
+    "rows": [
+      {
+        "id": "keyboard-notes",
+        "keys": "A W S E D F T G Y H U J K O L P ; '",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Play notes, C to the next F: a note sounds while its key is held"
+      },
+      {
+        "id": "keyboard-octave",
+        "keys": "Z / X",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Octave down / up"
+      },
+      {
+        "id": "keyboard-velocity",
+        "keys": "C / V",
+        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "text": "Velocity down / up (steps of 20)"
+      }
+    ],
+    "timeline": null,
+    "note": null,
+    "global": [
+      {
+        "id": "escape",
+        "keys": "Esc",
+        "text": "Stop immediately; close menus and dialogs"
+      },
+      {
+        "id": "roving",
+        "keys": "← →",
+        "where": "on tabs and segments",
+        "text": "Move and select"
+      },
+      {
+        "id": "tab",
+        "keys": "Tab",
+        "text": "Move focus (never taken by a shortcut)"
+      }
+    ]
+  }
+}
