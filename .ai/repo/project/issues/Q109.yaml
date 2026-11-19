@@ -20,4 +20,18 @@ validation:
 evidence_required:
   - "owner_decision"
 created_at: '2026-11-16'
-updated_at: '2026-11-16'
+updated_at: 2026-11-18T03:06:54Z
+started_at: 2026-11-18T02:57:14Z
+started_event: sha256:55dfd58e6dc9ef694885d5f319f767910814766d87185f535b92517173dc06c6
+verified_at: 2026-11-18T03:01:02Z
+verified_event: sha256:f8085bae11e632d3d763d5f539befdafa2bedcf6abab0fbaaf92f4a79df5216d
+completed_at: 2026-11-18T03:06:54Z
+completed_event: sha256:97f6d22178856e1f336308ff0e4dbd8ac141a17c2ae47034f84711f5743a8d21
+evidence:
+  - covers: "owner_decision"
+    type: manual
+    command: "AskUserQuestion, Claude Code session c9ae388a-1265-4c28-8fad-5fdaea45ef04 (oscilla-43), 2026-11-16"
+    result: "Owner decision of 2026-11-16, asked by oscilla-43 (session c9ae388a-1265-4c28-8fad-5fdaea45ef04) via AskUserQuestion. Question (verbatim): 'The Mac has 6.8 GiB free. About 595 OSCILLA worktrees under ~/dev/oscilla-wt have branches already merged to main and no uncommitted changes; together they hold ~29.7 GiB (du), mostly node_modules (~180 MB each). Most were created by other Claude sessions. How should space be reclaimed?' Options: 'node_modules only (Recommended)', 'Remove whole worktrees', 'Do nothing now'. Answer (verbatim): 'node_modules only (Recommended)'. Whole worktrees are removed only by a later owner decision. Stamped under Q112 (the owner's bulk approval of the plan triage, 2026-11-18)."
+    artifact: ".ai/repo/project/issues/Q109.yaml"
+    commit: 8e087873968df0438165b474684d6dee7ac7e5ff
+    recorded_at: 2026-11-18T03:05:02Z

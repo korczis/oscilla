@@ -21,4 +21,18 @@ validation:
 evidence_required:
   - "owner_decision"
 created_at: '2026-11-07'
-updated_at: '2026-11-07'
+updated_at: 2026-11-18T03:16:19Z
+started_at: 2026-11-18T03:10:03Z
+started_event: sha256:c45d29d06e5dbb33c69ce409cceecb11ec90cbfaf17aacfc08c8381be50ca9a2
+verified_at: 2026-11-18T03:12:34Z
+verified_event: sha256:12e19536eeef576aa13ef9f98ffa411f75d79bcf1bf7a5057e08c055727fee3c
+completed_at: 2026-11-18T03:16:19Z
+completed_event: sha256:05aef7c279727063874e6cc480e99d81c9f6486ce4570373343c5cca0a837388
+evidence:
+  - covers: "owner_decision"
+    type: manual
+    command: "Claude Code session 6f686fcc-fdbe-44a2-930d-ddf956a9ee5f (oscilla-2b), 2026-11-07 ~12:00Z: the owner's /loop order and the AskUserQuestion that followed"
+    result: "Owner order and answer of 2026-11-07, session 6f686fcc-fdbe-44a2-930d-ddf956a9ee5f (oscilla-2b). Order (verbatim): 'dokoncuj veskere issues, ktera jdou, vse zrobustnuj, at je vse hotove asap; odted ten artifakt musi mit ceskou prozu, vzdy a vsude, musi byt enforced, vse propojene, github cisty'. Question (verbatim): 'Ktery „artefakt“ ma mit od ted vzdy a vsude ceskou prozu (vynucene pravidlem a testem)?' Options: 'OSCILLA aplikace', 'claude.ai artefakty', 'Release notes a GitHub', 'Vsechno uvedene'. Answer (verbatim): 'Vsechno uvedene'. Criterion 2 holds on main 8e087873: rule .ai/repo/rules/project/czech-prose.v1.md with tests/unit/czech-prose.test.mjs (the per-file ratchet tests/unit/czech-prose-baseline.json) and tests/unit/czech-prose-short.test.mjs. Stamped under Q112 (the owner's bulk approval of the plan triage, 2026-11-18)."
+    artifact: ".ai/repo/project/issues/Q104.yaml"
+    commit: 8e087873968df0438165b474684d6dee7ac7e5ff
+    recorded_at: 2026-11-18T03:15:14Z

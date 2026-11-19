@@ -645,7 +645,7 @@ function defineChecks() {
   // input survives entering and leaving and reads UNCALIBRATED, with the reason, while the page
   // is in TEST CONTEXT.
   def('test-context-from-the-page', async ({ page, browserName, origin }) => {
-    const TC_LABEL = 'TEST CONTEXT · digital loopback (no microphone)';
+    const TC_LABEL = 'TESTOVACÍ KONTEXT · digitální smyčka (bez mikrofonu)';
     const SELECT = '#osc-m-input-device';
     await H.workspace(page, 'measure');
     const view = () => page.evaluate(() => {
@@ -687,12 +687,12 @@ function defineChecks() {
     };
     const enter = async () => {
       await page.selectOption(SELECT, { label: TC_LABEL }, { timeout: 5000 });
-      return H.until(view, (v) => v.loopback && !!v.banner && /^TEST CONTEXT/.test(v.polite),
+      return H.until(view, (v) => v.loopback && !!v.banner && /^TESTOVACÍ KONTEXT/.test(v.polite),
         3000);
     };
     const leave = async () => {
       await page.selectOption(SELECT, '', { timeout: 5000 });
-      return H.until(view, (v) => !v.loopback && !v.banner && /^Left TEST CONTEXT/
+      return H.until(view, (v) => !v.loopback && !v.banner && /^Opuštěn TESTOVACÍ KONTEXT/
         .test(v.polite), 3000);
     };
     const zero = (c) => c.ioNodes === 0 && c.ioSources === 0 && c.captures === 0
@@ -714,19 +714,19 @@ function defineChecks() {
       entered: entered.loopback && entered.selected === TC_LABEL && !entered.disabled
         && /^TESTOVACÍ KONTEXT\./.test(entered.banner || '')
         && entered.chip === 'TESTOVACÍ KONTEXT, smyčka'
-        && /no input device is used\. Choose an input to leave TEST CONTEXT/
+        && /nepoužívá se žádné vstupní zařízení\. Volbou vstupu TESTOVACÍ KONTEXT opustíte/
           .test(entered.status)
-        && /^TEST CONTEXT: digital loopback, no microphone/.test(entered.polite),
+        && /^TESTOVACÍ KONTEXT: digitální smyčka, bez mikrofonu/.test(entered.polite),
       checkedInIt: checked.state === 'READY' && checked.ioKind === 'loopback'
         && checked.inputNow && stored === true && calibrated.level
         && calibrated.indicator === 'CALIBRATED',
       left: !left.loopback && left.value === '' && left.banner === null
         && left.chip === 'Mikrofon' && !left.disabled,
       cleared: left.state === 'IDLE' && !left.inputNow && left.indicator === 'UNCALIBRATED'
-        && /Cleared: the input check\. Run the /.test(left.polite)
-        && left.toasts.some((t) => /^Left TEST CONTEXT: Cleared/.test(t)),
+        && /Vymazáno: kontrola vstupu\. Spusťte /.test(left.polite)
+        && left.toasts.some((t) => /^Opuštěn TESTOVACÍ KONTEXT: Vymazáno/.test(t)),
       // The calibration typed in TEST CONTEXT is kept, void outside it (decision 2026-10-11).
-      calibrationKept: left.level && !/level calibration/.test(left.polite)
+      calibrationKept: left.level && !/kalibrac/i.test(left.polite)
         && /^UNCALIBRATED: the level calibration was made in TEST /.test(left.levelVoid || ''),
       released: zero(counts),
       // The address follows the choice where the browser rewrites it (not judged on file://).
@@ -767,8 +767,8 @@ function defineChecks() {
     res.invalidCleared = leftInvalid.result === null && leftInvalid.rta === null
       && leftInvalid.noiseStep !== 'done' && leftInvalid.state === 'IDLE'
       && leftInvalid.assertive === '' && leftInvalid.chip === 'Mikrofon'
-      && /Cleared: the invalid TEST CONTEXT result/.test(leftInvalid.polite)
-      && leftInvalid.toasts.some((t) => /the invalid TEST CONTEXT result/.test(t));
+      && /Vymazáno: neplatný výsledek TESTOVACÍHO KONTEXTU/.test(leftInvalid.polite)
+      && leftInvalid.toasts.some((t) => /neplatný výsledek TESTOVACÍHO KONTEXTU/.test(t));
     await setGain(gainWas);
     res.releasedAfterInvalid = zero(await released());
     Object.assign(detail, { gainWas, shortened, invalid, leftInvalid });
@@ -929,7 +929,7 @@ function defineChecks() {
           && res.afterLeaving.response === null,
         routeAInject: res.injected.loopback && res.injected.set === true && res.injected.known
           && res.injected.left === true && refused(res.afterInject),
-        routeB: res.shown.ok === true && res.shown.title === 'TEST CONTEXT result'
+        routeB: res.shown.ok === true && res.shown.title === 'Výsledek TESTOVACÍHO KONTEXTU'
           && refused(res.afterShow),
         inContext: res.inContext.set === true && res.typedInContext.saved === true
           && res.typedInContext.indicator === 'CALIBRATED' && res.typedInContext.testContext
@@ -1001,12 +1001,12 @@ function defineChecks() {
             .test(res.afterRealCheck.void || '')
           && /úroveň relativní \(obdoba dBFS\)$/.test(res.afterRealCheck.step);
         v.testResultNeverTakesMicCal = res.shownChecked === true
-          && res.afterShownChecked.title === 'TEST CONTEXT result'
+          && res.afterShownChecked.title === 'Výsledek TESTOVACÍHO KONTEXTU'
           && res.afterShownChecked.input === 'known'
           && res.afterShownChecked.indicator === 'CALIBRATED'
           && relative(res.afterShownChecked.rta) && relative(res.afterShownChecked.response);
         v.pendingIsRelative = res.shownPending === true
-          && res.afterShownPending.title === 'TEST CONTEXT result'
+          && res.afterShownPending.title === 'Výsledek TESTOVACÍHO KONTEXTU'
           && res.afterShownPending.input === null
           && res.afterShownPending.indicator === 'PENDING INPUT CHECK'
           && /úroveň čeká na kontrolu vstupu$/.test(res.afterShownPending.step)
@@ -4644,7 +4644,7 @@ function defineChecks() {
           await H.workspace(page, 'playground');
         } else {
           await H.workspace(page, 'learn');
-          await page.locator('[data-osc="learn.demo"]', { hasText: 'Octave steps 125 Hz' }).click();
+          await page.locator('[data-osc="learn.demo"]', { hasText: 'Oktávové kroky 125 Hz' }).click();
           await page.waitForFunction(() => window.OSCILLA.app.workspace === 'playground', null,
             { timeout: 8000 });
         }

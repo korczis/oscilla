@@ -43,7 +43,7 @@ import { fakeIndexedDB } from './fixtures/fake-indexeddb.mjs';
 
 const { inputDeviceView, inputDeviceList, DEFAULT_INPUT_LABEL } = inputs;
 const TC = inputs.TEST_CONTEXT_INPUT_VALUE;
-const TC_LABEL = 'TEST CONTEXT · digital loopback (no microphone)';
+const TC_LABEL = 'TESTOVACÍ KONTEXT · digitální smyčka (bez mikrofonu)';
 const SR = 48000;
 const MIC_A = Object.freeze({ device: { label: 'Mic A', id: 'mic-a' },
   constraints: { requested: null, applied: { echoCancellation: false, noiseSuppression: false,
@@ -104,14 +104,14 @@ test('view: the input list ends with the TEST CONTEXT choice, labelled, and is n
     assert.equal(on.selected, TC, 'TEST CONTEXT is the selected choice while it is on');
     assert.deepEqual(on.options.map((o) => o.value), ['', 'a1', TC], 'inputs stay listed');
     assert.ok(!on.disabled, 'it can be left from the page');
-    assert.match(on.status, /TEST CONTEXT loopback: no input device is used/);
-    assert.match(on.status, /Choose an input to leave TEST CONTEXT/);
+    assert.match(on.status, /Smyčka TESTOVACÍHO KONTEXTU: nepoužívá se žádné vstupní zařízení/);
+    assert.match(on.status, /Volbou vstupu TESTOVACÍ KONTEXT opustíte/);
 
     // No microphone in this browser: TEST CONTEXT needs none, so the choice stays usable.
     const none = inputDeviceView({ available: false });
     assert.ok(!none.disabled);
     assert.deepEqual(none.options.map((o) => o.label), [DEFAULT_INPUT_LABEL, TC_LABEL]);
-    assert.match(none.status, /offers no microphone input here; TEST CONTEXT needs none/);
+    assert.match(none.status, /nenabízí žádný mikrofonní vstup; TESTOVACÍ KONTEXT žádný nepotřebuje/);
 
     // An input that vanished is not announced as missing while no input is in use.
     const gone = inputDeviceView({ devices: [], selectedId: 'a1', selectedLabel: 'USB mic',
@@ -139,8 +139,8 @@ test('enter: choosing TEST CONTEXT in the input list turns the loopback on and s
     assert.equal(cmp.meas.loopback, true, 'the banner and the chip follow meas.loopback');
     assert.equal(cmp.meas.input.selected, TC);
     assert.equal(cmp.meas.rtaLive.available, true, 'the live RTA needs no microphone here');
-    assert.match(await said(cmp, /^TEST CONTEXT/),
-      /^TEST CONTEXT: digital loopback, no microphone/);
+    assert.match(await said(cmp, /^TESTOVACÍ KONTEXT/),
+      /^TESTOVACÍ KONTEXT: digitální smyčka, bez mikrofonu/);
     assert.equal(seam.setInputNow(MIC_A), true, 'the page is in TEST CONTEXT');
     assert.equal(cmp.measureSelectInput(TC), true, 'choosing it again changes nothing');
     assert.deepEqual(seam.inputNow, MIC_A);
@@ -156,7 +156,7 @@ test('enter and leave are refused while a measurement uses the input', () => {
   assert.equal(cmp.measureSelectInput(TC), false);
   assert.equal(cmp.meas.loopback, false);
   assert.equal(cmp.meas.input.selected, '');
-  assert.equal(notes.at(-1).title, 'Input not changed');
+  assert.equal(notes.at(-1).title, 'Vstup nezměněn');
   cmp.meas.busy = false;
   assert.equal(cmp.measureSelectInput(TC), true);
   cmp.meas.busy = true;
@@ -175,7 +175,7 @@ test('leave: choosing an input clears the result and input check of TEST CONTEXT
 
   const result = { ...a.result };
   assert.equal(seam.showResult(result), true);
-  assert.equal(cmp.meas.shownTitle, 'TEST CONTEXT result');
+  assert.equal(cmp.meas.shownTitle, 'Výsledek TESTOVACÍHO KONTEXTU');
   assert.equal(seam.setInputNow(MIC_A), true);
   typeReading(cmp);
   assert.equal(cmp.measureSaveLevelCalibration(), true);
@@ -208,22 +208,22 @@ test('leave: choosing an input clears the result and input check of TEST CONTEXT
   assert.equal(cmp.measureLevelsText,
     'UNCALIBRATED (the calibration is not valid for this input)');
   assert.deepEqual(cmp.measureWhatWouldBeLost().map((l) => l.label),
-    ['The level calibration (kept in page memory only)'], 'the result is gone, not unsaved');
+    ['Kalibrace úrovně (drží se jen v paměti stránky)'], 'the result is gone, not unsaved');
   // A reading typed now has no input to bind to (ledger W7f route A, through the page).
   typeReading(cmp);
   assert.equal(cmp.measureSaveLevelCalibration(), false);
   assert.equal(cmp.meas.levelForm.error, LEVEL_NEEDS_INPUT);
   assert.equal(seam.levelCalibration, cal, 'the refused reading replaced nothing');
   // It is said, in the live region and in a notification.
-  const text = await said(cmp, /^Left TEST CONTEXT/);
-  assert.match(text, /^Left TEST CONTEXT\. Input: default input\. Cleared: /);
-  for (const what of [/the unsaved TEST CONTEXT result/, /the input check/]) {
+  const text = await said(cmp, /^Opuštěn TESTOVACÍ KONTEXT/);
+  assert.match(text, /^Opuštěn TESTOVACÍ KONTEXT\. Vstup: výchozí vstup\. Vymazáno: /);
+  for (const what of [/neuložený výsledek TESTOVACÍHO KONTEXTU/, /kontrola vstupu/]) {
     assert.match(text, what);
     assert.match(notes.at(-1).text, what);
   }
-  assert.doesNotMatch(text, /level calibration/, 'the calibration is kept, not cleared');
-  assert.equal(notes.at(-1).title, 'Left TEST CONTEXT');
-  assert.match(text, /Run the setup check for this input\.$/);
+  assert.doesNotMatch(text, /kalibrac/i, 'the calibration is kept, not cleared');
+  assert.equal(notes.at(-1).title, 'Opuštěn TESTOVACÍ KONTEXT');
+  assert.match(text, /Spusťte pro tento vstup kontrolu nastavení\.$/);
 });
 
 test('leave: a saved TEST CONTEXT result leaves the page and stays in Experiments, labelled',
@@ -238,7 +238,7 @@ test('leave: a saved TEST CONTEXT result leaves the page and stays in Experiment
     assert.equal(seam.result, null);
     assert.equal(cmp.meas.saved, false);
     assert.equal(cmp.meas.savedId, null);
-    assert.match(notes.at(-1).text, /its saved experiment is kept/);
+    assert.match(notes.at(-1).text, /jeho uložený experiment zůstává/);
     const stored = await cmp.experimentsGet(id);
     assert.equal(experimentTestContext(stored), a.result.testContext.label);
   });
@@ -249,8 +249,8 @@ test('leave: with nothing produced in TEST CONTEXT there is nothing to report', 
   assert.equal(cmp.measureSelectInput(''), true);
   assert.equal(cmp.meas.loopback, false);
   assert.deepEqual(notes, []);
-  assert.equal(await said(cmp, /^Left TEST CONTEXT/), 'Left TEST CONTEXT. Input: default input. '
-    + 'Run the setup check for this input.');
+  assert.equal(await said(cmp, /^Opuštěn TESTOVACÍ KONTEXT/), 'Opuštěn TESTOVACÍ KONTEXT. Vstup: výchozí vstup. '
+    + 'Spusťte pro tento vstup kontrolu nastavení.');
 });
 
 // ================================================================= address
@@ -352,9 +352,9 @@ test('origin: an INVALID result made in TEST CONTEXT is cleared on leaving, and 
     assert.notEqual(flowStatus(cmp, 'input'), 'blocked');
     assert.notEqual(flowStatus(cmp, 'noise'), 'done');
     assert.equal(cmp.meas.live.assertive, '', 'the outcome said in TEST CONTEXT is not left');
-    const text = await said(cmp, /^Left TEST CONTEXT/);
-    assert.match(text, /Cleared: the invalid TEST CONTEXT result/);
-    assert.match(notes.at(-1).text, /the invalid TEST CONTEXT result/);
+    const text = await said(cmp, /^Opuštěn TESTOVACÍ KONTEXT/);
+    assert.match(text, /Vymazáno: neplatný výsledek TESTOVACÍHO KONTEXTU/);
+    assert.match(notes.at(-1).text, /neplatný výsledek TESTOVACÍHO KONTEXTU/);
     assert.equal(cmp.meas.live.assertive, '');
   });
 
@@ -413,11 +413,11 @@ test('origin: an INVALID result of a real input is not kept inside TEST CONTEXT'
   assert.equal(cmp.meas.rta, null);
   assert.notEqual(flowStatus(cmp, 'input'), 'blocked');
   assert.equal(cmp.meas.live.assertive, '');
-  assert.match(await said(cmp, /^TEST CONTEXT/),
-    /Cleared: the invalid result of the previous input\.$/);
+  assert.match(await said(cmp, /^TESTOVACÍ KONTEXT/),
+    /Vymazáno: neplatný výsledek předchozího vstupu\.$/);
   // Said in a notification too, as leaving does (review of the merge, B2).
-  assert.equal(notes.at(-1).title, 'Entered TEST CONTEXT');
-  assert.match(notes.at(-1).text, /the invalid result of the previous input/);
+  assert.equal(notes.at(-1).title, 'Vstup do TESTOVACÍHO KONTEXTU');
+  assert.match(notes.at(-1).text, /neplatný výsledek předchozího vstupu/);
 });
 
 test('origin: a level calibration applies only on the side it was stored on, and is kept on '
@@ -490,12 +490,12 @@ test('enter: a COMPLETE result shown before TEST CONTEXT is dropped, and a notif
     assert.equal(cmp.meas.rta, null);
     assert.equal(cmp.meas.response, null);
     assert.equal(await cmp.measureSave(), null);
-    assert.match(await said(cmp, /^TEST CONTEXT/), /Cleared: the unsaved TEST CONTEXT result\.$/);
+    assert.match(await said(cmp, /^TESTOVACÍ KONTEXT/), /Vymazáno: neuložený výsledek TESTOVACÍHO KONTEXTU\.$/);
     // Not only for a screen reader: an unsaved measurement went (review of the merge, B2).
     assert.equal(notes.length, 1);
-    assert.equal(notes[0].title, 'Entered TEST CONTEXT');
-    assert.match(notes[0].text, /^Cleared, so that nothing from before is read as the digital /);
-    assert.match(notes[0].text, /the unsaved TEST CONTEXT result\.$/);
+    assert.equal(notes[0].title, 'Vstup do TESTOVACÍHO KONTEXTU');
+    assert.match(notes[0].text, /^Vymazáno, aby se nic z dřívějška nečetlo jako výsledek digitální /);
+    assert.match(notes[0].text, /neuložený výsledek TESTOVACÍHO KONTEXTU\.$/);
   });
 
 test('enter and leave end a captured reference reading and its summary', async () => {
@@ -518,7 +518,7 @@ test('enter and leave are refused while a reference capture is running', async (
   assert.equal(seam.referenceCapturing, true);
   assert.equal(cmp.meas.busy, false, 'a reference capture is not a measurement');
   assert.equal(cmp.measureSelectInput(''), false);
-  assert.equal(notes.at(-1).title, 'Input not changed');
+  assert.equal(notes.at(-1).title, 'Vstup nezměněn');
   assert.equal(seam.useMicrophone(), false);
   assert.equal(cmp.meas.loopback, true);
   release(loopbackCapture());
@@ -534,7 +534,7 @@ test('enter and leave are refused while a setup check is pending', async () => {
   const pending = cmp.measureCheck();
   assert.equal(cmp.meas.busy, false, 'the engine has not reported a state yet');
   assert.equal(cmp.measureSelectInput(''), false);
-  assert.equal(notes.at(-1).title, 'Input not changed');
+  assert.equal(notes.at(-1).title, 'Vstup nezměněn');
   assert.equal(seam.useMicrophone(), false);
   assert.equal(cmp.meas.loopback, true);
   release();

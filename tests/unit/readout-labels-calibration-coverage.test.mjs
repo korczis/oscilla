@@ -129,18 +129,18 @@ function rawExtremesSummary(v, quality) {
     });
   }
   const binHz = T.resolutionHz > 0 ? T.resolutionHz : T.binHz;
-  return `maximum ${common.ratioDbText(T.magnitudeDb[hi])} at `
+  return `maximum ${common.ratioDbText(T.magnitudeDb[hi])} na `
     + `${common.gridFrequencyText(f, hi, binHz)}, minimum ${common.ratioDbText(T.magnitudeDb[lo])}`
-    + ` at ${common.gridFrequencyText(f, lo, binHz)}`;
+    + ` na ${common.gridFrequencyText(f, lo, binHz)}`;
 }
 
 function assertNoCoverage(v, label) {
   assert.equal(v.primary, 'raw', `${label}: RAW is primary`);
   assert.ok(!v.badges.includes(CAL), `${label}: ${v.badges.join(' | ')}`);
   assert.ok(v.badges.includes('UNCALIBRATED'), `${label}: ${v.badges.join(' | ')}`);
-  assert.ok(v.summary.startsWith('Frequency response (observed, uncalibrated): maximum'),
+  assert.ok(v.summary.startsWith('Frekvenční odezva (naměřená, nekalibrováno): maximum'),
     `${label}: ${v.summary}`);
-  assert.doesNotMatch(v.summary, /\(calibrated\)|no measured points/, label);
+  assert.doesNotMatch(v.summary, /\(kalibrovaná\)|žádné změřené body/, label);
   assert.equal(v.markers.calibratedRange, null, label);
   assert.ok(v.series.every((s) => s.kind !== common.QUANTITY_KINDS.CALIBRATED
     && !/CALIBRATED/.test(s.label)), `${label}: no series claims CALIBRATED`);
@@ -151,10 +151,10 @@ function assertNoCoverage(v, label) {
   assert.ok(note, `${label}: ${v.notes.join(' | ')}`);
   assert.equal(v.notes.some((n) => /measured range/.test(n)), false, label);
   assert.match(note, /bez extrapolace/);
-  assert.match(note, /zobrazeno RAW, nekalibrováno/);
+  assert.match(note, /zobrazena surová křivka, nekalibrováno/);
   const r = v.readoutAt(1000);
   assert.equal(r.calibrated, false);
-  assert.equal(r.corrected, 'not covered by the profile (uncalibrated)');
+  assert.equal(r.corrected, 'mimo profil (nekalibrováno)');
 }
 
 test('fixture: a 100 Hz-10 kHz sweep on a 319-point grid that neither profile covers', () => {
@@ -194,10 +194,10 @@ test('response view: a partly covering profile keeps CALIBRATED and the uncovere
   assert.equal(v.primary, 'corrected');
   assert.ok(v.badges.includes(CAL));
   assert.match(v.markers.calibratedRange.label,
-    /^calibrated 1\.0+ kHz–\d.*, uncalibrated below 1\.0+ kHz \(no extrapolation\)$/);
+    /^kalibrováno 1\.0+ kHz–\d.*, nekalibrováno pod 1\.0+ kHz \(bez extrapolace\)$/);
   assert.ok(v.notes.includes(v.markers.calibratedRange.label));
-  assert.ok(!v.notes.some((n) => /covers none/.test(n)));
-  assert.match(v.summary, /^Frequency response \(calibrated\): maximum/);
+  assert.ok(!v.notes.some((n) => /nepokrývá žádn/.test(n)));
+  assert.match(v.summary, /^Frekvenční odezva \(kalibrovaná\): maximum/);
   assert.equal(v.readoutAt(2000).calibrated, true);
   assert.equal(v.readoutAt(200).calibrated, false);
 });
@@ -231,14 +231,14 @@ test('live RTA band modes badge from the coverage mask, as FFT mode does (MSR-30
     assert.ok(v.badges.includes(UNCAL_FREQ), `${mode}: ${v.badges.join(' | ')}`);
     assert.ok(!v.badges.includes(CAL), `${mode}: ${v.badges.join(' | ')}`);
     assert.ok(v.bars.every((b) => !b.covered && b.kind !== common.QUANTITY_KINDS.CALIBRATED));
-    assert.ok(v.notes.some((n) => /profile covers none of the bands/.test(n)
-      && /no extrapolation/.test(n)), v.notes.join(' | '));
+    assert.ok(v.notes.some((n) => /profil nepokrývá žádné pásmo/.test(n)
+      && /bez extrapolace/.test(n)), v.notes.join(' | '));
     assert.ok(!v.notes.some((n) => /Bands outside the frequency profile/.test(n)));
     // A covering profile still badges CALIBRATED and marks its uncovered bands.
     const c = liveView(AUDIBLE, mode);
     assert.ok(c.badges.includes(CAL), `${mode}: ${c.badges.join(' | ')}`);
-    assert.ok(c.notes.some((n) => /Bands outside the frequency profile are uncorrected/.test(n)));
-    assert.ok(!c.notes.some((n) => /covers none/.test(n)));
+    assert.ok(c.notes.some((n) => /Pásma mimo frekvenční profil nejsou korigována/.test(n)));
+    assert.ok(!c.notes.some((n) => /nepokrývá žádn/.test(n)));
   }
   // FFT mode, unchanged: UNCALIBRATED without a covered bin, CALIBRATED with one.
   assert.ok(liveView(ULTRA, 'fft').badges.includes(UNCAL_FREQ));

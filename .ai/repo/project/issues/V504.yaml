@@ -1,13 +1,14 @@
 id: V504
-milestone: M045
+milestone: "M069"
 serves:
   - "midi-jam-companion#midi-notes-visible"
+  - "connected-instrument#probes-and-views"
 title: "Incoming and generated notes beside the spectrum and waveform"
 slug: midi-notes-visible
 priority: p2
 profile: implementation
 objective: "Show incoming and generated notes (name, velocity) next to the existing spectrum and waveform views, in the OSCILLA visual language, with a non-pointer path and announcements."
-current_state: "Updated 2026-10-18. The scope names only MIDI paths plus the one integration file the criteria need, so that majordomus intent realization does not infer unrelated earlier work as realising this intent (audit finding main-plan F9, 2026-10-18). src/index.html is the integration file for the note view. It follows V503 as well as V502 because both change src/js/midi (scope conflict in the same wave, simulated 2026-10-18)."
+current_state: "2026-11-18: K085 (every Keys source in the note view) merged into this issue by the plan triage the owner approved in bulk (Q112: 'schvaluji vse', 2026-11-18T02:27Z, Claude Code session 980e22ee-d9d4-4dd0-8318-8b727f127ce9, oscilla-e5; triage derived from origin/main 4682eea4): since K178 and K183 every source feeds the one Keys node, so the incoming and generated notes this issue shows are K085's notes; its criteria are the ones that start 'From K085'. K085's scope src/js/ui was not taken over, so the scope stays as narrow as the note above explains; src/js/ui/midi covers the view. The issue moved from M045 to M069 with the milestone merge of the same triage. Updated 2026-10-18. The scope names only MIDI paths plus the one integration file the criteria need, so that majordomus intent realization does not infer unrelated earlier work as realising this intent (audit finding main-plan F9, 2026-10-18). src/index.html is the integration file for the note view. It follows V503 as well as V502 because both change src/js/midi (scope conflict in the same wave, simulated 2026-10-18)."
 scope:
   - "src/js/midi"
   - "src/js/ui/midi"
@@ -17,15 +18,22 @@ scope:
   - "src/styles/main.css"
   - "tests/README.md"
   - "dist"
+  - "src/js/synth"
+  - "tests/browser/integration-map.json"
+  - "tests/unit/note-view-sources.test.mjs"
 depends_on:
   - "V502"
   - "V503"
 acceptance_criteria:
   - "Show incoming and generated notes (name, velocity) next to the existing spectrum and waveform views, in the OSCILLA visual language, with a non-pointer path and announcements."
   - "Decision: .ai/repo/adrs/0058-midi-is-an-optional-local-input-layer-over-the-audio-engine.md; the visual identity lock applies."
+  - "From K085 (merged by Q112): the note view shows the Keys node's notes from every source (piano, computer keys, MIDI, sequencer) with their names and velocities; tests/unit/note-view-sources.test.mjs fails on the merge base: each source's note appears once with its source and velocity, and a note without velocity shows the sequencer default, stated."
+  - "From K085 (merged by Q112): a browser check in tests/browser/midi.cjs, wired into npm run test:synth so CI and the release gate run it, fails on the merge base. Linked: the note view links to the Synth workspace's Keys node and back. Real-time: a piano key and a sequencer step each appear in the note view at their time within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: the note view's list is reachable by keyboard and its rows have accessible names. It runs inside tests/browser/lib/suite.cjs, assumes no sample rate and adds nothing to tests/browser/timing-baseline.json."
+  - "From K085 (merged by Q112): every link it adds is a row of tests/browser/integration-map.json walked by tests/browser/integration-map.cjs; every string it adds passes tests/unit/synth-wording.test.mjs (project.no-fake-science); a change under src/js/synth carries a reviewer's verdict (project.review-verdict) and a feat or fix change a unit test that fails on the merge base (project.fail-first); scripts/size-report.mjs shows at most 1 KB gzip added within the cap Q023 records; tests/README.md has a row for each new test and dist is rebuilt."
 validation:
   - "npm run release-gate"
+  - "node --test tests/unit/note-view-sources.test.mjs"
 evidence_required:
   - "verified"
 created_at: 2026-10-18
-updated_at: 2026-10-18
+updated_at: 2026-11-18

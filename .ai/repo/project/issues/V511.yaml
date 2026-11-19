@@ -1,5 +1,5 @@
 id: V511
-milestone: M045
+milestone: "M069"
 serves:
   - "midi-jam-companion#midi-output-sysex"
 title: "SysEx output: OSCILLA writes to a controller's display and lights, only after a recorded decision to ask for the SysEx permission"
@@ -37,4 +37,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-15
-updated_at: 2026-11-15
+updated_at: 2026-11-18

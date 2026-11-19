@@ -323,10 +323,16 @@ export function gainLevelForPct(pct) {
   return round(MAX_OUTPUT_GAIN * p * p, 4);
 }
 
+/**
+ * The gain labels, V1 data the freeze golden pins (gainLabel); the one copy of each, which the
+ * Czech display map (data/learn-display.js GAIN_LABELS_SHOWN) imports as its keys.
+ */
+export const GAIN_LABELS = Object.freeze({ low: 'LOW', medium: 'MEDIUM', high: 'HIGH' });
+
 /** LOW / MEDIUM / HIGH label of a UI percentage. */
 export function gainLabelFor(pct) {
   // V1: oscillaApp getter gainLabel (index.html@a7b7a23)
-  return pct < 60 ? 'LOW' : pct < 80 ? 'MEDIUM' : 'HIGH';
+  return pct < 60 ? GAIN_LABELS.low : pct < 80 ? GAIN_LABELS.medium : GAIN_LABELS.high;
 }
 
 /** V2 extension: the logical gain in dB re full scale (-Infinity for 0). */

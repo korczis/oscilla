@@ -67,8 +67,8 @@ export function liveRange(mode, levelCalibration) {
 
 export const RTA_MODE_LABELS = Object.freeze({
   fft: 'FFT',
-  octave: 'OCTAVE',
-  third: '1/3 OCTAVE',
+  octave: 'OKTÁVY',
+  third: '1/3 OKTÁVY',
 });
 
 /**
@@ -81,15 +81,15 @@ export const FFT_PEAK_BIN_DEFICIT_DB = Object.freeze({
   'blackman-harris': Object.freeze([3.02, 3.85]),
 });
 
-/** "FAST (τ = 125 ms, conventional time constant, not IEC-verified)" */
+/** "FAST (τ = 125 ms, obvyklá časová konstanta, neověřeno podle IEC)" */
 export function averagingLabel(averaging) {
   if (averaging && typeof averaging.text === 'string') return averaging.text;
   const mode = averaging && averaging.mode;
-  if (!mode || !Object.hasOwn(RTA_MODES, mode)) return `averaging ${UNAVAILABLE.UNKNOWN}`;
+  if (!mode || !Object.hasOwn(RTA_MODES, mode)) return `průměrování ${UNAVAILABLE.UNKNOWN}`;
   const tau = RTA_MODES[mode];
-  if (tau === null) return 'INSTANT (no averaging)';
-  return `${mode.toUpperCase()} (τ = ${fixedText(tau * 1000, 0)} ms, conventional time constant, `
-    + 'not IEC-verified)';
+  if (tau === null) return 'OKAMŽITĚ (bez průměrování)';
+  return `${mode.toUpperCase()} (τ = ${fixedText(tau * 1000, 0)} ms, obvyklá časová konstanta, `
+    + 'neověřeno podle IEC)';
 }
 
 const drawableLevel = (v) => Number.isFinite(v) && v > ZERO_POWER_DB;
@@ -159,7 +159,7 @@ export function buildRtaView(input = {}) {
       hi: b.hi,
       exact: b.exact,
       value,
-      text: zeroPower ? 'no energy (zero power)' : formatDb(value, { kind: levelKind }),
+      text: zeroPower ? 'žádná energie (nulový výkon)' : formatDb(value, { kind: levelKind }),
       rawDb,
       kind: axisY.calibrated ? K.CALIBRATED : (covered ? K.CALIBRATED : K.DIGITAL),
       covered,
@@ -182,20 +182,20 @@ export function buildRtaView(input = {}) {
 
   if (under && under.some(Boolean)) {
     const low = bars.filter((b) => b.underResolved);
-    notes.push(`${low.length} band${low.length === 1 ? '' : 's'} up to `
-      + `${formatHz(low[low.length - 1].nominal)} span fewer than `
+    notes.push(`Pásma do ${formatHz(low[low.length - 1].nominal)} (${low.length}) `
+      + 'pokrývají méně než '
       + `${underResolvedBins(window || 'hann')} FFT `
-      + 'bins: their level is dominated by the window, not the band shape (drawn hatched).');
+      + 'binů: jejich úroveň určuje okno, ne tvar pásma (vykresleno šrafovaně).');
   }
   if (corr && bars.some((b) => !b.covered))
-    notes.push('Bands outside the frequency profile are uncorrected (no extrapolation).');
+    notes.push('Pásma mimo frekvenční profil nejsou korigována (bez extrapolace).');
   if (given && !corr) {
-    notes.push('The frequency profile covers none of the bands: no band is corrected (no '
-      + 'extrapolation); the levels are uncalibrated in frequency.');
+    notes.push('Frekvenční profil nepokrývá žádné pásmo: žádné pásmo není korigováno (bez '
+      + 'extrapolace); úrovně jsou frekvenčně nekalibrované.');
   }
-  notes.push(`Bars are band power integrated over the FFT bins of each band (${
-    RTA_MODE_LABELS[mode]}); never an FFT sample at the centre.`);
-  notes.push(`Averaging: ${avgText}.`);
+  notes.push(`Sloupce jsou výkon pásma integrovaný přes FFT biny každého pásma (${
+    RTA_MODE_LABELS[mode]}); nikdy vzorek FFT ve středu.`);
+  notes.push(`Průměrování: ${avgText}.`);
 
   return {
     mode,
@@ -212,27 +212,27 @@ export function buildRtaView(input = {}) {
 
 function rtaSummary({ mode, bars, avgText, frozen, levelKind }) {
   const live = bars.filter((b) => !b.zeroPower);
-  const head = `RTA, ${RTA_MODE_LABELS[mode]}, ${bars.length} bands, ${avgText}`;
-  if (!live.length) return `${head}: no energy in any band${frozen ? '; frozen' : ''}.`;
+  const head = `RTA, ${RTA_MODE_LABELS[mode]}, ${bars.length} pásem, ${avgText}`;
+  if (!live.length) return `${head}: v žádném pásmu žádná energie${frozen ? '; zmrazeno' : ''}.`;
   let hi = live[0];
   let lo = live[0];
   for (const b of live) {
     if (b.value > hi.value) hi = b;
     if (b.value < lo.value) lo = b;
   }
-  return `${head}: highest band ${formatHz(hi.nominal)} at ${formatDb(hi.value,
-    { kind: levelKind })}, lowest band ${formatHz(lo.nominal)} at ${formatDb(lo.value,
-    { kind: levelKind })}${frozen ? '; frozen' : ''}.`;
+  return `${head}: nejvyšší pásmo ${formatHz(hi.nominal)} na ${formatDb(hi.value,
+    { kind: levelKind })}, nejnižší pásmo ${formatHz(lo.nominal)} na ${formatDb(lo.value,
+    { kind: levelKind })}${frozen ? '; zmrazeno' : ''}.`;
 }
 
 function fftBinNote(window) {
   const deficit = FFT_PEAK_BIN_DEFICIT_DB[window];
   const name = window === 'blackman-harris' ? 'Blackman-Harris' : window === 'hann' ? 'Hann'
     : null;
-  return `FFT bins: mean-square power per bin (PSD × bin width${name ? `, ${name} window`
-    : ''}). A tone spreads over the window's main lobe, so its strongest bin reads ${deficit
-    ? `${fixedText(deficit[0], 1)}-${fixedText(deficit[1], 1)} dB` : 'a few dB'} below its band `
-    + 'level.';
+  return `FFT biny: střední kvadratický výkon na bin (PSD × šířka binu${name ? `, okno ${name}`
+    : ''}). Tón se rozprostře přes hlavní lalok okna, takže jeho nejsilnější bin ukazuje ${deficit
+    ? `${fixedText(deficit[0], 1)}-${fixedText(deficit[1], 1)} dB` : 'o několik dB'} pod úrovní `
+    + 'svého pásma.';
 }
 
 function fftView({ fft, peakDb, frozen, axisY, levelKind, display, avgText, badges,
@@ -243,7 +243,7 @@ function fftView({ fft, peakDb, frozen, axisY, levelKind, display, avgText, badg
   const anyCovered = cov ? cov.some((c) => c === 1) : false;
   badges.splice(1, 0, anyCovered ? FREQUENCY_BADGES.CALIBRATED : FREQUENCY_BADGES.UNCALIBRATED);
   const vals = Array.from(fft.levelsDb, (v) => (drawableLevel(v) ? display(v) : null));
-  const series = [{ id: 'fft', label: `OBSERVED spectrum · ${axisY.unit}`, kind: axisY.calibrated
+  const series = [{ id: 'fft', label: `OBSERVED spektrum · ${axisY.unit}`, kind: axisY.calibrated
     ? K.CALIBRATED : K.DIGITAL, role: 'observed', values: vals, width: 1, dash: null,
   alpha: 1, show: true, reliable: null, derivation: null }];
   if (peakDb && peakDb.length === f.length) {
@@ -258,9 +258,9 @@ function fftView({ fft, peakDb, frozen, axisY, levelKind, display, avgText, badg
   let best = -1;
   for (let i = 0; i < vals.length; i++) if (vals[i] !== null && (best < 0 || vals[i] > vals[best]))
     best = i;
-  const summary = `RTA, FFT, ${f.length} bins, ${avgText}: ${best < 0 ? 'no energy'
-    : `strongest bin ${binText(f, best)} at ${formatDb(vals[best], { kind: levelKind })}`}`
-    + `${frozen ? '; frozen' : ''}.`;
+  const summary = `RTA, FFT, ${f.length} binů, ${avgText}: ${best < 0 ? 'žádná energie'
+    : `nejsilnější bin ${binText(f, best)} na ${formatDb(vals[best], { kind: levelKind })}`}`
+    + `${frozen ? '; zmrazeno' : ''}.`;
   return {
     mode: 'fft',
     x: Float64Array.from(f),
@@ -273,8 +273,8 @@ function fftView({ fft, peakDb, frozen, axisY, levelKind, display, avgText, badg
     notes: [
       fftBinNote(window),
       ...(cov && anyCovered && cov.some((c) => c !== 1)
-        ? ['Bins outside the frequency profile are uncorrected (no extrapolation).'] : []),
-      `Averaging: ${avgText}.`,
+        ? ['Biny mimo frekvenční profil nejsou korigovány (bez extrapolace).'] : []),
+      `Průměrování: ${avgText}.`,
     ],
     summary,
   };

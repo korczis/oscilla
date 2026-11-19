@@ -16,7 +16,8 @@ import {
 } from '../../scripts/release-metadata.mjs';
 import { pinnedVersion } from '../../scripts/majordomus-pin-check.mjs';
 import {
-  FROM_MAIN, PAGES_TIMEOUT_MIN, STUCK_AFTER_MIN, WAITING_STATUSES, defaultSh, diagnoseStuckRuns,
+  FROM_MAIN, PAGES_TIMEOUT_MIN, STUCK_AFTER_MIN, TAGGED_ATTEMPTS, TAGGED_DELAY_S, TAGGED_WAIT_S,
+  WAITING_STATUSES, defaultSh, diagnoseStuckRuns,
   finishLine, jobStarted, majordomusPin, preconditionProblems, publish, releaseCreateFlags,
   releaseNotes,
   runStarted, stuckPagesRuns, taggedPageProblem,
@@ -805,13 +806,45 @@ test('--yes: after the tag, pages.yml is dispatched for main, waited for, and th
       receipt: RECEIPT, fingerprint: FP, fetchPage: u.fetchPage, ...fakeTime() }), 1);
     const text = u.out.join('\n');
     assert.match(text, /RELEASE:PUBLISH FAILED: after the redeploy of v40\.0\.0, the live page /);
-    assert.equal(sequence(u).filter((c) => c.startsWith('fetch ')).length, 3, 'bounded reads');
+    assert.equal(sequence(u).filter((c) => c.startsWith('fetch ')).length, TAGGED_ATTEMPTS,
+      'bounded reads');
+    assert.match(text, new RegExp(`\\(${TAGGED_ATTEMPTS} reads over ${TAGGED_WAIT_S} s\\)`));
     assert.ok(!u.calls.some((c) => c[0] === 'gh' && c[1] === 'release'), String(live));
     assert.match(text, /no GitHub Release was created/);
   }
   assert.equal(taggedPageProblem(TAGGED_PAGE, HEAD), null);
   assert.match(taggedPageProblem(page({ commit: HEAD, release: 'untagged' }), HEAD),
     /says release 'untagged' for f187f66\S+, expected 'tagged' for f187f66/);
+});
+
+test('--yes: a live page that names the tag only on its fourth read still publishes (CDN '
+  + 'edges serving the previous stamp, 2026-11-18)', async () => {
+  assert.ok(TAGGED_WAIT_S >= 180, `the wait covers minutes, not seconds: ${TAGGED_WAIT_S} s`);
+  assert.equal(TAGGED_ATTEMPTS, 1 + Math.floor(TAGGED_WAIT_S / TAGGED_DELAY_S));
+  let reads = 0;
+  const untagged = page({ commit: HEAD, release: 'untagged', distance: null });
+  const f = fakes({ runs: PUSH_RUN, live: () => ((reads += 1) < 4 ? untagged : TAGGED_PAGE) });
+  const code = await publish({ argv: ['--yes'], run: f.run, sh: f.sh, log: f.log,
+    receipt: RECEIPT, fingerprint: FP, fetchPage: f.fetchPage, ...fakeTime() });
+  const text = f.out.join('\n');
+  assert.equal(code, 0, text);
+  assert.equal(reads, 4, 'it stops reading once the page names the tag');
+  assert.ok(f.calls.some((c) => c[0] === 'gh' && c[1] === 'release' && c[2] === 'create'), text);
+  const fetches = sequence(f).filter((c) => c.startsWith('fetch '));
+  assert.deepEqual(fetches.map((c) => c.split('.').pop()), ['1', '2', '3', '4'],
+    'each read is cache-busted by its own number');
+
+  // the wait is wall clock, not a count: reads that each take 60 s end it after five
+  let t = NOW;
+  let slowReads = 0;
+  const slow = fakes({ runs: PUSH_RUN,
+    live: () => { slowReads += 1; t += 60_000; return untagged; } });
+  assert.equal(await publish({ argv: ['--yes'], run: slow.run, sh: slow.sh, log: slow.log,
+    receipt: RECEIPT, fingerprint: FP, fetchPage: slow.fetchPage, clock: () => t,
+    sleep: async (sec) => { t += sec * 1000; } }), 1);
+  assert.equal(slowReads, 5, slow.out.join('\n'));
+  assert.match(slow.out.join('\n'), new RegExp(`\\(5 reads over ${TAGGED_WAIT_S} s\\)`));
+  assert.ok(!slow.calls.some((c) => c[0] === 'gh' && c[1] === 'release'));
 });
 
 test('--yes: a dispatched redeploy that does not finish within the wait fails the publish '

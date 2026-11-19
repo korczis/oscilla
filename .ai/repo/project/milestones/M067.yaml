@@ -4,9 +4,12 @@ slug: instrument-wave-2-modulation-everywhere-labs-probes-sequence
 order: 67
 priority: p2
 problem: "Wave 1 instruments are playable but not yet woven into modulation, the labs, the visualizations and MEASURE, and the sequencer lacks locks, lanes, chains and conditions."
+current_state: "Paused on 2026-11-18 by the plan triage the owner approved in bulk (Q112: 'schvaluji vse', 2026-11-18T02:27Z, Claude Code session 980e22ee-d9d4-4dd0-8318-8b727f127ce9, oscilla-e5; triage derived from origin/main 4682eea4): 19 issues are BLOCKED on the M064 and M085 roots; the landed K226, K229, K230 and K151 are still stamped. It also holds the open issues of M058 and M061 after their merge. The milestone schema stores no status, so the pause is this recorded hold, not a field: no new slice of it is started until a later plan change lifts the hold; work already in flight lands, and landed issues are still stamped."
 outcome: "Any knob of any instrument a modulation destination from every source; labs that open and send the instrument's sound; probes into the Studio views; step onsets on the spectrogram; notes in the note view; parameter locks, CV lanes, bank, chain, song mode and conditional trigs; the follower; a sample slot; a patch measured and saved as an experiment."
 acceptance_criteria:
   - "K076, K077, K078, K079, K080, K081, K082, K083, K084, K085, K086, K087, K074, K096 are done with their evidence; npm run release-gate passes at the last one; npm run test:synth and node tests/browser/integration-map.cjs pass."
+  - "From M058 (merged by Q112): K021, K245 are done with their evidence."
+  - "From M061 (merged by Q112): K016, K018 are done with their evidence."
 validation:
   - "npm run release-gate"
 evidence_required:
@@ -16,4 +19,4 @@ risks:
   - "K082 waits on F003 and F006, K086 on K016, K084 on K025, K085 on V504, K087 reuses M029."
   - "K096 waits on Q020 (knobs in the Inspector) and E004."
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-18

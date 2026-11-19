@@ -31,28 +31,27 @@
 // never "this filter" or "this sound": the labs run the V1 engine and the Synth is the Studio
 // document, so nothing suggests shared state (project.studio-model-is-canonical).
 
-import { relatedOf, relatedRef, WORKSPACE_LABELS } from './shell.js';
+import { relatedOf, relatedRef, workspaceAccusative } from './shell.js';
 
 /**
  * Where a related entry is also a link inside a panel: { osc, from, to, text? }. osc: the
  * link's data-osc ("counterpart.<to>" for the microphone analyzer's line, written once in the
  * panel every `from` workspace shows); from: the workspaces showing it; to: the related entry
  * it carries (relatedRef: `<id><hash>`); text: the link text where it is not the default
- * ("Open the <label>" for a workspace, "Open <template> in Studio" for a Studio template,
- * ui/cross-links.js).
+ * ("Otevřít <label>" in the accusative for a workspace, "Otevřít šablonu <title> ve Studiu" for
+ * a Studio template, ui/cross-links.js; U118: an action link is a verb, one fallback each).
  */
 export const PANEL_LINKS = Object.freeze([
   { osc: 'counterpart.experiments', from: ['analyzer', 'compare'], to: 'experiments',
     text: 'Porovnat uložené experimenty' },
   { osc: 'filter.toSynth', from: ['filter'], to: 'synth' },
   { osc: 'dual.toSynth', from: ['synthesis'], to: 'synth' },
-  { osc: 'seq.toSynth', from: ['sequencer'], to: 'synth', text: 'Otevřít Synth' }, // G013
+  { osc: 'seq.toSynth', from: ['sequencer'], to: 'synth' },
   { osc: 'presets.toSynth', from: ['presets'], to: 'synth' },
   { osc: 'filter.toStudio', from: ['filter'], to: 'studio&st=filter-automation' },
   { osc: 'envelope.toStudio', from: ['synthesis'], to: 'studio&st=subtractive-synth' },
   { osc: 'dual.toStudio', from: ['synthesis'], to: 'studio&st=stereo-beat' },
-  { osc: 'seq.toStudioTemplate', from: ['sequencer'], to: 'studio&st=sweep-sequence',
-    text: 'Šablona Sweep Sequence ve Studiu' }, // G013: the Sequencer's row is Czech
+  { osc: 'seq.toStudioTemplate', from: ['sequencer'], to: 'studio&st=sweep-sequence' },
   { osc: 'measure.toStudio', from: ['measure'], to: 'studio&st=measurement-sweep' },
 ].map((l) => Object.freeze({ ...l, from: Object.freeze([...l.from]) })));
 
@@ -72,6 +71,16 @@ export const CONTENT_LINKS = Object.freeze([
   { osc: 'presets.toPlayground', from: ['presets'], to: 'playground' },
   { osc: 'presets.altPlayground', from: ['presets'], to: 'playground' },
 ].map((l) => Object.freeze({ ...l, from: Object.freeze([...l.from]) })));
+
+/**
+ * The visible text (and accessible name) of a workspace panel link: its own, else the verb form
+ * "Otevřít <label>" with the label in the accusative (shell.js workspaceAccusative; a kept
+ * English name such as Synth or Studio is not declined, Q104). One fallback for every such link
+ * (U118), as studioTemplateText is for the Studio template links.
+ */
+export function panelLinkText(l) {
+  return l.text || `Otevřít ${workspaceAccusative(l.to)}`;
+}
 
 /** The panel links whose every workspace relates to their target in the registry. */
 export function livePanelLinks(links = PANEL_LINKS) {
@@ -101,7 +110,7 @@ export function counterpartsOf(links = livePanelLinks()) {
   const out = [];
   for (const l of links.filter((x) => !x.to.includes('&'))) {
     const line = l.osc === `counterpart.${l.to}`;
-    const text = l.text || `Open the ${WORKSPACE_LABELS[l.to]}`;
+    const text = panelLinkText(l);
     let c = out.find((x) => x.id === l.to);
     if (!c) {
       c = { id: l.to, workspace: l.to, measureTab: null, label: text, labels: {}, from: [],

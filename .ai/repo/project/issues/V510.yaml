@@ -1,5 +1,5 @@
 id: V510
-milestone: M045
+milestone: "M069"
 serves:
   - "midi-jam-companion#midi-output-transport"
 title: "MIDI output without SysEx: the transport answers on a chosen output (MMC and MIDI clock out), measured on the owner's devices"
@@ -39,4 +39,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-15
-updated_at: 2026-11-15
+updated_at: 2026-11-18
