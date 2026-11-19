@@ -14,7 +14,9 @@
 //                         Drums tab, a notes clip's step grid in the Studio): it presses it
 //   pageKeyContext(cmp) -> { workspace, view }   what the dispatcher scopes keys by; the
 //     Synth's view is its tab ('panel', 'engines', 'xy')
-import { instrumentTakesSpace } from '../shortcuts.js';
+//   Escape, Space and R are declared once in ui/shortcuts.js PAGE_KEYS: each binding here
+//   spreads its declaration, which is also the row the Keyboard shortcuts dialog lists (D05).
+import { PAGE_KEYS, instrumentTakesSpace } from '../shortcuts.js';
 import { DOCK_KEY } from '../../midi/dock-yield.js';
 
 export const pageKeyContext = (cmp) => ({ workspace: cmp.workspace,
@@ -28,8 +30,7 @@ const shownRecordSwitch = () => (typeof document === 'undefined' ? null
 export function bindPageKeys({ keys, cmp, stopSequencer, stopAll = null }) {
   const offs = [
     // Escape is the playback bus's stopAll (C050): every owner stops in this one binding.
-    keys.bind({ id: 'page.escape', keys: ['Escape'], scope: { workspace: '*', focus: '*' },
-      prevent: false, label: 'Stop: the instrument, a sequence, a measurement', group: 'Page',
+    keys.bind({ ...PAGE_KEYS.escape,
       run: (e) => {
         if (typeof stopAll === 'function') {
           stopAll('escape');
@@ -39,17 +40,13 @@ export function bindPageKeys({ keys, cmp, stopSequencer, stopAll = null }) {
         cmp.measureAbort('escape');
         cmp.onKeyDown(e);
       } }),
-    keys.bind({ id: 'instrument.space', keys: ['Space'], scope: { workspace: '*' },
-      when: () => instrumentTakesSpace(cmp.workspace), group: 'Instrument',
-      label: 'Podržet a hrát (naprogramovaný vzor zazní jednou)',
+    keys.bind({ ...PAGE_KEYS.space, when: () => instrumentTakesSpace(cmp.workspace),
       run: (e) => cmp.onKeyDown(e), up: (e) => cmp.onKeyUp(e) }),
     keys.bind({ id: 'keys.dock', keys: [DOCK_KEY], scope: { workspace: '*' },
       when: () => !!cmp.kbdDockYields, group: 'Keyboard',
       label: 'Rozložit nebo složit klávesnici tam, kde noty hraje pad (její úchyt)',
       run: () => cmp.kbdDockToggle() }),
-    keys.bind({ id: 'notes.record', keys: ['KeyR'], scope: { workspace: '*' },
-      when: () => !!shownRecordSwitch(), group: 'Kroková mřížka',
-      label: 'Nahrávání živých úderů do notového klipu: zapnout nebo vypnout',
+    keys.bind({ ...PAGE_KEYS.record, when: () => !!shownRecordSwitch(),
       run: () => shownRecordSwitch().click() }),
   ];
   return () => offs.forEach((off) => off());
