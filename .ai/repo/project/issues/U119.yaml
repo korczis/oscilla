@@ -24,4 +24,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-18'
-updated_at: 2026-11-19
+updated_at: 2026-11-19T17:04:04Z
+started_at: 2026-11-19T17:00:33Z
+started_event: sha256:b0f76f507a7330a44f1fa72734ffc5b148756e877693acddae3371aaf4edea36
+verified_at: 2026-11-19T17:02:15Z
+verified_event: sha256:91bf0146d45f1bed8ca9de04071e07e5dfb29a3d4c3c67d5d36fc22027b3d71d
+completed_at: 2026-11-19T17:04:04Z
+completed_event: sha256:e70827c749aa3623fd90f793a7ecbd90e007a5ab3258e04f210ce8aa4252ee38
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "npm test; node tests/browser/control-census.cjs; node tests/browser/midi.cjs"
+    result: "Landed by PR 618 (7eef2499, oscilla-c3's legs OK on run 44422539544, SYN XY references accepted by c3 at 2ffc5dbb), released in v3.41.8; every criterion re-checked by oscilla-43 on main; it waited only on U118, done in this record."
+    artifact: ".ai/repo/releases/v3.41.9.yaml"
+    commit: e6f50a0e8d2dcb96b5a3b00698ed800843aa7075
+    recorded_at: 2026-11-19T17:03:28Z
