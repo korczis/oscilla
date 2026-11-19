@@ -1,0 +1,30 @@
+id: R059
+milestone: M011
+serves:
+- "release-provenance#one-version-authority"
+title: "The pre-move About timeline is held equal to its rendering by a committed fixture in about-current.test.mjs"
+slug: pre-move-about-timeline-held-by-a-fixture
+priority: p2
+profile: implementation
+objective: "Lands as test(about), or fix(about) if the renderer changes. The pre-move <ol class=\"osc-about-timeline\"> from ef959f5b's dist/index.html is committed as a fixture under tests/unit/fixtures/; tests/unit/about-current.test.mjs compares the first 25 rendered stations against it, every attribute except the derived data-state of the station that was current then. Either renderStations reproduces the old wrapping of <time> so the comparison is byte for byte, or a recorded decision amends the criterion to equality after whitespace normalisation. The test never reads git history, so it runs in a shallow CI clone."
+why: "Split from R032 (criteria 4, copied verbatim) by the audit-and-stamp follow-up train of 2026-11-18 (oscilla-d9, under the triage the owner approved on 2026-11-18, relayed by oscilla-e5, Q112). Re-run on main 8e087873: no such comparison exists in about-current.test.mjs. Measured: the dist <ol> at ef959f5b and at 7ec17bf1 is 8454 bytes in both, byte-equal false, equal after whitespace normalisation (each <time> used to wrap over two lines); today 24 of the 25 pre-move stations are whitespace-equal and the 25th differs only by data-state current to done."
+current_state: "Filed 2026-11-18 by oscilla-d9 in the audit-and-stamp follow-up train; not started."
+scope:
+- tests/unit/about-current.test.mjs
+- tests/unit/fixtures
+- scripts/about-stations.mjs
+- tests/README.md
+- dist
+depends_on: []
+acceptance_criteria:
+- "The rendered About timeline is byte-identical: the <ol class=\"osc-about-timeline\"> element of dist/index.html (src/index.html:2714-2884 at a19f1ff6) is extracted before and after the move and compared byte for byte for every existing station, in tests/unit/about-current.test.mjs."
+- "(added) The 'before' side is a committed fixture from dist/index.html at ef959f5b, never git history at test time; a mutation (one character of a pre-move title, or a dropped attribute) fails the test."
+- "(added) If byte identity is not reproduced, a recorded decision amends the criterion to whitespace-normalised equality and the test asserts that form; the test fails on its merge base."
+validation:
+- node --test tests/unit/about-current.test.mjs tests/unit/about.test.mjs
+- npm run build:check
+- npm test
+evidence_required:
+- verified
+created_at: '2026-11-18'
+updated_at: '2026-11-18'

@@ -1,0 +1,29 @@
+id: K249
+milestone: M067
+serves:
+- "connected-instrument#step-sequencer"
+- "connected-instrument#modulation-everywhere"
+- "connected-instrument#one-transport"
+title: "Step-voltage sequencer offline DSP: each step's frequency within one bin and trig1 opening an envelope on step 1 only"
+slug: step-voltage-sequencer-offline-dsp-trig1
+priority: p2
+profile: implementation
+objective: "Lands as test(studio). instrument-dsp.cjs and svsSteps in tests/browser/fixtures/instrument-dsp-entry.js assert, per browser and per render rate (44.1 and 48 kHz offline), each step's absolute frequency within one bin of its stated value (today only the ratios are asserted) and that trig1 cabled into an Envelope gate gives exactly one attack, at step 1's frame within one frame."
+why: "Split from K226 (criteria 3, copied verbatim) by the audit-and-stamp follow-up train of 2026-11-18 (oscilla-d9, under the triage the owner approved on 2026-11-18, relayed by oscilla-e5, Q112). Re-run on main 8e087873: s-steps and s-pitch PASS at 44100 and 48000 in chromium, firefox and webkit (CI run 44135531351), but no check reads trig1 and step 1's absolute 440 Hz is printed, not asserted."
+current_state: "Filed 2026-11-18 by oscilla-d9 in the audit-and-stamp follow-up train; not started."
+scope:
+- tests/browser/instrument-dsp.cjs
+- tests/browser/fixtures/instrument-dsp-entry.js
+- tests/README.md
+- tests/browser/timing-baseline.json
+depends_on: []
+acceptance_criteria:
+- "tests/browser/instrument-dsp.cjs renders, offline at 44.1 kHz and at 48 kHz, cvA stepping a VCO through three stated values: each step's frequency within one bin of the stated one at its computed time, and trig1 opening an envelope on step 1 only; no sample rate assumed."
+- "(added) It passes in chromium, firefox and webkit through tests/browser/lib/suite.cjs and until(); tests/browser/timing-baseline.json does not grow; the tests/README.md instrument-dsp row names s-steps, s-pitch and the trig1 check."
+validation:
+- node tests/browser/instrument-dsp.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-11-18'
+updated_at: '2026-11-18'

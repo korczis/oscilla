@@ -29,5 +29,19 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-07'
-updated_at: '2026-11-09'
-current_state: "Audit 2026-11-15 by oscilla-ff (session cae276ab-2d90-45d2-babb-a1f8023668d2) on main 474ce9c3, on the owner's order to finish unfinished work: landed but not done. The 2026-11-11 audit still holds on main 474ce9c3: criterion 2 not met (on the phone the pads show one at a time behind an L/R toggle, not stacked; the criterion was never amended; Pad R's arrow keys are not asserted) and 3 not met (no synth.pads.* row in control-census.cjs; the Synth is still CENSUS_PENDING at :1843); 1 met as amended (synth-dual-pads.test.mjs 11/11), 4 met (522.yaml). Earlier: Landed on main but not done (criteria audit by oscilla-d9 on origin/main 45db334e, 2026-11-11, ~/dev/oscilla-wt/scratch-d9-stamp-audit.md): 2 of 4 not met: #2 the phone shows one pad behind an L/R toggle (R2-K220-2) and this record was not amended; #3 no control-census rows for synth.pads.*."
+updated_at: 2026-11-18T03:37:06Z
+current_state: "Re-checked on main 8e087873 in the audit-and-stamp follow-up train (oscilla-d9, 2026-11-18). Stamped done in this train; the evidence names what was re-run and which criteria moved to which follow-up issue. Before this audit: Audit 2026-11-15 by oscilla-ff (session cae276ab-2d90-45d2-babb-a1f8023668d2) on main 474ce9c3, on the owner's order to finish unfinished work: landed but not done. The 2026-11-11 audit still holds on main 474ce9c3: criterion 2 not met (on the phone the pads show one at a time behind an L/R toggle, not stacked; the criterion was never amended; Pad R's arrow keys are not asserted) and 3 not met (no synth.pads.* row in control-census.cjs; the Synth is still CENSUS_PENDING at :1843); 1 met as amended (synth-dual-pads.test.mjs 11/11), 4 met (522.yaml). Earlier: Landed on main but not done (criteria audit by oscilla-d9 on origin/main 45db334e, 2026-11-11, ~/dev/oscilla-wt/scratch-d9-stamp-audit.md): 2 of 4 not met: #2 the phone shows one pad behind an L/R toggle (R2-K220-2) and this record was not amended; #3 no control-census rows for synth.pads.*."
+started_at: 2026-11-18T03:32:58Z
+started_event: sha256:d2f3c626bf49105efba05d8299e1669266772fbec44c0da3b4873935b3c8dfd6
+verified_at: 2026-11-18T03:34:32Z
+verified_event: sha256:67a761d47a56b63c6dceaa9c5b13083deeb81d7860c51f5636b1a4709bd2c8a2
+completed_at: 2026-11-18T03:37:06Z
+completed_event: sha256:e5012c398637f70a1c3b3678799c40c2915aaa66c6da23c0841d5ee0f94a6bd3
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/synth-dual-pads.test.mjs"
+    result: "Audit-and-stamp follow-up train (oscilla-d9, 2026-11-18), re-run on main 8e087873: synth-dual-pads 11/11 (7e77c8cd's copy 0/11 on a7102358), xy-wiring 31/31; s-pads ok in chromium, firefox and webkit, desktop side by side and phone one at a time, Stop releasing both (CI run 44135531351); build:check up to date; verdict 522.yaml by oscilla-c1 and oscilla-c3, who built none of it (oscilla-ee built K220). Criteria 1 and 4 met; criterion 2 (stacked at 390 px, arrows on each pad) moved verbatim to K254 and criterion 3 (census rows) to K255."
+    artifact: "tests/unit/synth-dual-pads.test.mjs"
+    commit: 8e087873968df0438165b474684d6dee7ac7e5ff
+    recorded_at: 2026-11-18T03:35:48Z

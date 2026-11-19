@@ -1,0 +1,30 @@
+id: K256
+milestone: M064
+serves:
+- "connected-instrument#synth-panel"
+- "connected-instrument#piano-keyboard"
+- "connected-instrument#one-transport"
+title: "Keys last-note priority and an event-clip gate rendered on a real OfflineAudioContext in instrument-dsp.cjs"
+slug: keys-last-note-priority-and-event-clip-gate-rendered
+priority: p2
+profile: implementation
+objective: "Lands as test(studio). Two renders in tests/browser/instrument-dsp.cjs and its fixture, in chromium, firefox and webkit at 44.1 and 48 kHz offline. Last-note priority: Keys to VCO to Master; hold A4, then A5, then release A5 through live-notes.js; the VCO plays A5 within 1 ct while it is held and A4 within 1 ct after the release, with no new gate onset. Event-clip gate: a gate event clip on an event track on Keys, played offline by the transport as renderNotes plays its notes clip; the Envelope reached by the Keys Gate starts within one frame of the clip start."
+why: "Split from K060 (criteria 1, copied verbatim) by the audit-and-stamp follow-up train of 2026-11-18 (oscilla-d9, under the triage the owner approved on 2026-11-18, relayed by oscilla-e5, Q112). Re-run on main 8e087873: the unit half and the k-a4a5, k-clamp, k-glide and gate-frame (n-onsets) renders pass in three engines at both rates (CI run 44135531351), but last-note priority and the event-clip gate are proven only on fake audio (synth-keys:235-255, v4-clip-target-policy:641-704). Per K060 criterion 2 the 'bipolar log edge' is the shipped linear octave input (the panel normal, depth 6, bipolar, linear)."
+current_state: "Filed 2026-11-18 by oscilla-d9 in the audit-and-stamp follow-up train; not started."
+scope:
+- tests/browser/instrument-dsp.cjs
+- tests/browser/fixtures/instrument-dsp-entry.js
+- tests/README.md
+depends_on: []
+acceptance_criteria:
+- "tests/unit/synth-keys.test.mjs, failing on the merge base, asserts on StudioFakeContext (tests/unit/sequencer-fake-audio.mjs) the scheduled calls, times, ramps and node census; tests/browser/instrument-dsp.cjs, rendering a real OfflineAudioContext in Chromium, Firefox and WebKit at each context's own rate (in the style of tests/browser/dsp.cjs) and failing on the merge base, checks the figures: a keys node driving a vco through a bipolar log edge of depth 6 octaves plays A4 at 440 Hz and A5 at 880 Hz within 0.1 cent; at vco scale 4' (octave +1, the highest of K059's -2..+1), note 0 tracks exactly and note 127 is clamped at 0.95 x Nyquist with the clamp stated, and every note below the clamp keeps exact tracking (no kc scaling of a pitch edge); glide is linear in exact time (owner decision 'Linear glide in exact time', 2026-11-03): a glide of 100 ms reaches the new pitch within 1 cent at 100 ms +- one render quantum, rendered at 44.1 kHz and at 48 kHz, in a test that fails on the merge base (the shipped glide is an exponential approach with time constant glide / 3); a gate starts the contour at the scheduled frame within one frame; last-note priority returns to the held note on release; an event clip on the keys node gates it at its start."
+- "(added) Delivered on main 8e087873 and not redone: the unit half, k-a4a5, k-clamp, k-glide and the gate frame (n-onsets); this issue adds the last-note-priority render and the event-clip-gate render."
+- "(added) Test-only: the pull request body says 'fail-first: n/a' (figures of shipped behaviour); a figure that fails on main becomes its own fix(studio) change with a unit test that fails on the merge base and a reviewer's verdict (src/js/studio is guarded)."
+- "(added) It runs inside tests/browser/lib/suite.cjs, waits through until() with a named deadline, assumes no sample rate, tests/browser/timing-baseline.json does not grow, and the tests/README.md row names the two checks."
+validation:
+- node tests/browser/instrument-dsp.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-11-18'
+updated_at: '2026-11-18'

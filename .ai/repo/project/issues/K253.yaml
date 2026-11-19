@@ -1,0 +1,28 @@
+id: K253
+milestone: M065
+serves:
+- "connected-instrument#step-sequencer"
+- "connected-instrument#one-transport"
+title: "Notes-clip renders hold the output ceiling and are click-free at every onset, ratchet and slide"
+slug: notes-clip-renders-hold-ceiling-and-are-click-free
+priority: p2
+profile: implementation
+objective: "Lands as test(studio), or fix if a defect is found. The n-onsets, n-ratchet and n-slide renders of tests/browser/instrument-dsp.cjs, at 44.1 and 48 kHz offline in three engines, assert the peak at or below the engine's output ceiling and the largest one-sample step within the CLICK_MAX bound of tests/browser/v31-studio-audio.cjs, read at the render's own rate."
+why: "Split from K068 (criteria 5, copied verbatim) by the audit-and-stamp follow-up train of 2026-11-18 (oscilla-d9, under the triage the owner approved on 2026-11-18, relayed by oscilla-e5, Q112). Re-run on main 8e087873: census 0 (studio-steps-playback, n-census) and the Nyquist clamp (K060's k-clamp) are proven, but no K068 render checks the peak or clicks."
+current_state: "Filed 2026-11-18 by oscilla-d9 in the audit-and-stamp follow-up train; not started."
+scope:
+- tests/browser/instrument-dsp.cjs
+- tests/browser/fixtures/instrument-dsp-entry.js
+- tests/README.md
+depends_on:
+- K060
+acceptance_criteria:
+- "Every node it plays is built by an engine adapter with track()/source() accounting, all timing is on the audio clock (no timer or rAF times audio), envelopes are click-free, frequencies stay below 0.95 x Nyquist of the running context, the peak stays at or below the output ceiling and the engine node census is 0 after stop (project.audio-engine-discipline v2)."
+- "(added) The peak and click checks fail under a mutation that removes the onset ramp (a step envelope) and under one that doubles the voice level, each recorded."
+validation:
+- node tests/browser/instrument-dsp.cjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-11-18'
+updated_at: '2026-11-18'
