@@ -437,9 +437,11 @@ function phoneWhole({ ws, gap, touchMin }) {
         if (cx < c.left || cx > c.right || cy < c.top || cy > c.bottom) return true;
       }
       // The viewport clips too: a centre still outside it after scrollIntoView (chromium at 375,
-      // a snap strip wider than the screen) is off screen, and elementFromPoint gives null there
-      // (oscilla-0b, #601). A centre inside it under another element still counts as covered.
-      return cx < 0 || cx > window.innerWidth || cy < 0 || cy > window.innerHeight;
+      // a snap strip wider than the screen) is off screen (oscilla-0b, #601). elementFromPoint
+      // answers null exactly there, and under mobile emulation innerWidth/innerHeight need not
+      // be the box it judges by (CI run on ee258f9b), so its null is the test. A centre inside
+      // the viewport under another element hits that element and still counts as covered.
+      return cx < 0 || cy < 0 || document.elementFromPoint(cx, cy) === null;
     })();
     if (!clipped && !hits(el, cx, cy)) {
       const hit = document.elementFromPoint(cx, cy);
