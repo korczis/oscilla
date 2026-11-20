@@ -10,7 +10,7 @@
         "width": 1536,
         "height": 1024
       },
-      "reference": "sha256:3a8a342c1d6c9ad871bc7e786a68c7310edcb1030ad8a44c68f9ef29e828bff3",
+      "reference": "sha256:d491b55ddc5190cee391316839e631d512a4c30bfccb3184a384cbce17f82a0e",
       "runs": 3,
       "total": 0,
       "totalExclData": 0,
@@ -402,6 +402,14 @@
           "date": "2026-11-18",
           "from": "sha256:9810048c8325f6dedc0b9c1e584bdaa2a1484c1ee91ece7c5177601337cf725b",
           "to": "sha256:3a8a342c1d6c9ad871bc7e786a68c7310edcb1030ad8a44c68f9ef29e828bff3"
+        },
+        {
+          "region": "reference.png",
+          "rise": null,
+          "reason": "Q113/#619: the sentence region's text became Czech (geometry 0, 13.12 %); reference.png regenerated from CI run 44650431485's linux-x64 current.png at #601",
+          "date": "2026-11-20",
+          "from": "sha256:3a8a342c1d6c9ad871bc7e786a68c7310edcb1030ad8a44c68f9ef29e828bff3",
+          "to": "sha256:d491b55ddc5190cee391316839e631d512a4c30bfccb3184a384cbce17f82a0e"
         }
       ]
     }
