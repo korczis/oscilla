@@ -121,12 +121,22 @@ const PHONE_SIZES = [{ width: 320, height: 568 }, { width: 375, height: 667 }, P
 // "<workspace>:<measure>" -> why it is still short and whose lane fixes it. Only shrinks. A key
 // may be scoped to a browser and a width: "<browser>@<width>:<ws>:<measure>",
 // "<browser>:<ws>:<measure>" or "@<width>:<ws>:<measure>"; the most specific listed key applies.
-// U108's one recorded debt, decided by oscilla-c3 (Q090, 2026-11-12): at 320 px the insert
-// alert with Více expanded (the whole sentence) may run under the keyboard dock; collapsed it
-// must not, at every size. Host- and engine-free; it only goes.
+// U108's recorded debt, decided by oscilla-c3 (Q090, 2026-11-12): at 320 px the insert alert
+// with Více expanded (the whole sentence) may run under the keyboard dock; collapsed it must
+// not, at every size. "@<width>:<safety>:<more>", where safety is the listening notice's state
+// (open or collapsed). A key may be scoped to a host, "<host>:@<width>:<safety>:<more>", as
+// PHONE_WHOLE_DEBT's keys are since #540; the most specific listed key applies. The split by
+// safety and host is Q090's debt measured per host at #601 (oscilla-0b standing in for
+// oscilla-c3, 2026-11-20). Engine-free; it only goes, and a key this host's run never applies
+// fails (u108-debt-current).
 const U108_DEBT = new Map([
-  ['@320:expanded', 'the whole insert sentence at 320 x 568 is taller than the room above the '
-    + 'dock; the short line and Close are on top collapsed (U108, oscilla-c3)'],
+  ['@320:open:expanded', 'the whole insert sentence at 320 x 568 is taller than the room above '
+    + 'the dock with the listening notice open; the short line and Close are on top collapsed '
+    + '(U108, oscilla-c3)'],
+  ['linux:@320:collapsed:expanded', 'on linux the whole insert sentence runs under '
+    + 'keyboard.octave-up with the listening notice collapsed too (CI run 44650431485); on darwin '
+    + 'it is on top in chromium, firefox and webkit (f8d004cc + table edits, 2026-11-20; '
+    + 'oscilla-0b for oscilla-c3, #601)'],
 ]);
 const R320 = 'the keyboard dock\'s octave buttons overlap the Synth\'s Copy link (25 px) at '
   + '320 x 568, under U108\'s alert: the Synth lane, #385 and V635. Since F002\'s page frame (#601, '
@@ -879,6 +889,7 @@ async function runOne(name) {
     // 320, 375 and 390 px with the safety notice open (the first visit) and collapsed, with Více
     // collapsed; expanded at 375 and 390 too (320 expanded is recorded debt, U108_DEBT). It waits
     // for the alert: a missing alert fails here, it never passes for want of one (C3-540-2).
+    const u108Seen = new Set();
     for (const size of PHONE_SIZES) {
       for (const safety of ['open', 'collapsed']) {
         const fresh = await browser.newContext({ viewport: size, hasTouch: true,
@@ -924,11 +935,14 @@ async function runOne(name) {
               ok: facts && heading && [...a, ...c].every((x) => x === 'self') };
           }, [more === 'expanded', size.width !== 320]), (m) => m.shown && m.ok,
           `ui-current: U108 insert alert on top at ${size.width} px (${safety}, ${more})`);
-          const debt = U108_DEBT.get(`@${size.width}:${more}`);
+          const key = [`${process.platform}:@${size.width}:${safety}:${more}`,
+            `@${size.width}:${safety}:${more}`].find((k) => U108_DEBT.has(k));
+          const debt = key && U108_DEBT.get(key);
           if (debt) {
+            u108Seen.add(key);
             check(`u108-alert-on-top-${size.width}-${safety}-${more}`, !r.ok,
-              `@${size.width}:${more} passes now (${safety}): remove it from U108_DEBT`);
-            if (!r.ok) console.log(`  KNOWN ${name} U108 @${size.width}:${more} (${safety}): `
+              `${key} passes now: remove it from U108_DEBT`);
+            if (!r.ok) console.log(`  KNOWN ${name} U108 ${key}: `
               + `${JSON.stringify(r.last)} (${debt})`);
           } else {
             check(`u108-alert-on-top-${size.width}-${safety}-${more}`, r.ok,
@@ -949,6 +963,12 @@ async function runOne(name) {
         await fresh.close();
       }
     }
+    // A U108 key scoped to another host is judged by that host's run (as phone-whole-debt-current).
+    const u108Mine = [...U108_DEBT.keys()].filter((k) => !/^(darwin|linux|win32):/.test(k)
+      || k.startsWith(`${process.platform}:`));
+    check('u108-debt-current', u108Mine.every((k) => u108Seen.has(k)),
+      `U108_DEBT names a key no run applied: ${u108Mine.filter((k) => !u108Seen.has(k))
+        .join(', ')}`);
     // U100: on a short phone a Synth opened from a link, both notices shown, keeps room for its
     // tab. On Engines the docked keys fold to their handle (one rule, routes.js roomFolds), each
     // notice takes one line, Expand all takes a tap at its centre and SYNTH_ROOM_MIN px of the
