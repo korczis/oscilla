@@ -15,7 +15,7 @@
     "selectors": 1189,
     "domainViewSelectors": 438
   },
-  "debt": 3596,
+  "debt": 3587,
   "surfaces": {
     "pending": [
       "card#osc-exp-compare",
@@ -70,16 +70,16 @@
       "modal#osc-dlg-studio-patch",
       "modal#osc-dlg-studio-render",
       "modal#osc-dlg-studio-templates",
-      "page#osc-view-about",
-      "page#osc-view-experiments",
-      "page#osc-view-measure",
-      "page#osc-view-studio",
       "shell:footer",
       "shell:main"
     ],
     "migrated": [
+      "page#osc-view-about",
+      "page#osc-view-experiments",
       "page#osc-view-learn",
+      "page#osc-view-measure",
       "page#osc-view-presets",
+      "page#osc-view-studio",
       "page#osc-view-synth",
       "shell:navbar",
       "shell:sidebar"
@@ -837,8 +837,8 @@
   },
   "stylesheets": {
     "src/styles/about.css": {
-      "selectors": 89,
-      "declarations": 317
+      "selectors": 88,
+      "declarations": 316
     },
     "src/styles/base.css": {
       "selectors": 38,
@@ -849,8 +849,8 @@
       "declarations": 488
     },
     "src/styles/instrument.css": {
-      "selectors": 244,
-      "declarations": 631
+      "selectors": 243,
+      "declarations": 625
     },
     "src/styles/integration.css": {
       "selectors": 170,
@@ -861,12 +861,12 @@
       "declarations": 0
     },
     "src/styles/measure.css": {
-      "selectors": 261,
-      "declarations": 623
+      "selectors": 258,
+      "declarations": 618
     },
     "src/styles/responsive.css": {
       "selectors": 155,
-      "declarations": 183
+      "declarations": 181
     }
   },
   "domainViews": {
@@ -880,7 +880,7 @@
     },
     "src/styles/studio.css": {
       "selectors": 273,
-      "declarations": 775
+      "declarations": 771
     },
     "src/styles/tokens.css": {
       "selectors": 4,

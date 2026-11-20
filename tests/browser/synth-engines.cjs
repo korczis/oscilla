@@ -202,13 +202,13 @@ async function openSynth(context, base, hash) {
     return st.dispatch({ type: 'NODE_PARAM_SET', nodeId: m.id, key: 'level', value: v });
   }, MAX_OUTPUT_GAIN);
   if (!r.ok) throw new Error(`the Master level is not set: ${r.reason}`);
-  await page.locator('#osc-synth-title').click();
+  await page.locator('[data-osc="page.title"]').click();
   return page;
 }
 const engines = (eng, values = '') => `#m=synth&yt=engines&ye=${eng}${values
   ? `&yv=${values}` : ''}`;
 async function hold(page, code) {
-  await page.locator('#osc-synth-title').click();
+  await page.locator('[data-osc="page.title"]').click();
   await page.keyboard.down(code);
 }
 async function tapJack(page, id) {
@@ -376,7 +376,7 @@ function defineChecks() {
     // load can let the idle panel through until its Keys-gated envelopes close).
     await page.evaluate(() => window.OSCILLA.app.synthArm());
     await silent(page, 'armed, nothing sounds');
-    await page.locator('#osc-synth-title').click();
+    await page.locator('[data-osc="page.title"]').click();
     const kick = await decayIn(page, 'KeyA');
     const peak = Math.max(...kick.pts.map((p) => p[1]));
     const fit = kick.pts.filter((p) => p[1] <= peak - 6 && p[1] >= peak - 30
