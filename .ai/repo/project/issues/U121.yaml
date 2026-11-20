@@ -1,0 +1,26 @@
+id: U121
+milestone: M054
+serves:
+  - "ui-current#phone-whole"
+title: "At 375 x 667 the docked keyboard no longer overlaps the Synth's section chips, on every host"
+slug: synth-375-chips-clear-of-dock
+priority: p3
+profile: implementation
+objective: "Lands as fix(ui). Pays the host-free debt '@375:synth:overlap' (tests/browser/ui-current.cjs R375). The docked keyboard's octave and Vše buttons overlap the Synth's section chips at 375 x 667. Every Mac engine has shown 5 pairs since #385's train. On CI linux F002's page frame (#601) deepened it from MARGIN -3 px (within tolerance) to 6 pairs 30 px deep, MARGIN -39 px (run 44650431485). The chips stay reachable by scrolling (0 covered in firefox and webkit). The fix moves the chips or the Synth's docked padding so no pair overlaps by more than 2 px, then removes the entry."
+why: "oscilla-0b, reviewing #601 for oscilla-c3 (2026-11-20): R375 was accepted as host-free on the condition that a plan issue pays it, because the debt grew on linux with F002."
+current_state: "Filed by oscilla-e5 with #601 (F002). Not started."
+scope:
+  - "src/index.html"
+  - "src/js/ui/pro-classes.js"
+  - "tests/browser/ui-current.cjs"
+depends_on: []
+acceptance_criteria:
+  - "phone-whole-overlap-synth-375 passes with no PHONE_WHOLE_DEBT entry, in chromium, firefox and webkit, on CI linux and on darwin; the MARGIN line at 375 x 667 is above -3 px."
+  - "The Synth's phone visual references are re-accepted where they move; U108's alert and the dock handle stay on top."
+  - "A reviewer's verdict."
+validation:
+  - "node tests/browser/ui-current.cjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-20'
+updated_at: 2026-11-20
