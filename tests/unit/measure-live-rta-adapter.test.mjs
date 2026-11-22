@@ -9,7 +9,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createLive } from '../../src/js/ui/measure/live.js';
+import { createLive, LIVE_RTA_TEXT } from '../../src/js/ui/measure/live.js';
 import { LIVE_VIEW_INTERVAL_MS } from '../../src/js/ui/measure/constants.js';
 import { MEASUREMENT_ERRORS } from '../../src/js/measurement/engine.js';
 import { MEASUREMENT_STATES as S } from '../../src/js/measurement/state-machine.js';
@@ -76,7 +76,7 @@ test('startLive opens the tap, runs on the frame loop and announces; a second st
     assert.equal(h.meas.rtaLive.starting, false);
     assert.equal(h.meas.rtaFrozen, false);
     assert.equal(h.ctx.liveStarting, false);
-    assert.deepEqual(h.said, ['Živé RTA spuštěno']);
+    assert.deepEqual(h.said, [LIVE_RTA_TEXT.started]);
     assert.equal(h.counts.opened, 1);
     assert.equal(h.frames.length, 1, 'subscribed to the frame loop');
     assert.equal(await h.live.startLive(h.cmp), false, 'one live RTA at a time');
@@ -146,7 +146,7 @@ test('stopLive releases the tap once and says it stopped; with nothing running i
     assert.equal(h.ctx.live, null);
     assert.equal(h.meas.rtaLive.running, false);
     assert.equal(h.meas.rtaLive.kind, null);
-    assert.equal(h.said.at(-1), 'Živé RTA zastaveno');
+    assert.equal(h.said.at(-1), LIVE_RTA_TEXT.stopped);
     assert.equal(h.live.stopLive(), false);
   });
 
@@ -159,7 +159,7 @@ test('the io closing the tap ends the run; a disconnected track says so; a stale
     assert.notEqual(h.ctx.live, null);
     tap.onClosed('track-ended');
     assert.equal(h.ctx.live, null);
-    assert.match(h.meas.rtaLive.error, /vstupní zařízení bylo odpojeno/);
+    assert.equal(h.meas.rtaLive.error, LIVE_RTA_TEXT.trackEnded);
     assert.equal(h.counts.closed, 0, 'the io closed it itself');
 
     const g = harness();
@@ -203,4 +203,11 @@ test('a failed tap says why, an aborted one says nothing', async () => {
   } });
   assert.equal(await abort.live.startLive(abort.cmp), false);
   assert.equal(abort.meas.rtaLive.error, null);
+});
+
+test('LIVE_RTA_TEXT: every text the live RTA says is Czech (Q104), so the imports above cannot '
+  + 'pass on an English copy', () => {
+  const values = Object.values(LIVE_RTA_TEXT);
+  assert.equal(values.length, 3);
+  for (const v of values) assert.match(v, /[áčďéěíňóřšťúůýž]/i, v);
 });
