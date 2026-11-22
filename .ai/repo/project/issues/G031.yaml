@@ -1,0 +1,37 @@
+id: G031
+milestone: M087
+serves:
+- "component-system#contract-and-registry"
+title: "Every catalogue declaration names its links and related views, and the link graph and the generated catalogue read them"
+slug: every-catalogue-declaration-names-its-links-and-related-views
+priority: p2
+profile: implementation
+objective: "Lands as feat(ui). Every declaration of src/js/ui/catalog/decl/*.js names its links ({ opens, openedBy }) and its related views, either explicitly or through a relation rule of G016's RELATION_RULES (src/js/ui/catalog/links.js) that the check expands before judging; a declaration with neither is listed in a new unrelated section of tests/unit/ui-catalog-allowance.json, in G001's shape ({ id, reason }, sorted, a reason of at least three words, judged against the base branch's copy, its length only falls). scripts/ui-catalog/check.mjs refuses a declaration with no declared or derived link or related view that the section does not list, naming its id, and refuses an entry for a declaration that has gained links. docs/ui-catalog.md (G014) prints each declaration's links in and out and its related views; the link graph (G016) takes its declared edges from the same fields, so a fixture link added to one declaration appears in both. Before (main 8e087873): 218 declarations, 11 with links, 22 with related, 33 with either; both fields optional (src/js/ui/catalog/define.js:127-134). After: every declaration names them or is listed with a reason. Negative cases: a declaration with neither and no entry; an entry that rises or returns; an entry for a declaration that now has links; a link G014 does not print; a link G016 does not draw. Rollback: revert; the section and the check go together and nothing at run time reads them."
+why: "Split from G001 by the audit-and-stamp follow-up train of 2026-11-18 (oscilla-d9, on the triage approved by the owner and relayed by oscilla-e5, Q112). G001's audit on 04d33aaf (oscilla-0b, 2026-11-11) found its interlinks criterion unmet, and the re-run on main 8e087873 confirms it: 185 of 218 declarations name neither links nor related views, and G014 and G016, which must read them, are not built. The rest of G001 is met on trunk, and G001 is the root of about 100 waiting issues, so the criterion moves here."
+current_state: "Filed 2026-11-18 by oscilla-d9 in the audit-and-stamp follow-up train; not started."
+scope:
+- src/js/ui/catalog
+- scripts/ui-catalog
+- tests/unit/ui-catalog.test.mjs
+- tests/unit/ui-catalog-allowance.json
+- tests/README.md
+- dist
+depends_on:
+- G014
+- G016
+acceptance_criteria:
+- "Definition of done, interlinks: each declaration names its links and related views; the link graph (G016) and the generated catalogue (G014) read them."
+- "(added) tests/unit/ui-catalog.test.mjs fails on the merge base and, with a fixture per clause, refuses with a message naming the id: a declaration with no declared or rule-derived link or related view that the unrelated section of tests/unit/ui-catalog-allowance.json does not list; an entry of that section that rises or returns; an entry for a declaration that now names a link."
+- "(added) A fixture link added to one declaration appears in docs/ui-catalog.md (npm run docs:ui -- --check fails until regenerated) and as an edge of the G016 link graph (tests/unit/ui-link-graph.test.mjs)."
+- "(added) Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed unless its scope widens to one; as a feat or fix change it carries a unit test that fails on the merge base (project.fail-first)."
+- "(added) scripts/size-report.mjs shows at most 1 KB gzip added, with the base and head figures in the pull request body (project.single-file-deliverable)."
+- "(added) Definition of done, deployed: it lands by merge commit and ships in the next release under project.deploy-often; the verified evidence names the main commit."
+validation:
+- node --test tests/unit/ui-catalog.test.mjs
+- node scripts/ui-catalog/check.mjs
+- node --test tests/unit/ui-link-graph.test.mjs
+- npm test
+evidence_required:
+- verified
+created_at: '2026-11-18'
+updated_at: '2026-11-18'

@@ -73,7 +73,8 @@
 //                     timeline keys and the note on keyboard paths) and the global ones; no key
 //                     is listed twice in one view and a kbd holds keys only
 //   control-names     (H004) each control reaches what its name says: the logo, described as
-//                     "Open the Playground", opens it from Measure; the skip link names the workspace shown
+//                     "Otevřít Playground" (U120), opens it from Measure; the skip link names
+//                     the workspace shown
 //                     in the Playground, Measure and Studio and moves focus to the main region
 //                     that holds it; the header "?", named "Keyboard shortcuts", opens the dialog
 //                     of that title; the Export menu has no Import item, and More's "Import
@@ -1338,7 +1339,7 @@ function defineChecks() {
     await page.click('[data-osc="presets.load"]:not([disabled])');
     const loaded = await until(() => page.evaluate(() => {
       const a = window.OSCILLA.app;
-      const alert = a.alerts.find((x) => /^Loaded/.test(x.title));
+      const alert = a.alerts.find((x) => /^Načteno: /.test(x.title));
       const said = alert ? `${alert.title} ${alert.message}` : '';
       return said ? { workspace: a.workspace, said,
         coarse: matchMedia('(pointer: coarse)').matches } : null;
@@ -1472,8 +1473,15 @@ function defineChecks() {
     }, sel);
     // B6: the logo goes home.
     const BRAND = '[data-osc="header.brand"]'; // the Pro navbar's logo (F002)
+    // U120: the description is a hidden Czech span outside the lang="en" link (aria-describedby).
     const logo = { name: await nameOf(BRAND),
-      title: await page.getAttribute(BRAND, 'title') };
+      title: await page.getAttribute(BRAND, 'title'),
+      description: await page.evaluate((s) => {
+      const el = document.querySelector(s);
+      const d = el && document.getElementById(el.getAttribute('aria-describedby') || '');
+      return d ? { text: d.textContent.trim(), hidden: d.hidden, inside: el.contains(d),
+        lang: d.closest('[lang]')?.getAttribute('lang') ?? null } : null;
+    }, BRAND) };
     await page.click(BRAND);
     logo.reached = await reach(() => page.evaluate(() => (window.OSCILLA.app.workspace
       === 'playground' ? new URLSearchParams(window.location.hash.slice(1)).get('m') : null)),
@@ -1531,7 +1539,9 @@ function defineChecks() {
     const picker = chooser ? await chooser.element().evaluate((x) => x.id) : null;
     await page.close();
     return { ...H.verdict({
-      logoNamed: /^OSCILLA · /.test(logo.name || '') && logo.title === 'Open the Playground',
+      logoNamed: /^OSCILLA · /.test(logo.name || '') && logo.title === null
+        && logo.description?.text === 'Otevřít Playground' && logo.description.hidden
+        && !logo.description.inside && logo.description.lang === 'cs',
       logoOpensPlayground: logo.reached === 'playground',
       skipNamed: skip.playground.name === 'Přeskočit na hlavní obsah: Playground'
         && skip.measure.name === 'Přeskočit na hlavní obsah: Měření'

@@ -17,20 +17,6 @@
   display: none;
 }
 
-/* .osc-view's min-height would cap the row at the scroll area and let content spill past it
-   (the Learn/Presets defect): the row follows the content. */
-.osc-app:is([data-mode="measure"], [data-mode="experiments"]) .osc-main {
-  grid-template-rows: max-content;
-}
-
-.osc-view--measure,
-.osc-view--experiments {
-  min-height: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-}
-
 .osc-measure,
 .osc-experiments {
   display: grid;

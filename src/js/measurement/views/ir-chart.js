@@ -151,7 +151,7 @@ export function buildIrView(ir, options = {}) {
   const dec = decimate(xsVis, ys, maxPoints);
   const plotY = dec.y.map((v) => (Number.isFinite(v) ? v : null));
 
-  const lineLabel = `${kind === K.NORMALIZED ? 'NORMALIZED' : 'OBSERVED'} impulsní odezva · `
+  const lineLabel = `${kind === K.NORMALIZED ? 'NORMALIZOVANÁ' : 'NAMĚŘENÁ'} impulsní odezva · `
     + `${label}`;
   const seriesList = [{
     id: 'ir', label: lineLabel, kind, role: 'observed', values: plotY,
@@ -208,10 +208,10 @@ export function buildIrView(ir, options = {}) {
   const notes = [origin.label + '.', `Metoda: ${ir.method || 'spectral'} (${ir.algorithm}).`];
   // T019: a full-overlap tail still holding the decay estimates an upper bound on the noise.
   const tailBound = Number.isFinite(ir.noiseFloorDb) && ir.noiseFloorMethod === 'full-overlap-tail';
-  if (!Number.isFinite(ir.noiseFloorDb)) notes.push('Šumový dozvuk: není k dispozici.');
+  if (!Number.isFinite(ir.noiseFloorDb)) notes.push('Šum na konci odezvy: není k dispozici.');
   else if (tailBound) notes.push(tailBoundNote(ir, stimulusFrames, msPerSample));
   else if (typeof ir.noiseFloorMethod === 'string' && ir.noiseFloorMethod) {
-    notes.push(`Odhad šumového dozvuku: ${ir.noiseFloorMethod}.`);
+    notes.push(`Odhad šumu na konci odezvy: ${ir.noiseFloorMethod}.`);
   }
   if (dec.factor > 1) notes.push(`Vykresleno jako minimum a maximum každých ${dec.factor} `
     + 'vzorků viditelného úseku (decimace zobrazení; data se nepřevzorkovávají).');
@@ -228,7 +228,7 @@ export function buildIrView(ir, options = {}) {
     // estimate itself scatters run to run (the note says so).
     + `${tailBound ? `odhad úrovně dozvuku ≤ ${fixedText(Math.ceil(ir.noiseFloorDb) || 0, 0)} `
       + 'dB vůči špičce (šum nebo nedokončený dozvuk)'
-      : `šumový dozvuk ${Number.isFinite(ir.noiseFloorDb)
+      : `šum na konci odezvy ${Number.isFinite(ir.noiseFloorDb)
       ? `${fixedText(ir.noiseFloorDb, 0)} dB vůči špičce` : 'není k dispozici'}`}, `
     + `délka ${msText(n * msPerSample, Math.max(1, msPerSample))}`
     + `${normalize ? '; zobrazení NORMALIZED' : ''}.`;
@@ -259,7 +259,7 @@ function tailBoundNote(ir, stimulusFrames, msPerSample) {
       + 'po špičce'
     : `střední výkon posledních ${Math.round(IR_TAIL_FRACTION * 100)} % zpoždění, při nichž `
       + 'celý stimul leží uvnitř záznamu (zhruba jeden post-roll po špičce)';
-  return `Odhad šumového dozvuku: full-overlap-tail, ${where}. Dozvuk, který tam ještě běží, se `
+  return `Odhad šumu na konci odezvy: full-overlap-tail, ${where}. Dozvuk, který tam ještě běží, se `
     + 'počítá jako šum, takže šum leží na této úrovni nebo pod ní, v rámci vlastního rozptylu '
     + 'odhadu; pro čtení za dozvukem prodlužte post-roll.';
 }

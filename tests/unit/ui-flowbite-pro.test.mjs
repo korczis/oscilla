@@ -24,8 +24,13 @@
 //                 page     every element whose id starts with "osc-view-" (a workspace)
 //                 card     every other <section> element with an id
 //                 modal    every <dialog> element with an id
-//               A surface is migrated when its root's static class attribute holds every class
-//               of one class set PRO_STRUCTURE gives its kind (the Pro admin shell's navbar,
+//               A surface is migrated when its root's classes hold every class of one class set
+//               PRO_STRUCTURE gives its kind (its root's classes: its static class attribute,
+//               plus the classes it binds unconditionally through a named Pro class list of
+//               src/js/ui/pro-classes.js: a :class that is `PRO.<name>`, or an array literal
+//               with a top-level element `PRO.<name>` (boundProClasses); a conditional element,
+//               a ternary, an object key or a binding on any element but the root adds none,
+//               and a name PRO does not define is a problem of the record (the Pro admin shell's navbar,
 //               sidebar drawer, #main-content, footer card, page gutter, card and modal
 //               content) AND the build compiles Tailwind with the flowbite plugin
 //               (buildCompilesFlowbite: the tailwindcss and flowbite packages, the plugin in
@@ -141,6 +146,7 @@ import {
   TAILWIND_ENTRY, baselineHistory, buildCompilesFlowbite, bundledInputs, definedClasses,
   fingerprint, historyGate, historyProblems, kitProblems, measure, openingTags,
   proSourceProblems, read, readBaseline, recordProblems, resolveRelative, sum, tailwindFiles,
+  boundProClasses,
   tracked, treeInputs, treeMeasure,
 } from '../../scripts/ui-flowbite-pro-measure.mjs';
 
@@ -482,6 +488,47 @@ test('mutation M9: a surface on the Pro class set counts as migrated only with t
   assert.ok(measure({ ...FIX, html: proHtml, build: half }).pending.includes('card#osc-panel-b'),
     'a Pro class the compiled CSS does not define keeps the surface pending');
 });
+
+test('mutation M10: only a PRO list bound unconditionally on a surface root counts (judge change)',
+  () => {
+    // The review of 2c0fcf43: a view binds its frame from one PRO token instead of repeating
+    // the classes. The measure reads such a binding, and nothing looser.
+    const TOKENS = { card: `p-4 ${PRO_CARD}`, half: 'p-4 bg-white' };
+    const dist = `<style>${['p-4', ...PRO_CARD.split(' ')]
+      .map((c) => `.${c.replace(/[^\w-]/g, '\\$&')}{x:y}`).join('')}</style>`;
+    const build = { compiles: true, defines: definedClasses(dist) };
+    const root = (attrs, inner = '') => FIX_HTML.replace(
+      '<section class="osc-panel" id="osc-panel-b" style="width: 1px"></section>',
+      `<section ${attrs} id="osc-panel-b">${inner}</section>`);
+    const state = (html) => {
+      const m = measure({ ...FIX, html, build, tokens: TOKENS });
+      return m.migrated.includes('card#osc-panel-b') ? 'migrated' : 'pending';
+    };
+    // Bound unconditionally: the whole binding, or a top-level element of an array literal.
+    assert.equal(state(root(':class="PRO.card"')), 'migrated');
+    assert.equal(state(root('x-bind:class="PRO.card"')), 'migrated');
+    assert.equal(state(root(`:class="[open && 'ring', PRO.card]"`)), 'migrated');
+    assert.equal(state(root(`:class="[\n  PRO.card,\n  open && 'ring'\n]"`)), 'migrated');
+    // (b) A conditional binding never counts.
+    for (const c of ['open && PRO.card', "open ? PRO.card : ''", "open ? '' : PRO.card",
+      '[open && PRO.card]', '[open ? PRO.card : PRO.half]', '{ [PRO.card]: open }',
+      'PRO.card + extra', 'pick(PRO.card)', "PRO.card || ''", 'PRO.card.trim()']) {
+      assert.equal(state(root(`:class="${c}"`)), 'pending', `:class="${c}" binds no class`);
+    }
+    // (c) A PRO list on an element inside the surface, not its root, does not count.
+    assert.equal(state(root('class="osc-panel"', '<div :class="PRO.card"></div>')), 'pending');
+    // A list without the whole set keeps it pending, like a static class attribute would.
+    assert.equal(state(root(':class="PRO.half"')), 'pending');
+    // (d) An unknown name fails closed: no class, and the record reports it.
+    for (const name of ['cardz', 'constructor', 'toString', '__proto__']) {
+      const m = measure({ ...FIX, html: root(`:class="PRO.${name}"`), build, tokens: TOKENS });
+      assert.ok(m.pending.includes('card#osc-panel-b'), `PRO.${name} binds no class`);
+      has(recordProblems(m, record(m)),
+        new RegExp(`^card#osc-panel-b: binds PRO\\.${name.replace(/[$_]/g, '\\$&')}, which`));
+    }
+    // The default list is the product's own (src/js/ui/pro-classes.js).
+    assert.deepEqual(boundProClasses({ ':class': 'PRO.page' }), ['px-4', 'pt-6']);
+  });
 
 test('fixture: the build compiles Tailwind with the flowbite plugin only when all of it is there',
   () => {

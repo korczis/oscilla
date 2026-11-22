@@ -10,6 +10,11 @@ const BTN = 'inline-flex items-center justify-center px-3 text-sm font-medium ro
 const BTN_XS = 'inline-flex items-center justify-center px-2 text-xs font-medium rounded-lg '
   + 'min-h-6 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11 '
   + 'focus:outline-none focus:ring-4';
+// The one Pro page frame (PRO_STRUCTURE.page of scripts/ui-flowbite-pro-measure.mjs).
+const PAGE = 'px-4 pt-6';
+// Below md the frame's top is 8 px, as <main>'s was before F002: a phone's first screen keeps
+// its controls (the Playground's HOLD above the fold at 375 x 667, qa safety-notice).
+const PHONE_TOP = 'max-md:!pt-2';
 const SECONDARY = 'text-gray-900 bg-white border border-gray-200 hover:bg-gray-100 '
   + 'hover:text-primary-700 focus:ring-gray-100 dark:bg-gray-800 dark:text-gray-400 '
   + 'dark:border-gray-600 dark:hover:text-white dark:hover:bg-gray-700 dark:focus:ring-gray-700';
@@ -51,8 +56,21 @@ export const PRO = Object.freeze({
   tabOn: 'text-primary-700 border-primary-700 dark:text-primary-500 dark:border-primary-500',
   tabOff: 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 '
     + 'dark:text-gray-400 dark:hover:text-gray-300',
-  /** A page's heading. */
-  pageTitle: 'mb-4 text-xl font-semibold text-gray-900 sm:text-2xl dark:text-white',
+  /** The one Pro page frame every workspace stands in (owner decision Q110): a view of its own
+   *  binds PRO.pageView on its root through :class, where the Pro measure reads it; <main> carries
+   *  it for a workspace whose panels stand in its grid (shell.js mainFrameOf). The page's
+   *  visible title is the page header's alone. */
+  page: PAGE,
+  /** The frame with its bottom gutter and the phone's 8 px top: what every view of its own
+   *  binds (the Synth, whose bottom keeps the docked keys' band, binds PRO.pageDocked). */
+  pageView: `${PAGE} pb-6 ${PHONE_TOP}`,
+  /** The Studio's frame: an editor that fills the viewport keeps an 8 px gutter on a phone, so
+   *  its 44 px controls fit (the step grid's eight steps at 390 px, the graph's view controls
+   *  at 320 px) and its header actions stay clear of the docked keys' handle at 375 px. */
+  pageEditor: `${PAGE} pb-6 max-md:!px-2 ${PHONE_TOP}`,
+  /** The Synth's frame: the docked keys play it, so on a phone its top is 12 px and its insert
+   *  alert stays above the dock at 320 px (U108, oscilla-c3's Q090 criterion). */
+  pageDocked: `${PAGE} max-md:!pt-3`,
 });
 
 /** The Alpine part: PRO for the markup's :class bindings. */

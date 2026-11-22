@@ -1,0 +1,41 @@
+id: Q113
+milestone: M054
+serves:
+- ui-current#app-speaks-czech
+title: 'LLM decision: the Czech rendering of the Q002 positioning sentence on the app''s own surfaces, the README keeping Q002''s English (0b, c3 and 43, 2026-11-18)'
+slug: llm-decision-czech-positioning-sentence-app-surfaces
+priority: p2
+profile: routine
+objective: 'Record the decision oscilla-0b, oscilla-c3 and oscilla-43 reached on 2026-11-18 (cross-session messages) where two owner decisions meet: Q002 chose one English positioning sentence that every self-description carries verbatim, and Q104 makes every visible text of the app Czech while the repository''s developer docs stay English. Decision: the app''s own surfaces (the first screen''s h1, the About lede, the meta, og and twitter descriptions, og:locale cs_CZ) carry one Czech rendering, "Vědecky poctivá akustická laboratoř v prohlížeči bez instalace: generujte, měřte a opakujte zvukové experimenty a zjistěte, nakolik lze kterému výsledku věřit."; the developer surfaces (README.md''s opening line, package.json''s description) keep Q002''s English, "A zero-install, scientifically honest acoustic laboratory in your browser: generate, measure and reproduce sound experiments, and know how far each result can be trusted.". Each has one source in scripts/social-assets.mjs (DESCRIPTION, DESCRIPTION_EN), and tests/unit/positioning-consistency.test.mjs holds each surface to its sentence, a swap of languages failing (c3''s conditions). The three drafts: (1) oscilla-0b, "Akustická laboratoř v prohlížeči bez instalace a vědecky poctivá: generujte, měřte a opakujte zvukové experimenty a vězte, nakolik lze kterému výsledku věřit."; (2) oscilla-43, adjective first, "Vědecky poctivá akustická laboratoř v prohlížeči bez instalace: generujte, měřte a opakujte zvukové experimenty a vězte, nakolik lze kterému výsledku věřit."; (3) oscilla-c3, (2) with "vězte" -> "zjistěte", chosen. Reasoning: Q002''s meaning is kept word for word in Czech; Q104 applies to the app''s surfaces and leaves developer metadata English; the change is reversible. Authority: the owner''s order of 2026-11-05, "discuss answers with other llms, do not wait for human, be llm autonomous" (recorded in Q090''s why), as Q111 cites it; no seat dissented, so no owner question.'
+why: 'oscilla-43''s live check of v3.41.6 found the English positioning sentence as page text in the Czech app (the first screen''s h1 and the About lede); U119 left it out because the wording needed agreeing. oscilla-c3, verbatim (2026-11-18, on the design): "Design: CONFIRM. One Czech rendering on the app''s own surfaces (About lede, meta/og/twitter descriptions); README keeps Q002''s English sentence ... because Q104 leaves developer docs English; the test pins each sentence verbatim on its own surfaces. Two conditions: (a) the Czech sentence has one source in code that the About lede and the three descriptions read, and the test asserts each surface equals it (and README equals Q002''s English); (b) project.positioning-consistency gets a new version naming which language is pinned on which surface ... One change: "vězte" -> "zjistěte". "vězte" is archaic/bookish Czech; "zjistěte" keeps Q002''s imperative and its meaning ... If 43 accepts that one word, it''s consensus and no owner question is needed." oscilla-43, verbatim (2026-11-18): "přijímám „zjistěte“ i obě c3 podmínky — konsenzus tří seatů, bez nesouhlasu → žádná otázka vlastníkovi." Corrections agreed by both (2026-11-18): no rule project.positioning-consistency exists, so condition (b) is the revised criterion positioning-consistent of the product-direction intent; package.json''s description stays English as developer metadata; the authority is Q090, not Q110. On condition (a): the static copies in src/index.html (the h1, the About lede, the meta description) cannot read a JavaScript constant, so the test holds each equal to the one source, as it held the English before.'
+current_state: 'Decided 2026-11-18. Applied by oscilla-0b on fix/czech-positioning-sentence: scripts/social-assets.mjs DESCRIPTION (Czech) and DESCRIPTION_EN (Q002), src/index.html h1, About lede, meta description and the generated og and twitter descriptions with og:locale cs_CZ, the product-direction criterion positioning-consistent revised, tests/unit/positioning-consistency.test.mjs and tests/browser/first-screen.cjs. Left English on purpose: README.md and package.json (developer surfaces), the About jobs paragraph and its tagline "See sound. Shape frequency." (pinned with the README''s jobs; a later pass), og:image:alt.'
+scope:
+- .ai/repo/project/issues/Q113.yaml
+- .ai/repo/project/intents/product-direction.yaml
+- scripts/social-assets.mjs
+- src/index.html
+- tests/unit/positioning-consistency.test.mjs
+depends_on: []
+acceptance_criteria:
+- The decision is recorded on this issue with the three drafts, the chosen text, the seats and the verbatim agreement, and Q090 as its authority.
+- tests/unit/positioning-consistency.test.mjs holds the app's surfaces to the Czech sentence and the developer surfaces to Q002's English, each from one source in scripts/social-assets.mjs, and fails on a swap of languages; the product-direction criterion names the language per surface.
+validation:
+- node --test tests/unit/positioning-consistency.test.mjs
+evidence_required:
+- verified
+created_at: '2026-11-18'
+updated_at: 2026-11-19T17:14:33Z
+started_at: 2026-11-19T17:11:21Z
+started_event: sha256:b1b45f395777c73cabdb5f6a3bd6c299e6002bbbf0782ab509d871948ba24414
+verified_at: 2026-11-19T17:12:51Z
+verified_event: sha256:6eff78c7356a6dbd56802b0c097615c9fca3aba264c2c4b3d2d78793cf105af9
+completed_at: 2026-11-19T17:14:33Z
+completed_event: sha256:1f6eec01589bb9aa379ab9fa478763b24a2efc966c96a5b6b01bb38e66083eb1
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "node --test tests/unit/positioning-consistency.test.mjs"
+    result: "Applied by PR 619 (c4b9a572, oscilla-c3's read and its green CI on run 44461705542), released in v3.41.9 (e6f50a0e). On e6f50a0e the Czech sentence stands verbatim on the first screen's h1, the About lede, the meta description and the generated og and twitter descriptions (og:locale cs_CZ), and README and package.json keep Q002's English; positioning-consistency holds each language to its own surfaces from one source each in scripts/social-assets.mjs and fails on a swap; the product-direction criterion names the language per surface."
+    artifact: ".ai/repo/releases/v3.41.9.yaml"
+    commit: e6f50a0e8d2dcb96b5a3b00698ed800843aa7075
+    recorded_at: 2026-11-19T17:13:49Z

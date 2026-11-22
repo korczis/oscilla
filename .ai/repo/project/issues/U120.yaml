@@ -1,0 +1,40 @@
+id: U120
+milestone: M054
+serves:
+  - "ui-current#app-speaks-czech"
+title: "Czech pass 8 markup cut 3: the header brand link describes where it goes in Czech, its English name kept"
+slug: czech-pass-8-brand-description
+priority: p2
+profile: implementation
+objective: "Lands as fix(ui). The header brand link (data-osc header.brand) keeps its accessible name, the product name 'OSCILLA · Interactive Sound & Frequency Lab', marked lang='en'. Its description 'Open the Playground' was a title attribute on that lang='en' element. It becomes 'Otevřít Playground', a hidden span (id osc-brand-desc) outside the link, so the page's lang cs applies, referenced by aria-describedby. The link has no title any more (a hover tooltip, unavailable to keyboard and touch). oscilla-c3's option B (2026-11-18): A, moving lang to the visible spans, would read the English name with a Czech voice; naming from the visible spans fails below 375 px, where the wordmark drops; a sr-only span would repeat the description in browse mode."
+why: "U118's first criterion, as oscilla-43 re-checked it after v3.41.7, still has one gap: title='Open the Playground' on the header brand (src/index.html). The shortcut dialog's English group names, the other remnant, wait for #602 (D05), which rewrites the same lines in src/js/ui/keys."
+current_state: "Built by oscilla-0b in task t-20261119005733-58f2 on fix/czech-u120-brand-title. Left for after #602: the shortcut dialog's group names (Page, Instrument, Keyboard, General)."
+scope:
+  - "src/index.html"
+depends_on: [U118]
+acceptance_criteria:
+  - "The header brand link's accessible description is 'Otevřít Playground' through aria-describedby; the target is hidden, outside the lang='en' link, and takes the page's lang cs; the link has no title; its name is unchanged and lang='en'."
+  - "tests/unit/control-names.test.mjs and tests/unit/cross-links.test.mjs pin it and fail on the base; tests/browser/navigation.cjs and tests/browser/cross-links.cjs read the description; H004 reads 'its description says …'."
+  - "The czech-prose-short ratchet does not rise; src/index.html within its cap; the four visual gates pass."
+validation:
+  - "npm test"
+  - "node tests/browser/navigation.cjs"
+  - "node tests/browser/cross-links.cjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-19'
+updated_at: 2026-11-19T17:09:33Z
+started_at: 2026-11-19T17:05:34Z
+started_event: sha256:2104373fb41ab5ace4a19f638112932060e236751d36a6165b1273f7eb46992b
+verified_at: 2026-11-19T17:07:02Z
+verified_event: sha256:ca294fd36ca64bf761d39815546ff8e4e16b6ea29e90c4d5ddf6c08956e74f60
+completed_at: 2026-11-19T17:09:33Z
+completed_event: sha256:39d47940841a0a18516de3a66b7a4c6ec8ac41991e5da2835b7eba716ed545f3
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "npm test; node tests/browser/navigation.cjs; node tests/browser/cross-links.cjs"
+    result: "Landed by PR 625 (c22e42f1, oscilla-c3's read and legs OK on run 44451322596), released in v3.41.9 (e6f50a0e). The brand link has no title; aria-describedby points to the hidden span 'Otevřít Playground' outside the lang='en' link (src/index.html on e6f50a0e); control-names and cross-links pin it and failed on the base; navigation and cross-links read it; the four visual gates passed; src/index.html 316 037 B under the 317 000 cap the raises entry for PR 625 set."
+    artifact: ".ai/repo/releases/v3.41.9.yaml"
+    commit: e6f50a0e8d2dcb96b5a3b00698ed800843aa7075
+    recorded_at: 2026-11-19T17:08:41Z

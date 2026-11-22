@@ -113,7 +113,8 @@ test('a Learn demo and a Learn tool link carry the way back to the lesson (one-w
   const topic = LEARN_TOPICS.find((t) => t.id === 'harmonic');
   const back = learnReturnAction(topic);
   assert.equal(routeOfHash(back.href).workspace, 'learn');
-  assert.equal(back.text, 'Back to the lesson: Harmonics');
+  // U116: the way back names the lesson as the Výuka page shows it, in Czech.
+  assert.equal(back.text, 'Zpět na lekci: Harmonické');
   assert.match(PAGE, /<template x-if="a\.action">\s*<a :href="a\.action\.href" data-osc="alert\.action"/);
   const src = readFileSync(new URL('../../src/js/ui/workbench.js', import.meta.url), 'utf8');
   assert.match(src, /this\.runDemo\(topic, \{ action: learnReturnAction\(topic\) \}\)/);
@@ -152,7 +153,7 @@ test('the header and Measure name what their links and buttons do (B2, B6, B7, B
   // The skip link's label names the workspace shown (H004 B7, ui/app.js syncSkipLink).
   assert.match(PAGE, /<a class="osc-skip" href="#osc-main">Přeskočit na hlavní obsah: Playground<\/a>/);
   // The logo keeps the product's name (positioning-consistency) and says where it goes (H004 B6).
-  assert.match(PAGE, /<a href="#m=playground" x-bind="homeLink\(\)" data-osc="header\.brand" data-osc-link="jump" title="Open the Playground"\s+lang="en" aria-label="OSCILLA · Interactive Sound &amp; Frequency Lab"/);
+  assert.match(PAGE, /<a href="#m=playground" x-bind="homeLink\(\)" data-osc="header\.brand" data-osc-link="jump" aria-describedby="osc-brand-desc"\s+lang="en" aria-label="OSCILLA · Interactive Sound &amp; Frequency Lab"/);
   assert.ok(tagOf('header.help').includes('aria-label="Klávesové zkratky"'));
   const toExp = tagOf('measure.toExperiments');
   assert.ok(toExp.includes(`@click="setWorkspace('experiments', { focusHeading: true })"`),
@@ -289,7 +290,7 @@ test('A1: a preset loaded in Presets says what plays it there and links to its t
     for (const p of BUILTIN_PRESETS.filter((x) => !x.requiresHeadphones)) {
       app.alerts = [];
       app.applyPreset(p);
-      const loaded = app.alerts.find((x) => x.title.startsWith('Loaded'));
+      const loaded = app.alerts.find((x) => x.title.startsWith('Načteno: '));
       if (!loaded) continue; // partly applied: a warning, no "Loaded"
       assert.doesNotMatch(loaded.message, /^(Press TRIGGER|Stiskněte Spustit \(nebo)/,
         `${p.id}: ${loaded.message}`);
@@ -302,7 +303,7 @@ test('A1: a preset loaded in Presets says what plays it there and links to its t
     phone.sampleRate = 48000;
     phone.mode = 'presets';
     phone.applyPreset(BUILTIN_PRESETS.find((x) => x.id === 'ref-440'));
-    const said = phone.alerts.find((x) => x.title.startsWith('Loaded'));
+    const said = phone.alerts.find((x) => x.title.startsWith('Načteno: '));
     assert.ok(said, 'Load on a phone announces the preset');
     assert.match(said.message, /^Otevřete Playground a zahrajte ho tlačítkem /);
     assert.equal(said.action.href, '#m=playground');

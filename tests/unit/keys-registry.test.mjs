@@ -71,7 +71,8 @@ test('a chord has one owner per scope: a second throws, a nested view overrides'
   const help = reg.helpRows(keys, (w) => w.toUpperCase());
   const rows = help.flatMap((g) => g.rows);
   assert.deepEqual(rows.find((r) => r.id === 'xy.rec'),
-    { id: 'xy.rec', keys: ['R'], label: 'Record or overdub the loop', where: 'SYNTH (xy)' });
+    { id: 'xy.rec', keys: ['R'], shown: 'R', label: 'Record or overdub the loop',
+      where: 'SYNTH (xy)', place: null, section: 'workspace' });
   assert.equal(rows.find((r) => r.id === 'help').where, 'Everywhere');
 });
 

@@ -5,8 +5,8 @@
     {
       "id": "M011",
       "title": "Release engineering, provenance and product graph",
-      "done": 30,
-      "required": 54,
+      "done": 31,
+      "required": 55,
       "phase": "now"
     },
     {
@@ -19,8 +19,8 @@
     {
       "id": "M046",
       "title": "Engineering integrity: orchestration split, structural checks, measured costs",
-      "done": 41,
-      "required": 72,
+      "done": 42,
+      "required": 73,
       "phase": "now"
     },
     {
@@ -48,14 +48,14 @@
       "id": "M055",
       "title": "The whole interface on Flowbite Pro",
       "done": 1,
-      "required": 15,
+      "required": 16,
       "phase": "now"
     },
     {
       "id": "M054",
       "title": "The whole interface shows the current product",
-      "done": 24,
-      "required": 79,
+      "done": 31,
+      "required": 85,
       "phase": "now"
     },
     {
@@ -96,16 +96,16 @@
     {
       "id": "M064",
       "title": "Instrument wave 1a: the integration map, the knob and the semi-modular Synth panel with patch cables",
-      "done": 15,
-      "required": 47,
+      "done": 20,
+      "required": 53,
       "phase": "now"
     },
     {
       "id": "M065",
       "title": "Instrument wave 1b: the piano keyboard, one note source and a proper step sequencer",
       "done": 0,
-      "required": 7,
-      "phase": "later"
+      "required": 9,
+      "phase": "next"
     },
     {
       "id": "M066",
@@ -117,8 +117,8 @@
     {
       "id": "M067",
       "title": "Instrument wave 2: modulation everywhere, labs, probes, sequencer depth, follower and MEASURE",
-      "done": 3,
-      "required": 28,
+      "done": 4,
+      "required": 32,
       "phase": "now"
     },
     {
@@ -187,7 +187,7 @@
     {
       "id": "M085",
       "title": "Component system, wave 0: one contract, one registry and the proven duplicates, before Pro",
-      "done": 2,
+      "done": 3,
       "required": 8,
       "phase": "now"
     },
@@ -202,8 +202,8 @@
       "id": "M087",
       "title": "Component system, wave 2: generated catalogue, What is this, the link graph and traceability",
       "done": 0,
-      "required": 7,
-      "phase": "later"
+      "required": 8,
+      "phase": "next"
     },
     {
       "id": "M111",
@@ -217,20 +217,20 @@
       "title": "Unified controls: one parametrized implementation per control family, no parallel ones",
       "done": 0,
       "required": 10,
-      "phase": "later"
+      "phase": "next"
     },
     {
       "id": "M101",
       "title": "Instrument kinds, wave 1: the kind contract, the meter and the 88-key piano",
-      "done": 0,
-      "required": 6,
-      "phase": "next"
+      "done": 1,
+      "required": 9,
+      "phase": "now"
     },
     {
       "id": "M090",
       "title": "One instrument, one coherent state",
-      "done": 36,
-      "required": 69,
+      "done": 39,
+      "required": 72,
       "phase": "now"
     },
     {
@@ -251,8 +251,8 @@
       "id": "M102",
       "title": "Instrument kinds, wave 2: readouts, jacks and cables, the transport, the step grid and locks, the XY pad, the channel strip and the track header",
       "done": 0,
-      "required": 4,
-      "phase": "later"
+      "required": 5,
+      "phase": "next"
     },
     {
       "id": "M096",
@@ -273,7 +273,7 @@
       "title": "Instrument kinds, wave 3 and 4: the mini-scope, the DAW kinds under Q062, and the sweep",
       "done": 0,
       "required": 6,
-      "phase": "later"
+      "phase": "next"
     },
     {
       "id": "M098",

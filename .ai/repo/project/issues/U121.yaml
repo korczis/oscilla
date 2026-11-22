@@ -1,0 +1,33 @@
+id: U121
+milestone: M054
+serves:
+  - "ui-current#phone-whole"
+title: "On a phone the Synth's content ends above the docked keys (K247 parity), so no Synth control sits under the dock's buttons on the first screen"
+slug: "synth-content-ends-above-dock"
+priority: p3
+profile: implementation
+objective: "Lands as fix(ui). The Synth keeps the docked keyboard floating over its own content: its view reserves the dock's band with bottom padding (pb-[max(1.5rem,var(--osc-dock-h,20rem))]) while every other workspace ends <main> above the dock (K247, !mb-[dock-h - statusbar-h]). Whatever Synth control lies in the dock's button band on the first screen is measured as overlapped, so R375 and R320 of tests/browser/ui-current.cjs only move when the header moves. The fix gives the Synth K247's geometry: its content ends at the dock's top, so the dock covers nothing of it. It touches the Synth's scroll region (main's !block !pt-0 scroll-pt for the Synth's sticky section nav), src/js/synth/ui.js's nav room and src/js/midi/dock-yield.js."
+why: "oscilla-0b measured a header-only fix on 2026-11-22 (darwin, chromium, firefox and webkit alike): with Open in Studio and Copy link as icons below sm, the chips at 375 x 667 cleared the dock (MARGIN -39 -> +13 px) but the next panel buttons took their place, 3 pairs 42 px deep instead of 6 pairs 30 px; at 320, 5 chip pairs at 11 px instead of Copy link at 25 px. That moves the debt, not shrinks it, so oscilla-43 (Q090, 2026-11-22) chose the structural fix and dropped the header change unless the structural fix still needs it."
+current_state: "Re-scoped 2026-11-22 by oscilla-0b on oscilla-43's decision (Q090): first filed by oscilla-e5 with #601 as moving the chips or the docked padding; a header-only attempt was measured and dropped (see why). Design settled under Q090 by oscilla-d9 on 2026-11-22 against origin/main 6f5e9346: (a) K247 parity for the Synth only, the Studio stays; <main> drops the Synth exclusion from K247's margin, the Synth view's band padding becomes pb-6 and main's scroll-pb of --osc-dock-h is 0 on the Synth. (b) nav-room.js keeps C1-R2T51-2's fold invariance with a geometry-free rule: bottom = min(mainRect.bottom, innerHeight - dockedBand) (dockedBand = max(now, DOCKED) as today; no fixed dock: mainRect.bottom), avail = bottom - mainRect.top, sticks = avail - navH >= NAV_ROW_PX; navRoomOf({ mainTop, mainBottom, navH, dockTop }) stays pure, with unit cases for the old geometry (same as today), the new one docked (no double count) and the new one folded (sticks as docked); the module header loses its scroll-pb note. (c) Traps: U108 condition 4, the Synth's own-work share floor, is clipped to the viewport, not to main, so pb-6 can drop it under 2/3 on a tall phone with a short tab (390 x 844, XY or Drums): measure before and after at 320, 375 and 390; if it falls, the share is judged against main's rect (oscilla-c3's floor, asked of c3), never a new debt key. U100 and U107 (C3-539-2, in U108) carry no trap. Runs: synth-nav-room unit, xy-pad (phone-dock-se in webkit), synth, iphone and ui-current in three engines, and the SYN phone visuals in the noble container. Not started; built after the v3.42.0 publish."
+scope:
+  - "src/index.html"
+  - "src/js/ui/shell.js"
+  - "src/js/synth/ui.js"
+  - "src/js/midi/dock-yield.js"
+  - "src/js/synth/nav-room.js"
+  - "tests/unit/synth-nav-room.test.mjs"
+  - "tests/browser/ui-current.cjs"
+  - "tests/visual/synth/"
+depends_on: []
+acceptance_criteria:
+  - "R375 (@375:synth:overlap) and R320 (@320:synth:overlap) of tests/browser/ui-current.cjs shrink to empty, or strictly smaller in both pair count and deepest px, in chromium, firefox and webkit, on CI linux and on darwin; no pair is re-recorded under another control."
+  - "The Synth's content ends at the docked keyboard's top on a phone, as K247 gives every other workspace: its MARGIN line is >= 0 px at 320, 375 and 390."
+  - "U108 holds: the insert alert and its Close stay on the first screen above the dock (u108-alert-on-top checks), and the Synth's section nav still scrolls into view under its sticky top."
+  - "ui-current passes in chromium, firefox and webkit; the Synth's phone visual references are re-accepted with each moved view named."
+  - "The design is settled under Q090 by oscilla-c3 or oscilla-d9 before building, and a reviewer's verdict judges the change."
+validation:
+  - "node tests/browser/ui-current.cjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-20'
+updated_at: 2026-11-22

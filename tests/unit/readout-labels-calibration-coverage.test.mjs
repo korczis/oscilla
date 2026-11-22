@@ -151,7 +151,7 @@ function assertNoCoverage(v, label) {
   assert.ok(note, `${label}: ${v.notes.join(' | ')}`);
   assert.equal(v.notes.some((n) => /measured range/.test(n)), false, label);
   assert.match(note, /bez extrapolace/);
-  assert.match(note, /zobrazeno RAW, nekalibrováno/);
+  assert.match(note, /zobrazena surová křivka, nekalibrováno/);
   const r = v.readoutAt(1000);
   assert.equal(r.calibrated, false);
   assert.equal(r.corrected, 'mimo profil (nekalibrováno)');

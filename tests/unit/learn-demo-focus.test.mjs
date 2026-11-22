@@ -83,3 +83,12 @@ test('runLearnDemo defers its transport focus through deferDemoFocus, not a bare
   assert.match(body, /if \(fromKeyboard\) deferDemoFocus\(this, focusSafely\);/);
   assert.doesNotMatch(body, /\$nextTick\(\(\) => focusSafely/);
 });
+
+test('the Learn card\'s example button is named in Czech (U119, Q104)', () => {
+  const page = readFileSync(`${ROOT}src/index.html`, 'utf8');
+  const at = page.indexOf('data-osc="learn.example"');
+  assert.ok(at > 0, 'src/index.html has learn.example');
+  const end = page.indexOf('</button>', at);
+  const label = page.slice(page.indexOf('>', at) + 1, end).trim();
+  assert.equal(label, 'Ukázat na aktuálním nastavení', 'its visible text and accessible name');
+});
