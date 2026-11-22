@@ -48,14 +48,14 @@
       "id": "M055",
       "title": "The whole interface on Flowbite Pro",
       "done": 1,
-      "required": 15,
+      "required": 16,
       "phase": "now"
     },
     {
       "id": "M054",
       "title": "The whole interface shows the current product",
-      "done": 27,
-      "required": 84,
+      "done": 31,
+      "required": 85,
       "phase": "now"
     },
     {
@@ -97,7 +97,7 @@
       "id": "M064",
       "title": "Instrument wave 1a: the integration map, the knob and the semi-modular Synth panel with patch cables",
       "done": 20,
-      "required": 52,
+      "required": 53,
       "phase": "now"
     },
     {
