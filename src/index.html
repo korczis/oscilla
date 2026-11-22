@@ -2629,7 +2629,7 @@
       <h2 class="sr-only" id="osc-presets-title">Předvolby</h2>
       <div data-osc="presets-content">
         <div class="flex flex-wrap mb-4 text-sm font-medium text-center border-b border-gray-200
-          dark:border-gray-700" role="tablist" aria-label="Preset categories">
+          dark:border-gray-700" role="tablist" aria-label="Kategorie předvoleb">
           <template x-for="c in PRESET_CATEGORIES" :key="c.id">
             <button type="button" role="tab" data-osc="presets.tab" :data-value="c.id"
               :id="'osc-ptab-cat-' + c.id"
@@ -2642,10 +2642,10 @@
           <button type="button" data-osc="presets.save" @click="openSave()"
             :class="PRO.btnPrimary">Uložit aktuální…</button>
           <button type="button" data-osc="presets.reset" @click="resetDefaults()"
-            :class="PRO.btnSecondary">Reset to defaults</button>
+            :class="PRO.btnSecondary">Obnovit výchozí</button>
           <button type="button" data-osc="presets.clearHistory"
             :class="PRO.btnSecondary"
-            x-show="presetTab === 'history'" @click="clearHistory()">Clear history</button>
+            x-show="presetTab === 'history'" @click="clearHistory()">Vymazat historii</button>
           <a href="#m=synth" data-osc="presets.toSynth" data-osc-link="jump" hidden
             class="self-center [@media(pointer:coarse)]:inline-flex [@media(pointer:coarse)]:min-h-11
               [@media(pointer:coarse)]:items-center"
@@ -2666,19 +2666,19 @@
                     <span class="text-sm text-yellow-800 dark:text-yellow-300" x-show="presetDisabled(p)"
                       :id="'osc-preset-why-' + p.id" x-text="presetDisabledReason(p)"></span>
                     <a href="#m=playground" data-osc="presets.altPlayground" data-osc-link="jump" x-show="presetDisabled(p)"
-                      class="self-start text-sm font-medium text-primary-700 hover:underline [@media(pointer:coarse)]:inline-flex [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:items-center dark:text-primary-400">Set a tone within the limit in the Playground</a>
+                      class="self-start text-sm font-medium text-primary-700 hover:underline [@media(pointer:coarse)]:inline-flex [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:items-center dark:text-primary-400">Nastavte tón v mezích v Playgroundu</a>
                   </div>
                   <div class="flex flex-wrap items-center gap-2">
                     <button type="button" data-osc="presets.load"
                       :class="PRO.btnPrimary"
                       :disabled="presetDisabled(p)" @click="loadPresetFromView(p)"
                       :aria-describedby="presetDisabled(p) ? 'osc-preset-why-' + p.id : null"
-                      :aria-label="'Load preset ' + p.name">Load</button>
+                      :aria-label="'Načíst předvolbu ' + p.name">Načíst</button>
                     <button type="button" data-osc="presets.delete"
                       :class="PRO.btnSecondary"
                       x-show="p.custom" @click="deletePresetFocus(p, $event)" @blur="cancelDelete(p.id)"
-                      :aria-label="(pendingDelete === p.id ? 'Confirm delete ' : 'Delete ') + p.name"
-                      x-text="pendingDelete === p.id ? 'Confirm' : 'Delete'"></button>
+                      :aria-label="(pendingDelete === p.id ? 'Potvrdit smazání ' : 'Smazat ') + p.name"
+                      x-text="pendingDelete === p.id ? 'Potvrdit smazání' : 'Smazat'"></button>
                   </div>
                 </li>
               </template>
@@ -2708,16 +2708,16 @@
                   </div>
                   <div class="flex flex-wrap items-center gap-2">
                     <button type="button" @click="recallHistory(h)"
-                      :class="PRO.btnSecondary">Recall</button>
+                      :class="PRO.btnSecondary">Vyvolat</button>
                   </div>
                 </li>
               </template>
               <li class="p-4 text-sm text-gray-500 dark:text-gray-400" data-empty-row
-                x-show="!history.length">Nothing
-                played in this page view yet. <a href="#m=playground" data-osc="presets.toPlayground" data-osc-link="jump"
+                x-show="!history.length">V tomto
+                zobrazení stránky zatím nic nezaznělo. <a href="#m=playground" data-osc="presets.toPlayground" data-osc-link="jump"
                 class="font-medium text-primary-700 hover:underline dark:text-primary-500
                   [@media(pointer:coarse)]:inline-flex [@media(pointer:coarse)]:min-h-11
-                  [@media(pointer:coarse)]:items-center">Play something in the Playground</a></li>
+                  [@media(pointer:coarse)]:items-center">Zahrajte něco v Playgroundu</a></li>
             </ul>
           </template>
         </div>
