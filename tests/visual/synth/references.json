@@ -429,7 +429,7 @@
         "desktop-panel-light": {
           "runs": 10,
           "px": 0,
-          "faint": 0
+          "faint": 41
         },
         "desktop-engines-dark": {
           "runs": 10,
@@ -489,7 +489,7 @@
         "desktop-bay-light": {
           "runs": 10,
           "px": 3,
-          "faint": 24
+          "faint": 71
         },
         "phone-bay-dark": {
           "runs": 10,
@@ -512,7 +512,7 @@
             },
             "desktop-panel-light": {
               "px": 131,
-              "faint": 137
+              "faint": 163
             },
             "desktop-engines-dark": {
               "px": 495,
@@ -559,8 +559,8 @@
               "faint": 2527
             },
             "desktop-bay-light": {
-              "px": 2338,
-              "faint": 2530
+              "px": 2341,
+              "faint": 2540
             },
             "phone-bay-dark": {
               "px": 0,
@@ -581,7 +581,7 @@
             },
             "desktop-panel-light": {
               "px": 0,
-              "faint": 0
+              "faint": 41
             },
             "desktop-engines-dark": {
               "px": 0,
@@ -629,7 +629,7 @@
             },
             "desktop-bay-light": {
               "px": 1803,
-              "faint": 2335
+              "faint": 2345
             },
             "phone-bay-dark": {
               "px": 0,
@@ -650,7 +650,7 @@
             },
             "desktop-panel-light": {
               "px": 0,
-              "faint": 0
+              "faint": 26
             },
             "desktop-engines-dark": {
               "px": 0,
@@ -698,7 +698,7 @@
             },
             "desktop-bay-light": {
               "px": 3,
-              "faint": 11032
+              "faint": 11023
             },
             "phone-bay-dark": {
               "px": 0,
@@ -719,7 +719,7 @@
             },
             "desktop-panel-light": {
               "px": 0,
-              "faint": 0
+              "faint": 26
             },
             "desktop-engines-dark": {
               "px": 0,
@@ -766,8 +766,8 @@
               "faint": 1560
             },
             "desktop-bay-light": {
-              "px": 1321,
-              "faint": 1694
+              "px": 1320,
+              "faint": 1560
             },
             "phone-bay-dark": {
               "px": 0,
