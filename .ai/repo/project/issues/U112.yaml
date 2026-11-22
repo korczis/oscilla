@@ -21,4 +21,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-13'
-updated_at: 2026-11-18
+updated_at: 2026-11-22T07:14:40Z
+started_at: 2026-11-22T07:13:18Z
+started_event: sha256:821c35c41d5352f359c732126c8239acaeea60eab9f8f1a424e628320b369a20
+verified_at: 2026-11-22T07:13:49Z
+verified_event: sha256:e76e5163b464817867b3ee08a33b2108f2421e4f135bbc82428892f7f4661ae9
+completed_at: 2026-11-22T07:14:40Z
+completed_event: sha256:e5565e18f71ccc8e208d7b3e182a603c22639b68e9f4c0783701cdc49e7d933e
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node tests/browser/ui-current.cjs (CI legs of #601)"
+    result: "Re-checked on main 6f5e9346 by oscilla-43 (2026-11-22): AC1 tests/browser/ui-current.cjs:189 names the @320:synth:overlap pairs (keyboard.octave-down/up x synth.copy-link) and R320 (:137-150) cites the named CI run 44650431485 whose KNOWN lines they are, near-zero pairs carrying ~<depth>; landed by #601 (d0c5d871), legs green at fe375fd9; AC2 the reviewer's verdict .ai/repo/reviews/547.yaml covers U112's commits, and #601's ui-current table change was judged by oscilla-0b (601.yaml). Released in v3.42.0 (6f5e9346)."
+    artifact: ".ai/repo/reviews/547.yaml"
+    commit: 6f5e934694d4b6c776203843a3ac2b0eb063609f
+    recorded_at: 2026-11-22T07:14:22Z

@@ -1,0 +1,66 @@
+# Review verdict for pull request #633 (refactor/measure-text-constants): the Measure live and
+# run parts export their texts and the tests import them (follow-up A of #624). Built by
+# oscilla-0b; judged at 5a49e6e5 (merge of origin/main 6f5e9346, v3.42.0) on base origin/main
+# 6f5e9346, 2026-11-22, in the reviewer's own worktree ~/dev/oscilla-wt/review/pr633.
+#
+# Reviewer: oscilla-d9 (claude-code 4bf9d8e4), a separate top-level session, asked by oscilla-0b
+# because oscilla-c3 was silent; the builder may not write its own verdict. oscilla-d9 built
+# none of #633: `git log origin/main..5a49e6e5` holds 8fab9477 and the merge 5a49e6e5, both made
+# by oscilla-0b's session.
+#
+# The digest: origin/main's scripts/review-verdict.mjs --content --list --head 5a49e6e5
+# --base-branch origin/main (the head's copy and scripts/lib are identical to main's):
+# 31bd4a96... over 2 guarded paths, src/js/ui/measure/live.js and src/js/ui/measure/run.js.
+#
+# What the guarded change does (8fab9477): live.js exports LIVE_RTA_TEXT (3 texts: started,
+# stopped, trackEnded) and run.js exports RUN_TEXT (6: checkFailed, offDefinition, failed, busy,
+# notSaved, recipeUnused), both frozen; the call sites read them in place of the literals. No
+# logic, no audio or measurement path changes; the notify kinds, the bodies and the announce
+# politeness are unchanged.
+#
+# How it was judged, measured by the reviewer at 5a49e6e5 (Node 22.20.0):
+# - Byte identity: each of the 9 values occurs as a string literal in main 6f5e9346's live.js or
+#   run.js, the split trackEnded literal joined (a scratch script importing the head's modules;
+#   9/9 found, exit 0). recipeUnused replaces both of main's literals.
+# - npm run build:check exit 0 (dist/index.html is up to date, 3694962 bytes, source
+#   704e7fa957e7); the committed dist is the build of this source.
+# - measure-live-rta-adapter.test + measure-run-flow.test: 22/22 pass. Full npm test exit 0:
+#   6070 tests, 6068 pass, 0 fail, 2 skipped (the builder's run skipped 1; environment-gated).
+# - Mutations, each against the two suites, restored after:
+#   M1 a RUN_TEXT value turned English            -> caught (1 fail, the Czech-letter test)
+#   M2 a call site back to a drifted literal       -> caught (1 fail)
+#   M3 live.js announcing .started on stop         -> caught (1 fail)
+#   M5 measureRunRecipe's unsaved reason -> .busy  -> caught (1 fail)
+#   M4 a typo inside a value that keeps its Czech letters ('Měřění selhalo') -> NOT caught (R1).
+# - Other readers of these texts, grepped at the head: tests/browser/link-integrity.cjs and
+#   v3-ui.cjs pin 'Odkaz na recept nebyl použit' (unchanged value); v3-ui.cjs reads
+#   'Měření selhalo' only as an absence; saving.js keeps its own 'Experiment nebyl uložen' titles
+#   (no full stop, another part, out of this PR's scope).
+#
+# Findings:
+# - R1 (P3, open, accepted by design): the units now compare each text with the same constant
+#   the code reads, so only the wording's language is pinned, not the wording itself. A typo or
+#   an accidental rewording that keeps a Czech letter passes every unit (M4); only the two
+#   browser suites still pin recipeUnused's exact wording. This is the point of follow-up A (a
+#   Czech pass edits one place, not the tests too), and the key count plus the Czech-letter test
+#   stop the English regression Q104 is about. If exact wording matters later, pin it once in a
+#   snapshot of the two objects, not again at each assertion.
+# - R2 (P3, open, a follow-up, not a condition): the extraction is partial by its own doc
+#   comment ("titles and refusal reasons"). The notify bodies stay inline in run.js ('Nastavení
+#   se liší od načtené definice, ...', 'Běží měření; zastavte ho a otevřete odkaz znovu.',
+#   '. Nastavení měření se nezměnilo.'), and src/index.html:1335 composes its own copy of
+#   'Odkaz na recept nebyl použit: ' that is not tied to RUN_TEXT.recipeUnused. A later Czech
+#   pass can change one copy and not the other.
+#
+# Verdict: merge. The change is behaviour-preserving (byte-identical texts, dist rebuilt from
+# this source), the tests are no weaker against the English regression and stronger at the
+# call sites (M2, M3, M5); R1 and R2 are notes, not conditions.
+
+schema: review-verdict/v1
+pr: 633
+verdict: merge
+reviewer: oscilla-d9 (claude-code 4bf9d8e4, a separate top-level session standing in for oscilla-c3; built none of 5a49e6e5)
+content: 31bd4a9692aa32b69748ebb07a58358910c74bf362da438715d3f8c94653fb9a
+findings:
+  - { id: R1, severity: P3, status: open, title: "units pin only the texts' language, not their wording; a Czech-letter typo in a constant passes (by design of follow-up A)" }
+  - { id: R2, severity: P3, status: open, title: "notify bodies in run.js and the recipe-link prefix in src/index.html:1335 stay outside the constants (follow-up)" }

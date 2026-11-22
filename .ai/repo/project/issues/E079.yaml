@@ -1,0 +1,28 @@
+id: E079
+milestone: M046
+serves:
+  - "engineering-integrity#browser-suites-harnessed"
+title: "SYN desktop-bay-light flakes on CI far beyond its measured noise: knob edges differ on some captures"
+slug: syn-desktop-bay-light-ci-flake
+priority: p2
+profile: implementation
+objective: "Pin and fix why CI's Visual regression gate intermittently fails SYN desktop-bay-light while its recorded noise is small. tests/visual/synth/references.json records 10 runs for that view at most 3 px / 24 faint (limits 24 / 96), yet two CI captures failed far beyond it: #601 at fe375fd9 (134 faint against 96) and release #631 at 317255b1 (34 px / 800 faint, run 44988612246 attempt 1); both passed on rerun of the same dist. The diff of #631's capture (artifact visual-gate, diff-desktop-bay-light.png) shows antialias speckle on several knobs' edges (Glide, VCO 2 Tune, Ring Depth, Noise Level, the LFO sync knob), no layout or content change."
+why: "A release PR (#631) and F002 (#601) each went red on it and needed a rerun; a gate that fails without a change trains everyone to rerun, which is how a real regression gets waved through."
+current_state: "Open, cause not pinned. Filed 2026-11-22 by oscilla-43 from #631's failed attempt and e5's report on #601. Leading guess, unverified: the capture is taken before every knob's SVG has settled (a late layout or font swap, or a transition on the knob's rotation), so a slower runner catches the antialiasing mid-change; the local noise runs in the noble container did not reproduce it (load at 35-60 on the Mac)."
+scope:
+  - "scripts/visual-synth.mjs"
+  - "tests/visual/synth/references.json"
+  - "src/js/ui/synth/knob.js"
+depends_on: []
+acceptance_criteria:
+  - "A failing capture records why it differs: which knobs (their data-osc) carry the differing pixels, and whether any transition, animation or pending font or image load was in flight when the capture was taken."
+  - "The cause is stated in this issue's current_state, from such a capture or from a reproduction (for example a throttled CPU in the container)."
+  - "The fix makes the capture wait for a stated, bounded condition (through the suite's own wait helpers, no fixed sleep) or removes the source of the late change; desktop-bay-light then passes 20 consecutive CI-equivalent captures in the linux-x64 container, with its limits not widened."
+  - "A reviewer's verdict."
+validation:
+  - "node scripts/visual-synth.mjs dist --view desktop-bay-light"
+  - "node scripts/visual-synth.mjs dist --measure-noise 20 --view desktop-bay-light"
+evidence_required:
+  - "verified"
+created_at: '2026-11-22'
+updated_at: '2026-11-22'
