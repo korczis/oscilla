@@ -1,0 +1,102 @@
+# Review verdict for pull request #638 (fix/u121-synth-k247-parity): the Synth's content ends
+# above the docked keys, K247 parity (U121). Built by oscilla-0b; judged at d1beed25 (merge of
+# origin/main d392cf48) on base origin/main d392cf48, 2026-11-22, in the reviewer's own worktree
+# ~/dev/oscilla-wt/review/pr638.
+#
+# Reviewer: oscilla-d9 (claude-code 4bf9d8e4), a separate top-level session, asked by oscilla-0b
+# for oscilla-43 after oscilla-c3 had not answered for about 1.5 h. Disclosed: oscilla-d9 settled
+# U121's design under Q090 (the navRoomOf rule min(mainBottom, dockTop) - mainTop - navH) and
+# proposed the dock-yield settle guard this PR builds (underStickyBar). It wrote none of the
+# code: `git log origin/main..d1beed25` holds 724d4a7d, c5bc5b86, 2f6ab6e6 and two merges, all
+# made by oscilla-0b's session. A reader who had not shaped the fix was preferred and not
+# available; this verdict judges the build against that design, not the design afresh.
+#
+# The digest: origin/main's scripts/review-verdict.mjs --content --list --head d1beed25
+# --base-branch origin/main (the head's copy and scripts/lib are identical to main's):
+# c701eb10... over 1 guarded path, src/js/synth/nav-room.js. dock-yield.js (src/js/midi), the
+# markup, pro-classes.js, the tests and the visual references are not guarded paths.
+#
+# What the change does:
+# - src/index.html: K247's bottom margin on <main> now binds the Synth too (only the Studio keeps
+#   its own band); the Synth's <main> binding adds !scroll-pb-0; the Synth view drops its
+#   pb-[max(1.5rem,var(--osc-dock-h,20rem))]; PRO.pageDocked gains pb-6 (pro-page-frame forbids
+#   the view repeating a frame class).
+# - nav-room.js (guarded): navRoomOf({ mainTop, mainBottom, navH, dockTop }) judges the room to
+#   min(mainBottom, dockTop), dockTop from the kept docked band (DOCKED), so the same rule holds
+#   with <main> under the dock or ending above it, and a fold, which grows <main>, changes
+#   nothing (C1-R2T51-2). applyNavRoom reads <main>'s rect instead of clientHeight.
+# - dock-yield.js: underStickyBar(win, el), a top inside the scroller's box but above roomTop
+#   (1 px rounding); the settle's replace() re-places when dockCovers || underStickyBar.
+# - ui-current.cjs: R320, R375 and the @390 Synth overlap debts and their PHONE_WHOLE_PAIRS entry
+#   removed (paid, not moved); the MARGIN reading clips each control to <main>'s bottom.
+#
+# How it was judged, measured by the reviewer at d1beed25 (Node 22.20.0):
+# - build:check exit 0 (dist/index.html is up to date, 3695709 bytes, source 9db18996b948).
+# - synth-nav-room, keyboard-dock-yield, synth-phone, page-frame, pro-page-frame, visual-synth:
+#   69/69. Full npm test exit 0: 6074 tests, 6072 pass, 0 fail, 2 skipped.
+# - Mutations against synth-nav-room + keyboard-dock-yield + synth-phone, each restored:
+#   N1 the room ignores the dock top (mainBottom only)       -> caught (3 fail)
+#   N2 the docked band subtracted again (double count)        -> caught (3 fail)
+#   N3 the live band instead of the kept docked one           -> caught (2 fail)
+#   N4 >= NAV_ROW_PX to >                                      -> caught (1 fail)
+#   N5 mainTop read as 0                                       -> caught (2 fail)
+#   D1 underStickyBar without R6's inside-the-scroller bound   -> caught (2 fail)
+#   D2 the guard dropped from the settle                       -> caught (1 fail, the source pin)
+#   D3 the 1 px rounding turned the other way                  -> caught (1 fail)
+# - Browser suites: not run here (the Mac's 1-minute load was 50-54, above OSC_LOAD_MAX 36). The
+#   builder's darwin runs (ui-current 408/408, iphone, xy-pad x-dock-yields webkit phone-dock-se
+#   passing with the guard and failing 3/3 without it) and CI decide them; CI run 45018191297 at
+#   d1beed25 was still queued when this verdict was written.
+# - CI run 45010186163 at c5bc5b86 (before the phone re-accept): all six browser legs passed;
+#   the Visual regression gate failed on the six SYN phone views (since re-accepted at 2f6ab6e6)
+#   and on desktop-panel-light (0 px / 50789 faint, limits 24 / 96) and desktop-bay-light
+#   (43 px / 352304 faint), their dark twins 0 px. The reviewer read that run's visual-gate
+#   artifact (diff-desktop-panel-light.png, diff-desktop-bay-light.png): every differing pixel
+#   lies in the patch bay's module plates, whose fill is an SVG linearGradient (patch-bay.js
+#   #bay-plate, surface-3 to surface-1); no knob edge, no text, no layout moved.
+#
+# Findings:
+# - R1 (P2, open, a condition on landing): the desktop light failures are not E079's class. E079
+#   is antialias speckle on a few knob edges of desktop-bay-light, at most 34 px / 800 faint, and
+#   passes on a rerun of the same dist. Here the whole fill of every bay plate differs, 63x
+#   (panel) and 440x (bay) E079's largest faint count, and desktop is not unchanged by this PR:
+#   kbdDocked is true for the Synth at every width (keyboard-ui.js, the workspace alone), so
+#   K247's margin now ends the Synth's <main> above the dock at 1536 px too. A changed scroller
+#   box can change how the bay's gradient is rastered (its dither or tile phase) with nothing
+#   visible moving (a hypothesis, not measured: why dark stays at 0 px was not checked).
+#   Condition: the Visual regression gate passes on the head that lands. If
+#   desktop-panel-light or desktop-bay-light fail again at counts of the same order, treat them
+#   as caused by this PR, not as E079: re-accept them from the CI capture with this reason and
+#   their measured noise (--measure-noise, as for the phone views), and do not rerun them away.
+#   If they pass, say so in the PR body and add the run to E079's evidence as a different
+#   signature (plate fill, not knob edges).
+# - R2 (P3, open, a note): the MARGIN line now clips each control to <main>'s bottom, so on the
+#   Synth it is about +2 px by construction (<main> ends at the dock's top less the status bar
+#   rounding). That is correct for K247 (a control below <main>'s bottom is clipped, not
+#   covered), and the elementFromPoint overlap pairs remain the check that can fail; read MARGIN
+#   as a geometry readout from now on, not as the overlap guard.
+# - R3 (P3, open, a note): D2 is caught only by a source pin; the settle guard's behaviour is
+#   proved only in a browser (xy-pad x-dock-yields, webkit phone-dock-se). A unit test of
+#   replace() through a fake window would make it a behaviour check, if the dock-yield lane
+#   touches it again.
+# - R4 (P3, open, a note): replace() now also moves a surface whose top a user left under the
+#   sticky nav, inside the scroller, when a resize or the dock's settle fires. That matches the
+#   existing dockCovers re-place (a surface the user left under the dock is moved the same way),
+#   and on a phone <main> is the scroller, so the toolbar's collapse does not fire it from
+#   scrolling inside <main>.
+#
+# Verdict: merge under R1's condition (the Visual regression gate green on the landing head, or
+# the two desktop light views re-accepted with R1's reason). The guarded change is the settled
+# rule, exactly, with its unit cases for both geometries and the fold; the dock-yield guard is
+# narrow (R6) and closes the WebKit failure it was built for.
+
+schema: review-verdict/v1
+pr: 638
+verdict: merge
+reviewer: oscilla-d9 (claude-code 4bf9d8e4, a separate top-level session; settled U121's design and proposed the settle guard; built none of d1beed25)
+content: c701eb10bfd32ca6817d7f196cbcc2c012e240aaea5aaec7f6ae44f62477b20c
+findings:
+  - { id: R1, severity: P2, status: open, title: "desktop-panel-light and desktop-bay-light failures are not E079 (bay plate gradient fill, 63-440x E079); condition: visual gate green on the landing head, or re-accept them with this reason" }
+  - { id: R2, severity: P3, status: open, title: "MARGIN now clips to <main>'s bottom, about +2 px by construction on the Synth; the overlap pairs stay the failing check" }
+  - { id: R3, severity: P3, status: open, title: "the settle guard is unit-pinned only by source; its behaviour is proved only by xy-pad in webkit" }
+  - { id: R4, severity: P3, status: open, title: "replace() also moves a surface a user left under the sticky nav on a resize, as dockCovers already does under the dock" }

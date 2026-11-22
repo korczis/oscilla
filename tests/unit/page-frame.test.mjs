@@ -82,6 +82,6 @@ test('a workspace scrolled into view keeps the frame\'s top padding as its gap',
   assert.deepEqual(bound, ['scroll-pt-[var(--osc-synth-nav-h,0px)]'],
     '<main> binds no scroll-pt of its own but the Synth\'s');
   assert.ok(tag.includes(
-    "workspace === 'synth' && '!block !pt-0 scroll-pt-[var(--osc-synth-nav-h,0px)]'"),
+    "workspace === 'synth' && '!block !pt-0 !scroll-pb-0 scroll-pt-[var(--osc-synth-nav-h,0px)]'"),
   'the Synth binds scroll-pt to its nav height');
 });
