@@ -833,7 +833,7 @@ async function runLeg(name, origin) {
         await H.activate(page, '[data-osc="presets.load"]:not([disabled])', input);
         const said = await until(() => page.evaluate(() => {
           const a = window.OSCILLA.app;
-          const n = a.alerts.find((x) => /^Loaded/.test(x.title));
+          const n = a.alerts.find((x) => /^Načteno: /.test(x.title));
           return n ? { workspace: a.workspace, message: n.message,
             action: n.action && n.action.text,
             coarse: matchMedia('(pointer: coarse)').matches } : null;

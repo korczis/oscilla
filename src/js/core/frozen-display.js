@@ -15,6 +15,13 @@ export const FROZEN_DISPLAY = Object.freeze({
   'Press and hold HOLD TO PLAY.': 'Stiskněte a držte Podržet a hrát.',
   'Press TRIGGER (or Space) to hear it.': 'Stiskněte Spustit (nebo mezerník) a uslyšíte to.',
   'Trigger duration': 'Délka spuštěné noty',
+  // U122: the notice of Předvolby's Obnovit výchozí, pinned as V1 alert data
+  'Defaults restored': 'Výchozí hodnoty obnoveny',
+  'All instrument parameters are back to their defaults. Custom presets are kept.':
+    'Všechny parametry nástroje mají opět výchozí hodnoty. Vlastní předvolby zůstávají.',
+  // and the title of Uložit aktuální… (its message carries the user's own name, so it is no
+  // exact frozen string; it waits for a pattern form here)
+  'Preset saved': 'Předvolba uložena',
   'Continuous repeat needs “Allow continuous playback”; playing once.':
     'Nepřetržité opakování potřebuje „Povolit nepřetržité přehrávání“; zazní jednou.',
 });

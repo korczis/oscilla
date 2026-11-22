@@ -836,7 +836,8 @@ function defineChecks() {
     must(same(a.app, d.app, INSTRUMENT_FIELDS).length > 0, 'the fresh page starts elsewhere');
     await op.navTo(p2, 'presets');
     await p2.click('#osc-ptab-cat-custom');
-    await p2.locator('[data-osc="presets.load"][aria-label="Load preset Journey five"]').click();
+    await p2.locator('[data-osc="presets.load"][aria-label="Načíst předvolbu Journey five"]')
+      .click();
     const s = await waitSnap(p2, (x) => same(a.app, x.app, INSTRUMENT_FIELDS).length === 0,
       'the custom preset restores the instrument');
     return { restored: INSTRUMENT_FIELDS.map((k) => s.app[k]) };
