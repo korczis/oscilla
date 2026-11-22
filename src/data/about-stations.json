@@ -315,6 +315,10 @@
       "summary": "V Nastavení, v sekci MIDI, se dá zvolit výstup „Hodiny a transport na výstup“: zvolený výstup MIDI dostává Start, Pokračovat, Stop a hodiny MIDI podle transportu, který právě vidíte (v Sekvenceru jeho vlastní, jinde Studia), při každém načtení je zvolené „Žádný“ a bez volby se nic neposílá; ovladač rychlosti u LFO, Náhody, Krokového modulátoru a sekvenceru napětí se jmenuje Rychlost",
       "commit": "3b618be",
       "datetime": "2026-11-16T19:02:14+01:00"
+    },
+    {
+      "title": "Jeden rám stránky pro každou plochu a čeština od úvodu po Studio",
+      "summary": "Každá pracovní plocha stojí v jednom stejném rámu stránky Flowbite Pro: obsah začíná pod hlavičkou na stejném odsazení, jediný viditelný nadpis je ten v hlavičce stránky a drobečková navigace ho neopakuje; Synth a Studio si na telefonu zatím drží své dřívější rozvržení (F014); úvodní věta aplikace, popisky stránky a sdílení jsou česky, akční odkazy říkají „Otevřít šablonu … ve Studiu“, Výuka i Předvolby mluví česky a úchyt klávesnice se jmenuje Klávesnice"
     }
   ]
 }
