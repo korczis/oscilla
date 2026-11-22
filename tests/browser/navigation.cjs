@@ -1339,7 +1339,7 @@ function defineChecks() {
     await page.click('[data-osc="presets.load"]:not([disabled])');
     const loaded = await until(() => page.evaluate(() => {
       const a = window.OSCILLA.app;
-      const alert = a.alerts.find((x) => /^Loaded/.test(x.title));
+      const alert = a.alerts.find((x) => /^Načteno: /.test(x.title));
       const said = alert ? `${alert.title} ${alert.message}` : '';
       return said ? { workspace: a.workspace, said,
         coarse: matchMedia('(pointer: coarse)').matches } : null;

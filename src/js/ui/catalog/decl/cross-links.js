@@ -116,8 +116,8 @@ export default [
   defineComponent({
     id: 'presets.toPlayground',
     kind: 'open',
-    label: 'Play something in the Playground',
-    docs: 'Opens the Playground from the empty history of played settings.',
+    label: 'Zahrajte něco v Playgroundu',
+    docs: 'Z prázdné historie zahraných nastavení otevře Playground.',
     state: 'ui.workspace',
     effect: { route: 'playground' },
   }),
@@ -204,8 +204,8 @@ export default [
   defineComponent({
     id: 'presets.altPlayground',
     kind: 'open',
-    label: 'Set a tone within the limits',
-    docs: 'Opens the Playground when a preset is beyond the limits, to set a tone that loads.',
+    label: 'Nastavte tón v mezích v Playgroundu',
+    docs: 'Když je předvolba mimo meze, otevře Playground, kde jde nastavit tón, který se načte.',
     state: 'ui.workspace',
     effect: { route: 'playground' },
   }),

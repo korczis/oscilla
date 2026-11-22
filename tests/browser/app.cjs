@@ -2169,7 +2169,7 @@ function defineChecks() {
         await clearAlerts('n');
         await page.click('[data-osc="presets.tab"][data-value="history"]');
         await page.locator('[data-osc="presets.history"]').first()
-          .locator('button', { hasText: 'Recall' }).click();
+          .locator('button', { hasText: 'Vyvolat' }).click();
         leg.history = await told(page, `History recall names the drop at ${w}px`);
         // 3. Config import, through the real file input
         await clearAlerts('n');
