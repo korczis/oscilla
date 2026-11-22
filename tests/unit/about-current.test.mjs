@@ -448,6 +448,8 @@ test('A15: the roadmap spawn bound fits plan roadmap under load, one source for 
   assert.match(facts, /import \{[^}]*\bROADMAP_SPAWN_TIMEOUT_MS\b[^}]*\}\s*from '\.\/roadmap\.mjs'/,
     'scripts/facts.mjs imports the bound: one source for one command');
   assert.doesNotMatch(facts, /timeout: [0-9_]+/, 'and keeps no literal copy of it');
+  assert.match(facts, /timeout: ROADMAP_SPAWN_TIMEOUT_MS/,
+    'and its spawn uses the imported bound, not a local constant beside it');
   assert.match(read('scripts/roadmap.mjs'), /timeout: ROADMAP_SPAWN_TIMEOUT_MS/,
     'planRoadmap spawns with the named bound, not a literal');
 });
