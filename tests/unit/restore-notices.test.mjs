@@ -82,16 +82,16 @@ test('link: the drop is in the result, its notice, and the restore summary', () 
 
 // -------------------------------------------------------------- the instrument's entries
 
-test('preset: loading a saved continuous sweep shows the drop beside "Loaded"', () => {
+test('preset: loading a saved continuous sweep shows the drop beside "Načteno"', () => {
   const app = instrument();
   app.applyPreset({ id: 'u1', name: 'Continuous sweep', cfg: sweepRecord('continuous') });
   assert.equal(app.sweep.repeat, 'once');
   assert.equal(app.continuousAllowed, false, 'a preset never grants the permission');
   assert.ok(named(app.alerts), JSON.stringify(titles(app.alerts)));
-  assert.ok(app.alerts.some((a) => a.title === 'Loaded “Continuous sweep”'));
+  assert.ok(app.alerts.some((a) => a.title === 'Načteno: „Continuous sweep“'));
 });
 
-test('History: recalling a continuous sweep shows the drop beside "Recalled"', () => {
+test('History: recalling a continuous sweep shows the drop beside "Vyvoláno"', () => {
   const app = instrument();
   app.recallHistory({ label: 'Sweep 100 Hz → 1 kHz', cfg: sweepRecord('continuous') });
   assert.equal(app.sweep.repeat, 'once');
@@ -148,7 +148,7 @@ test('a record saved as once restores with no drop and no notice on every path',
     'Nothing plays until you press HOLD TO PLAY or TRIGGER.']], 'the link summary is unchanged');
   const app = instrument();
   app.applyPreset({ id: 'u2', name: 'Once', cfg: sweepRecord('once') });
-  assert.deepEqual(titles(app.alerts), ['Loaded “Once”']);
+  assert.deepEqual(titles(app.alerts), ['Načteno: „Once“']);
 });
 
 test('with the permission given in this page view, continuous is kept and nothing is dropped',

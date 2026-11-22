@@ -290,7 +290,7 @@ test('A1: a preset loaded in Presets says what plays it there and links to its t
     for (const p of BUILTIN_PRESETS.filter((x) => !x.requiresHeadphones)) {
       app.alerts = [];
       app.applyPreset(p);
-      const loaded = app.alerts.find((x) => x.title.startsWith('Loaded'));
+      const loaded = app.alerts.find((x) => x.title.startsWith('Načteno: '));
       if (!loaded) continue; // partly applied: a warning, no "Loaded"
       assert.doesNotMatch(loaded.message, /^(Press TRIGGER|Stiskněte Spustit \(nebo)/,
         `${p.id}: ${loaded.message}`);
@@ -303,7 +303,7 @@ test('A1: a preset loaded in Presets says what plays it there and links to its t
     phone.sampleRate = 48000;
     phone.mode = 'presets';
     phone.applyPreset(BUILTIN_PRESETS.find((x) => x.id === 'ref-440'));
-    const said = phone.alerts.find((x) => x.title.startsWith('Loaded'));
+    const said = phone.alerts.find((x) => x.title.startsWith('Načteno: '));
     assert.ok(said, 'Load on a phone announces the preset');
     assert.match(said.message, /^Otevřete Playground a zahrajte ho tlačítkem /);
     assert.equal(said.action.href, '#m=playground');

@@ -1223,9 +1223,9 @@ row({ id: 'presets.delete.pointer', ws: 'presets', control: '[data-osc="presets.
     D.click('#osc-ptab-cat-custom')),
   // two steps: Delete turns the button into Confirm, which deletes
   act: async (page) => {
-    const del = page.locator('[data-osc="presets.delete"][aria-label="Delete Gone"]');
+    const del = page.locator('[data-osc="presets.delete"][aria-label="Smazat Gone"]');
     await del.click();
-    await page.locator('[data-osc="presets.delete"][aria-label="Confirm delete Gone"]').click();
+    await page.locator('[data-osc="presets.delete"][aria-label="Potvrdit smazání Gone"]').click();
   },
   expect: (s, b, x) => !x.v, read: () => ({ v: (window.OSCILLA.app.customPresets || [])
     .some((p) => p.name === 'Gone') }) });

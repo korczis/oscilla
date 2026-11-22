@@ -933,7 +933,10 @@ export function createInstrument(deps = {}) {
     presetDisabledReason(p) { return presetDisabledReason(p, this.safeMax, this.provisional); },
     // V1: oscillaApp: loadPreset, applyPreset (index.html@a7b7a23)
     loadPreset(p) {
-      if (this.presetDisabled(p)) { this.notify('warning', 'Preset unavailable', this.presetDisabledReason(p)); return; }
+      if (this.presetDisabled(p)) {
+        this.notify('warning', 'Předvolba není dostupná', this.presetDisabledReason(p));
+        return;
+      }
       if (p.requiresHeadphones) {
         this.pendingPreset = p;
         this.openModal('headphonesModal');
@@ -949,10 +952,12 @@ export function createInstrument(deps = {}) {
       const play = presetLoadedNotice(this.mode, this.isProgrammed, this.source,
         !!host.matchMedia && host.matchMedia('(pointer: coarse)').matches);
       if (issues) {
-        this.notify('warning', 'Preset partly applied',
-          `${issues} value(s) were invalid and kept at their previous setting.${also ? ` ${also}` : ''}`);
+        this.notify('warning', 'Předvolba použita jen zčásti',
+          `Neplatné hodnoty: ${issues}; zůstalo jejich předchozí nastavení.`
+          + `${also ? ` ${also}` : ''}`);
       } else {
-        this.notify('success', `Loaded “${p.name}”`, also ? `${also} ${play.message}` : play.message,
+        this.notify('success', `Načteno: „${p.name}“`,
+          also ? `${also} ${play.message}` : play.message,
           { action: play.action });
       }
     },
@@ -1031,15 +1036,16 @@ export function createInstrument(deps = {}) {
       this.history = storage.pushHistory(this.history, entry);
       if (!sessionStore.set(STORAGE_KEYS.history, JSON.stringify(this.history)) && !this._historyWarned) {
         this._historyWarned = true;
-        this.notify('warning', 'History not saved', 'sessionStorage is unavailable; history lasts only for this page view.');
+        this.notify('warning', 'Historie se neuložila', 'Úložiště relace (sessionStorage) není '
+          + 'dostupné; historie vydrží jen do zavření stránky.');
       }
     },
     // V1: oscillaApp: recallHistory, clearHistory, historyTime, historyFreqs (index.html@a7b7a23)
     recallHistory(h) {
       const { issues, also } = restoreRecordLabs(this, h, 'history', this.applyConfig(h.cfg, 'history'));
       this.loadedLabel = h.label;
-      const said = issues ? 'Some values could not be restored.' : h.label;
-      this.notify(issues ? 'warning' : 'success', 'Recalled', also ? `${said} ${also}` : said);
+      const said = issues ? 'Některé hodnoty nešlo obnovit.' : h.label;
+      this.notify(issues ? 'warning' : 'success', 'Vyvoláno', also ? `${said} ${also}` : said);
     },
     clearHistory() {
       this.history = [];
