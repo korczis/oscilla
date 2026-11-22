@@ -2728,7 +2728,7 @@
          src/js/ui/studio/workspace.js): every module plate, knob, switch and jack is generated
          from src/js/synth/panels/semi-mono.js and the registry's node descriptors. The keyboard
          docks at the bottom here and plays the panel. -->
-    <section class="pb-6" :class="PRO.pageDocked" id="osc-view-synth" data-osc="synth-view"
+    <section :class="PRO.pageDocked" id="osc-view-synth" data-osc="synth-view"
       data-osc-modes="synth" hidden :hidden="workspace !== 'synth'"
       aria-labelledby="osc-synth-title" tabindex="-1">
       <!-- U108: below md the insert alert comes first (order), clear of the dock. -->
