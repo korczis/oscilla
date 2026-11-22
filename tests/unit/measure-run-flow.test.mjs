@@ -12,7 +12,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  createRun, measureFlowPart, measureRecipeLinkPart,
+  createRun, measureFlowPart, measureRecipeLinkPart, RUN_TEXT,
 } from '../../src/js/ui/measure/run.js';
 import { FIELD_DEFAULTS, recipeValues } from '../../src/js/ui/measure/constants.js';
 import { encodeRecipeLink, recipeParamOf } from '../../src/js/core/url-state-measure.js';
@@ -58,7 +58,7 @@ test('a setup check that fails says so; an aborted one says nothing', async () =
     state: S.COMPLETE }) });
   await bad.run.runPreflight(bad.cmp);
   assert.equal(bad.engine.resets, 1, 'a finished run is reset first');
-  assert.deepEqual(bad.notes, [{ kind: 'error', title: 'Kontrola nastavení selhala', text: 'No input' }]);
+  assert.deepEqual(bad.notes, [{ kind: 'error', title: RUN_TEXT.checkFailed, text: 'No input' }]);
   assert.equal(bad.ctx.pending, null);
   assert.equal(bad.cmp.meas.saved, false);
   assert.equal(bad.cmp.meas.savedId, null);
@@ -77,7 +77,7 @@ test('a failed measurement says so and resolves null; the definition mismatch is
     h.ctx.definition = { id: 'def-1' };
     assert.equal(await h.run.runMeasure(h.cmp), null);
     assert.deepEqual(h.notes.map((n) => [n.kind, n.title]), [
-      ['warning', 'Neběží podle definice'], ['error', 'Měření selhalo']]);
+      ['warning', RUN_TEXT.offDefinition], ['error', RUN_TEXT.failed]]);
     assert.equal(h.ctx.lastRecipe, h.recipe);
     assert.equal(h.ctx.checking, h.recipe);
     assert.equal(h.ctx.runDefinition, null);
@@ -240,7 +240,7 @@ test('a Studio recipe run: refused when busy, failed with its reasons, saved wit
     const h = harness();
     const busy = flow(h, { owns: true }).c;
     assert.deepEqual(await busy.measureRunRecipe({}), { ok: false, state: S.IDLE,
-      reason: 'Měření už probíhá.' });
+      reason: RUN_TEXT.busy });
 
     const throwing = flow(h).c;
     throwing.measureRunRecipe = measureFlowPart(h.ctx, h.svc, { ...h.ops,
@@ -270,7 +270,7 @@ test('a Studio recipe run: refused when busy, failed with its reasons, saved wit
 
     const unsaved = flow(h, { result: { state: S.COMPLETE }, save: () => null }).c;
     assert.deepEqual(await unsaved.measureRunRecipe({}), { ok: false, state: S.COMPLETE,
-      reason: 'Experiment nebyl uložen.' });
+      reason: RUN_TEXT.notSaved });
   });
 
 /** A component with the recipe link part over the harness. */
@@ -341,7 +341,7 @@ test('a recipe hash is applied once when valid, refused whole when not or while 
 
     assert.equal(c.measureApplyRecipeHash('#mr=%21%21%21'), false);
     assert.ok(c.meas.recipeLinkErrors.length >= 1);
-    assert.equal(h.notes.at(-1).title, 'Odkaz na recept nebyl použit');
+    assert.equal(h.notes.at(-1).title, RUN_TEXT.recipeUnused);
     assert.equal(c.measureApplyRecipeHash('#mr=%21%21%21'), null, 'the same link is not re-read');
 
     const param = encodeRecipeLink({ ...recipeValues(FIELD_DEFAULTS), repeats: 6 });
@@ -359,3 +359,10 @@ test('a recipe hash is applied once when valid, refused whole when not or while 
     assert.match(h.notes.at(-1).text, /^Log sweep 20 Hz–20 kHz, běhy: 6\./);
     assert.equal(c.measureApplyRecipeHash(`#mr=${param}`), null);
   });
+
+test('RUN_TEXT: every title and reason the run flow shows is Czech (Q104), so the imports above '
+  + 'cannot pass on an English copy', () => {
+  const values = Object.values(RUN_TEXT);
+  assert.equal(values.length, 6);
+  for (const v of values) assert.match(v, /[áčďéěíňóřšťúůýž]/i, v);
+});
