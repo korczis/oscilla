@@ -2,12 +2,13 @@
 // On a phone a control scrolled into view (centred, focused, a section chip's plate) landed under
 // the sticky "Sekce Synthu" nav. One rule from one token: the nav's height is --osc-synth-nav-h on
 // the root, set here alone, which the app's <main> keeps clear at its top on the Synth
-// (src/index.html scroll-pt, beside its scroll-pb of the docked keys' --osc-dock-h). The nav
+// (src/index.html scroll-pt; since U121 <main> ends above the docked keys, K247). The nav
 // sticks only where a row of the face (NAV_ROW_PX) fits between it and the dock; on a phone
 // shorter than that (an iPhone SE: 20 px between the nav and the Panel's docked keys) it scrolls
 // with the face and the token is 0px, as where the nav is hidden (the panel face from xl).
 //
-//   navRoomOf({ mainH, navH, dockH }) -> { sticks, token }   pure (tests/unit/synth-nav-room)
+//   navRoomOf({ mainTop, mainBottom, navH, dockTop }) -> { sticks, token }
+//                          pure (tests/unit/synth-nav-room)
 //   applyNavRoom(el, win)   measures the nav of the Synth's host `el` and applies the rule
 //   watchNavRoom(win, judge)   judges again, at once, on the dock's resize and on each state
 //     midi/dock-yield.js applies (onDockChange: the state is that module's alone, C1-R2T51-1),
@@ -25,13 +26,19 @@ import { onDockChange } from '../midi/dock-yield.js';
 export const NAV_ROW_PX = 44 + 8;
 
 /**
- * Whether the nav sticks over its scroller (mainH tall, the docked keys covering dockH of it)
- * and the token the scroller then keeps clear at its top: the nav's height where a row fits
- * between it and the dock, else 0. No nav, or no scroller measured: 0.
+ * Whether the nav sticks over its scroller and the token the scroller then keeps clear at its
+ * top: the nav's height where a row fits between it and the bottom of the room, else 0. The
+ * room ends at the scroller's bottom or at the docked keys' top, whichever is higher (U121,
+ * oscilla-d9's Q090 settlement): the same rule whether <main> runs under the dock or ends above
+ * it (K247), and judged against the band the keys take docked, so a fold, which grows <main>
+ * under K247, never changes it (C1-R2T51-2). No nav, or no scroller measured: 0.
  */
-export function navRoomOf({ mainH, navH, dockH = 0 } = {}) {
-  if (!(navH > 0) || !Number.isFinite(mainH)) return { sticks: false, token: 0 };
-  const sticks = mainH - navH - (dockH > 0 ? dockH : 0) >= NAV_ROW_PX;
+export function navRoomOf({ mainTop, mainBottom, navH, dockTop = null } = {}) {
+  if (!(navH > 0) || !Number.isFinite(mainTop) || !Number.isFinite(mainBottom)) {
+    return { sticks: false, token: 0 };
+  }
+  const bottom = Number.isFinite(dockTop) ? Math.min(mainBottom, dockTop) : mainBottom;
+  const sticks = bottom - mainTop - navH >= NAV_ROW_PX;
   return { sticks, token: sticks ? navH : 0 };
 }
 
@@ -48,12 +55,15 @@ export function applyNavRoom(el, win = globalThis.window) {
   const navH = nav && nav.getClientRects().length
     ? Math.ceil(nav.getBoundingClientRect().height) : 0;
   const main = el && el.closest('main'); // the Synth's scroller
+  const box = main && typeof main.getBoundingClientRect === 'function'
+    ? main.getBoundingClientRect() : null;
   const keys = dockOf(doc);
   const top = keys && win.getComputedStyle(keys).position === 'fixed'
     ? keys.getBoundingClientRect().top : 0;
   const now = top > 0 ? Math.ceil(win.innerHeight - top) : 0;
-  const room = navRoomOf({ mainH: main ? main.clientHeight : NaN, navH,
-    dockH: top > 0 ? Math.max(now, DOCKED.get(win) || 0) : 0 });
+  const band = top > 0 ? Math.max(now, DOCKED.get(win) || 0) : 0;
+  const room = navRoomOf({ mainTop: box ? box.top : NaN, mainBottom: box ? box.bottom : NaN,
+    navH, dockTop: band > 0 ? win.innerHeight - band : null });
   if (nav && navH) nav.classList.toggle('sticky', room.sticks);
   if (root && root.style) root.style.setProperty('--osc-synth-nav-h', `${room.token}px`);
   return room;

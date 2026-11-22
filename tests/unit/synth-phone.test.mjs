@@ -61,13 +61,24 @@ test('the dock folds on a phone in the Synth and the keys and Octave stay', () =
   assert.match(more[0], /sm:hidden/);
 });
 
-test('the Synth view pads its bottom by the dock it sits under', () => {
+test('the Synth\'s content ends above the dock, as K247 ends every docked workspace (U121)',
+  () => {
   const html = read('src/index.html');
   const view = html.match(/<section[^>]*id="osc-view-synth"[^>]*>/s);
   assert.ok(view, 'the Synth view');
-  // One dock height, one writer (26's trackDockHeight, the synth train): the view pads by it.
-  assert.match(view[0], /pb-\[max\(1\.5rem,var\(--osc-dock-h,20rem\)\)\]/);
+  // U121 (oscilla-d9's Q090 settlement): <main> ends at the dock's top on the Synth too, so the
+  // view no longer pads its bottom by the dock's band and the scroller keeps no dock padding.
+  assert.doesNotMatch(view[0], /--osc-dock-h/, 'the view reserves no band of its own');
   assert.doesNotMatch(view[0], /\bpb-80\b/);
+  const main = html.match(/<main [^>]*id="osc-main"[^>]*>/s);
+  assert.ok(main, '#osc-main');
+  assert.match(main[0],
+    /kbdDocked && workspace !== 'studio' && '!mb-\[max\(0px,calc\(var\(--osc-dock-h,0px\)/,
+    'K247\'s margin binds the Synth (only the Studio keeps its own band)');
+  assert.doesNotMatch(main[0], /workspace !== 'synth'/);
+  assert.match(main[0], /workspace === 'synth' && '[^']*!scroll-pb-0/,
+    'the Synth\'s scroller keeps no scroll padding for a dock it no longer runs under');
+  // One dock height, one writer (26's trackDockHeight, the synth train).
   const kui = read('src/js/midi/keyboard-ui.js');
   assert.match(kui, /setProperty\('--osc-dock-h'/);
   assert.doesNotMatch(kui, /--osc-kbd-h/, 'no second dock-height writer');

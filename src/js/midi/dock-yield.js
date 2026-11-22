@@ -237,6 +237,24 @@ export function dockCovers(el, dock, gap = 8) {
   return hasBox(r) && r.bottom > dock.getBoundingClientRect().top - gap;
 }
 
+/**
+ * Whether the top of el's box lies under a bar stuck to its scroller's top (roomTop), so it is
+ * hidden there as surely as under the dock (U121, oscilla-d9: after an unfold in WebKit the XY
+ * pad's top was left under the Synth's sticky section nav). Only a top inside the scroller's
+ * box counts: one the user scrolled above the scroller was scrolled away on purpose, and is left
+ * there (R6). One px of rounding is allowed.
+ */
+export function underStickyBar(win, el) {
+  if (!el || !el.isConnected || typeof el.getBoundingClientRect !== 'function') return false;
+  const r = el.getBoundingClientRect();
+  if (!hasBox(r)) return false;
+  const doc = el.ownerDocument;
+  const sc = scrollerOf(win, el);
+  const top = sc === doc.scrollingElement || sc === doc.documentElement ? 0
+    : sc.getBoundingClientRect().top;
+  return r.top >= top - 1 && r.top < roomTop(win, el) - 1;
+}
+
 /** The dock drawn: its handle, its status line, its folded children. */
 export function mountDockYield({ win, doc, cmp, dock, band = () => {}, release,
   buttonClass = '' }) {
@@ -386,9 +404,12 @@ export function mountDockYield({ win, doc, cmp, dock, band = () => {}, release,
   win.addEventListener(NOTES_EVENT, (e) => ctl.claim(e.detail));
   win.addEventListener(ROOM_EVENT, () => ctl.update('room')); // a surface's keptBy changed
   // A resize or a rotation: the chrome measured again and, while the dock yields and covers the
-  // owner's surface, the surface re-placed against the dock (folded or unfolded).
+  // owner's surface or a sticky bar hides its top (U121), the surface re-placed against the dock
+  // and under the bar (folded or unfolded).
   const replace = () => {
-    if (ctl.yields && surface && dockCovers(surface, dock)) reveal(win, surface, dock);
+    if (ctl.yields && surface && (dockCovers(surface, dock) || underStickyBar(win, surface))) {
+      reveal(win, surface, dock);
+    }
   };
   win.addEventListener('resize', () => {
     band();

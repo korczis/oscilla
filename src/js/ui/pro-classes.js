@@ -62,15 +62,16 @@ export const PRO = Object.freeze({
    *  visible title is the page header's alone. */
   page: PAGE,
   /** The frame with its bottom gutter and the phone's 8 px top: what every view of its own
-   *  binds (the Synth, whose bottom keeps the docked keys' band, binds PRO.pageDocked). */
+   *  binds (the Synth binds PRO.pageDocked, the same frame with its own phone top). */
   pageView: `${PAGE} pb-6 ${PHONE_TOP}`,
   /** The Studio's frame: an editor that fills the viewport keeps an 8 px gutter on a phone, so
    *  its 44 px controls fit (the step grid's eight steps at 390 px, the graph's view controls
    *  at 320 px) and its header actions stay clear of the docked keys' handle at 375 px. */
   pageEditor: `${PAGE} pb-6 max-md:!px-2 ${PHONE_TOP}`,
   /** The Synth's frame: the docked keys play it, so on a phone its top is 12 px and its insert
-   *  alert stays above the dock at 320 px (U108, oscilla-c3's Q090 criterion). */
-  pageDocked: `${PAGE} max-md:!pt-3`,
+   *  alert stays above the dock at 320 px (U108, oscilla-c3's Q090 criterion). Since U121 its
+   *  <main> ends above the dock (K247), so it keeps the bottom gutter as every view does. */
+  pageDocked: `${PAGE} pb-6 max-md:!pt-3`,
 });
 
 /** The Alpine part: PRO for the markup's :class bindings. */
