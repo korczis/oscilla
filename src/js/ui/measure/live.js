@@ -9,6 +9,13 @@ import { createAnalyserReader } from '../../analysis/analyser.js';
 import { onFrame } from '../../charts/frame-loop.js';
 import { LIVE_VIEW_INTERVAL_MS } from './constants.js';
 
+/** What the live RTA says (announced, or shown as its error); tests import these. */
+export const LIVE_RTA_TEXT = Object.freeze({
+  started: 'Živé RTA spuštěno',
+  stopped: 'Živé RTA zastaveno',
+  trackEnded: 'Živé RTA zastaveno: vstupní zařízení bylo odpojeno nebo zastaveno.',
+});
+
 /** The live functions over `ctx`; `ops` holds those of the other parts. */
 export function createLive(ctx, svc, ops) {
   // ---------------------------------------------------------------- live RTA
@@ -32,7 +39,7 @@ export function createLive(ctx, svc, ops) {
     m.rtaLive.running = false;
     m.rtaLive.kind = null;
     m.rtaFrozen = ctx.rta ? ctx.rta.averager.frozen : false;
-    ops.announce({ politeness: 'polite', text: 'Živé RTA zastaveno' });
+    ops.announce({ politeness: 'polite', text: LIVE_RTA_TEXT.stopped });
     ops.rebuildRta();
   }
 
@@ -42,8 +49,7 @@ export function createLive(ctx, svc, ops) {
     if (!L || L.token !== token || L.closing) return; // stopLive() is already cleaning up
     endLive(L);
     if (reason === 'track-ended') {
-      ctx.cmp.meas.rtaLive.error = 'Živé RTA zastaveno: vstupní zařízení bylo odpojeno nebo '
-        + 'zastaveno.';
+      ctx.cmp.meas.rtaLive.error = LIVE_RTA_TEXT.trackEnded;
     }
   }
 
@@ -110,7 +116,7 @@ export function createLive(ctx, svc, ops) {
       m.rtaLive.running = true;
       m.rtaLive.kind = kind;
       m.rtaFrozen = false;
-      ops.announce({ politeness: 'polite', text: 'Živé RTA spuštěno' });
+      ops.announce({ politeness: 'polite', text: LIVE_RTA_TEXT.started });
       ops.rebuildRta();
       L.off = onFrame(liveTick);
       ops.inputOpened(null);

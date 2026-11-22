@@ -12,6 +12,16 @@ import {
 import { hashForWorkspace } from '../navigation.js';
 import { LIVE_RTA_FIELDS, FIELD_DEFAULTS, recipeValues } from './constants.js';
 
+/** The titles and refusal reasons the run flow shows; tests import these. */
+export const RUN_TEXT = Object.freeze({
+  checkFailed: 'Kontrola nastavení selhala',
+  offDefinition: 'Neběží podle definice',
+  failed: 'Měření selhalo',
+  busy: 'Měření už probíhá.',
+  notSaved: 'Experiment nebyl uložen.',
+  recipeUnused: 'Odkaz na recept nebyl použit',
+});
+
 /** The run functions over `ctx`; `ops` holds those of the other parts. */
 export function createRun(ctx, svc, ops) {
   /**
@@ -49,7 +59,7 @@ export function createRun(ctx, svc, ops) {
       await ctx.pending;
     } catch (e) {
       if (!(e && e.code === 'ABORTED')) {
-        cmp.notify('error', 'Kontrola nastavení selhala', e.message || String(e));
+        cmp.notify('error', RUN_TEXT.checkFailed, e.message || String(e));
       }
     } finally {
       ctx.pending = null;
@@ -89,7 +99,7 @@ export function createRun(ctx, svc, ops) {
     ctx.runDefinition = !given && ops.setupIsDefinition(recipe) ? ctx.definition : null;
     const definitionAtStart = ctx.runDefinition;
     if (!given && ctx.definition && !ctx.runDefinition) {
-      cmp.notify('warning', 'Neběží podle definice', 'Nastavení se liší od načtené definice, '
+      cmp.notify('warning', RUN_TEXT.offDefinition, 'Nastavení se liší od načtené definice, '
         + 'takže tento experiment zaznamená definici odvozenou z vlastního receptu.');
     }
     let result = null;
@@ -106,7 +116,7 @@ export function createRun(ctx, svc, ops) {
       result = await ctx.pending;
     } catch (e) {
       if (!(e && e.code === 'ABORTED')) {
-        cmp.notify('error', 'Měření selhalo', e.message || String(e));
+        cmp.notify('error', RUN_TEXT.failed, e.message || String(e));
       }
     } finally {
       ctx.pending = null;
@@ -177,7 +187,7 @@ export function measureFlowPart(ctx, svc, ops) {
     async measureRunRecipe(recipe, { decorate = null, startAt = null } = {}) {
       if (this.measureOwnsOutput() || ctx.pending) {
         return { ok: false, state: ctx.me ? ctx.me.state : S.IDLE,
-          reason: 'Měření už probíhá.' };
+          reason: RUN_TEXT.busy };
       }
       let result = null;
       try {
@@ -197,7 +207,7 @@ export function measureFlowPart(ctx, svc, ops) {
         return saved;
       } });
       return id ? { ok: true, state, experimentId: id, name: saved.name, experiment: saved }
-        : { ok: false, state, reason: 'Experiment nebyl uložen.' };
+        : { ok: false, state, reason: RUN_TEXT.notSaved };
     },
     async measureStart() {
       await ops.runMeasure(this);
@@ -308,7 +318,7 @@ export function measureRecipeLinkPart(ctx, svc, ops) {
       const r = decodeRecipeLink(param, { defaults: recipeValues(FIELD_DEFAULTS) });
       if (!r.ok) {
         this.meas.recipeLinkErrors = r.errors.slice(0, 5);
-        this.notify('warning', 'Odkaz na recept nebyl použit', `${r.errors.slice(0, 3)
+        this.notify('warning', RUN_TEXT.recipeUnused, `${r.errors.slice(0, 3)
           .join('; ')}. Nastavení měření se nezměnilo.`);
         return false;
       }
@@ -316,7 +326,7 @@ export function measureRecipeLinkPart(ctx, svc, ops) {
       const applied = ops.applyRecipeValues(this, r.values);
       if (!applied.ok) {
         this.meas.recipeLinkErrors = applied.errors;
-        this.notify('warning', 'Odkaz na recept nebyl použit', 'Běží měření; zastavte ho a '
+        this.notify('warning', RUN_TEXT.recipeUnused, 'Běží měření; zastavte ho a '
           + 'otevřete odkaz znovu.');
         ctx.lastRecipeParam = null;
         return false;
