@@ -8,7 +8,7 @@ priority: p2
 profile: implementation
 objective: "Lands as fix(ui). The Předvolby page (src/index.html #osc-view-presets) shows Obnovit výchozí, Vymazat historii, Načíst (aria-label 'Načíst předvolbu <name>'), Smazat / Potvrdit smazání (aria-label with the name), Vyvolat, the tab list's 'Kategorie předvoleb', the empty history row and its two Playground links in Czech; the notices of its own actions (src/js/core/instrument.js: Načteno, Předvolba není dostupná, Předvolba použita jen zčásti, Vyvoláno, Historie se neuložila) are Czech at their source. The frozen V1 reset notice ('Defaults restored' and its sentence, pinned in tests/freeze/golden-a7b7a23.json) and the 'Preset saved' title stay byte-exact as data and are shown in Czech through src/js/core/frozen-display.js (U114). Ids, data-osc hooks and stored records stay."
 why: "Q104 (the app's visible prose is Czech): oscilla-43's live check of v3.42.0 (2026-11-22) found English 'Load' on every preset card and 'Reset to defaults' beside 'Uložit aktuální…'; pass 8 (U116) translated the built-in presets through data/presets-display.js but not the page around them. Assigned to oscilla-0b by oscilla-43 as U122."
-current_state: "Built by oscilla-0b in task started 2026-11-22 on fix/u122-presets-czech. Left for a follow-up: the save notice's message ('“<name>” is in Presets → Custom.') is a frozen V1 string that carries the user's own name, so FROZEN_DISPLAY (exact strings only) cannot show it in Czech until it gains a pattern form."
+current_state: "Built by oscilla-0b in task started 2026-11-22 on fix/u122-presets-czech. Left for a follow-up: the save notice's message ('“<name>” is in Presets → Custom.') is a frozen V1 string that carries the user's own name, so FROZEN_DISPLAY (exact strings only) cannot show it in Czech until it gains a pattern form. Landed by PR 637 (d392cf48), released in v3.42.1 (e0bd6190); oscilla-43 checked it live on Pages 3.42.1 (2026-11-22). Every criterion re-checked by its builder on main: the Czech texts and label-in-name (presets-czech.test, 3/3), the frozen notice via shownText, both ratchets fallen (2630 -> 2621, 1523 -> 1518), and criterion 3's eight suites green in chromium locally and in 637's CI legs. Stamped done; the saved-notice pattern form stays a follow-up."
 scope:
   - "src/index.html"
   - "src/js/core/instrument.js"
@@ -27,4 +27,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-22'
-updated_at: 2026-11-22
+updated_at: 2026-11-22T14:08:29Z
+started_at: 2026-11-22T14:00:03Z
+started_event: sha256:731b5722465389a01a105ba04183b83fcb7f9d339d4647aab9f30df6b3188b85
+verified_at: 2026-11-22T14:02:28Z
+verified_event: sha256:d354ad8fa8f67142eb1ac90b79fb47e8e637cdc5bbcc454ea1ecd87f00079fe9
+completed_at: 2026-11-22T14:08:29Z
+completed_event: sha256:f8c041dc367ebb5f37e8da580c1c2655255e728148c77681ae91799720b89e78
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "npm test; node tests/browser/navigation.cjs; node tests/browser/cross-links.cjs"
+    result: "Landed by PR 637 (merge commit d392cf48); criterion 3's suites (app, control-census, cross-links, first-screen, journeys, navigation, ui-flowbite-pro, ui-current) passed in chromium on darwin before the push and in every CI leg of 637; released in v3.42.1 (e0bd6190); oscilla-43 saw Obnovit výchozí, Načíst, Vymazat historii and the empty-history sentence in Czech on Pages 3.42.1, no Load, Reset or Clear left."
+    artifact: ".ai/repo/releases/v3.42.1.yaml"
+    commit: e38bb808bf894767a1304379bed6f3ca627b17a1
+    recorded_at: 2026-11-22T14:07:14Z
