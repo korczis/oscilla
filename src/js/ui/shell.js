@@ -27,6 +27,11 @@
 //   empty    { when, title, body, action: { label, to } }: the page's empty state, shown while
 //            the predicate `when` (registered by its adapter, ui/empty-states.js) is true;
 //            action.to is a registry id.
+//   view     true: the workspace stands in a view of its own, the <section> of index.html
+//            whose id ends in the workspace id, which carries the one Pro page frame (PRO.page) itself; without it the
+//            workspace's panels stand in <main>'s grid and <main> carries that frame
+//            (mainFrame). Either way every page's content starts at the same inset under the
+//            page header (owner decision Q110; tests/unit/pro-page-frame.test.mjs).
 //
 // The labels are Czech (U106, rule project.czech-prose, Q104; decided by oscilla-c3 under Q090,
 // 2026-11-15); the page is lang="cs". Studio, Synth and Playground stay as names, so their rows
@@ -35,6 +40,7 @@
 // `words` keeps the English names, so a search for "measure" or "filter lab" still finds them.
 
 import { roving } from './keys/roving.js';
+import { PRO } from './pro-classes.js';
 
 /** The workspaces, in navigation order. group: the sidebar group holding it, or none. */
 export const WORKSPACE_REGISTRY = Object.freeze([
@@ -47,7 +53,8 @@ export const WORKSPACE_REGISTRY = Object.freeze([
       { id: 'synth', why: 'Hlas s filtry, obálkami a klávesami' },
       { id: 'learn', why: 'Karty pojmů, jejichž ukázky hrají tady' },
     ] },
-  { id: 'measure', label: 'Měření', words: 'measure frequency response sweep impulse room test',
+  { id: 'measure', label: 'Měření', view: true,
+    words: 'measure frequency response sweep impulse room test',
     summary: 'Řízené měření řetězce reproduktoru, místnosti a mikrofonu: frekvenční '
       + 'charakteristika, impulsní odezva a RTA, u každého běhu s hodnocením kvality.',
     related: [
@@ -56,7 +63,8 @@ export const WORKSPACE_REGISTRY = Object.freeze([
         hash: '&st=measurement-sweep' },
       { id: 'learn', why: 'Vysvětlení logaritmických stupnic a limitů reproduktorů' },
     ] },
-  { id: 'experiments', label: 'Experimenty', words: 'saved records findings compare history',
+  { id: 'experiments', label: 'Experimenty', view: true,
+    words: 'saved records findings compare history',
     summary: 'Uložená měření jako experimenty: jejich definice, porovnání s referenčním '
       + 'měřením a zjištění, která se na ně odvolávají.',
     related: [
@@ -112,7 +120,8 @@ export const WORKSPACE_REGISTRY = Object.freeze([
       { id: 'studio', why: 'Sekvence sweepů jako dokument Studia', hash: '&st=sweep-sequence' },
       { id: 'presets', why: 'Presety vzorů jako výchozí bod' },
     ] },
-  { id: 'presets', label: 'Předvolby', group: 'synthesis', words: 'presets library load sounds',
+  { id: 'presets', label: 'Předvolby', group: 'synthesis', view: true,
+    words: 'presets library load sounds',
     summary: 'Vestavěná i uložená nastavení nástroje a historie toho, co se hrálo.',
     related: [
       { id: 'playground', why: 'Tady načtený preset zazní: tlačítkem Spustit nebo podržením' },
@@ -123,14 +132,15 @@ export const WORKSPACE_REGISTRY = Object.freeze([
       body: 'Nastavte zvuk v Playgroundu a uložte ho tady tlačítkem Uložit aktuální… nebo '
         + 'tlačítkem Uložit preset ve stavové liště.',
       action: { label: 'Otevřít Playground', to: 'playground' } } },
-  { id: 'learn', label: 'Výuka', words: 'learn lessons guide acoustics',
+  { id: 'learn', label: 'Výuka', view: true, words: 'learn lessons guide acoustics',
     summary: 'Karty pojmů od frekvence po signálovou cestu, většina s ukázkou k přehrání.',
     related: [
       { id: 'analyzer', why: 'Tvary vln, harmonické a aliasing v živém spektru' },
       { id: 'synth', why: 'Modulace, AM a FM na záložce Enginy v Synthu' },
       { id: 'measure', why: 'Logaritmické stupnice a reproduktory v reálném měření' },
     ] },
-  { id: 'studio', label: 'Studio', lang: 'en', words: 'graph nodes cables timeline patch',
+  { id: 'studio', label: 'Studio', lang: 'en', view: true,
+    words: 'graph nodes cables timeline patch',
     summary: 'Signálový graf, který propojujete kabely, s časovou osou, transportem '
       + 'a automatizací, běžící na Web Audio.',
     related: [
@@ -139,7 +149,8 @@ export const WORKSPACE_REGISTRY = Object.freeze([
       { id: 'filter', why: 'Odezva filtru, kterou automatizují šablony' },
     ] },
   // Synth (K058) is top level after Studio by the owner's decision Q019.
-  { id: 'synth', label: 'Synth', lang: 'en', words: 'synthesizer engines voices keys midi patch',
+  { id: 'synth', label: 'Synth', lang: 'en', view: true,
+    words: 'synthesizer engines voices keys midi patch',
     summary: 'Semimodulární monofonní hlas na modelu Studia s patch bayí a ukotvenými '
       + 'klávesami; záložka Enginy s hlasy aditivními, FM, AM / ring, wavetable, hard sync '
       + 'a perkusními, záložka XY a záložka Bicí s kroky bicích.',
@@ -148,7 +159,7 @@ export const WORKSPACE_REGISTRY = Object.freeze([
       { id: 'sequencer', why: 'Blokové sekvence tónů a sweepů' },
       { id: 'learn', why: 'Vysvětlení modulace, AM a FM' },
     ] },
-  { id: 'about', label: 'O aplikaci', words: 'about credits licence version',
+  { id: 'about', label: 'O aplikaci', view: true, words: 'about credits licence version',
     summary: 'Tato stránka: co je OSCILLA, jak vznikla a co přijde dál.',
     related: [
       { id: 'playground', why: 'Začněte u nástroje' },
@@ -221,6 +232,34 @@ export function relatedHref(r) {
 export function phonePrimaryOf(id) {
   const w = byId(id);
   return (w && w.phone && w.phone.primary) || null;
+}
+
+/** Does the workspace stand in a view of its own (the registry's `view`)? */
+export function ownsViewOf(id) {
+  const w = byId(id);
+  return !!(w && w.view);
+}
+
+/** The workspaces whose <main> scroll padding is their own: the Synth keeps the height of its
+ *  sticky section nav (src/index.html, synth/nav-room.js). */
+const OWN_SCROLL_PADDING = Object.freeze(['synth']);
+
+/** <main>'s scroll padding: the frame's top padding (PRO.page's pt-6, a literal Tailwind can
+ *  see; tests/unit/page-frame.test.mjs holds the two equal), so a card scrolled into view keeps
+ *  the gap it has unscrolled, in a view of its own as on <main>'s grid (#598). */
+export const FRAME_SCROLL_PT = 'scroll-pt-6 max-md:scroll-pt-2';
+
+/**
+ * The classes <main> carries in a workspace: the Pro page frame (PRO.pageView) where the
+ * workspace's panels stand in <main>'s grid, none where the workspace has a view of its own,
+ * which carries the frame (Q110: one frame, never two nested); and in every workspace but the
+ * Synth a scroll padding equal to the frame's top, so a card brought into view by
+ * scrollIntoView (Show in Measure, a Related link) keeps the frame's gap under the header.
+ */
+export function mainFrameOf(id) {
+  const frame = ownsViewOf(id) ? [] : [PRO.pageView];
+  if (!OWN_SCROLL_PADDING.includes(id)) frame.push(FRAME_SCROLL_PT);
+  return frame.join(' ');
 }
 
 /**
@@ -490,6 +529,10 @@ export function createShell({ get = storageGet, set = storageSet } = {}) {
     /** A label of the sidebar: visually hidden (still named) while it shows icons only. */
     sidebarLabel() {
       return { ':class'() { return { 'lg:sr-only': this.sidebarIcons }; } };
+    },
+    /** <main>'s page frame in the workspace in view (mainFrameOf). */
+    mainFrame() {
+      return mainFrameOf(this.workspace);
     },
     /**
      * The workspace column keeps its margin while the sidebar peeks over it, and is inert while

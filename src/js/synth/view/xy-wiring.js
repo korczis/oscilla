@@ -409,9 +409,10 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
     + `<p id="${uid}-first" class="mt-1 text-sm font-semibold text-gray-900 dark:text-white" `
     + 'data-xy-first="" aria-live="polite"></p>'
     // The readout above the pad, where the docked keyboard never covers it (S3), its lines
-    // reserved (3 on a phone, 2 from sm, 1 from lg) so that a longer reading never moves the
-    // pad under the finger.
-    + '<p data-osc="synth.xy.readout" class="mt-2 min-h-[3.75rem] font-mono text-sm '
+    // reserved (4 on a phone, 2 from sm, 1 from lg) so that a longer reading never moves the
+    // pad under the finger: a held Y with its Nyquist hold ("drženo ≤ 0.95 × Nyquist při
+    // 44.1 kHz") takes 4 lines at a phone's 318-334 px.
+    + '<p data-osc="synth.xy.readout" class="mt-2 min-h-[5rem] font-mono text-sm '
     + 'text-gray-700 sm:min-h-[2.5rem] lg:min-h-[1.25rem] dark:text-gray-300"></p>'
     + '<div class="mt-2" data-osc="synth.xy.pad"></div>';
   const spec = target.wire(host.querySelector('[data-xy-controls]'));

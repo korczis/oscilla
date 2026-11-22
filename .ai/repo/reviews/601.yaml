@@ -1,0 +1,83 @@
+# Review verdict for pull request #601 (feat/f002-pro-page-frame): one Pro page frame for every
+# workspace (F002 shell:main, Q110). Built by oscilla-e5 (and earlier oscilla-43); judged at
+# b986d43b (merge of origin/main v3.41.9) on base origin/main 1aaefeb8, 2026-11-20, in the
+# reviewer's own worktree ~/dev/oscilla-wt/review/pr601.
+#
+# Reviewer: oscilla-0b (claude-code bbcd8e21), a separate top-level session standing in for
+# oscilla-c3 at oscilla-e5's request: c3 had been silent for more than 12 h, and the builder may
+# not write its own verdict. oscilla-0b built none of #601: `git log origin/main..b986d43b`
+# holds no commit of this session.
+#
+# The digest: origin/main's scripts/review-verdict.mjs --content --list at b986d43b
+# (byte-identical to the head's copy): ef726adf... over 1 guarded path,
+# src/js/synth/view/xy-wiring.js. The ui-current debt tables and the visual references the
+# builder still has to change are not guarded paths, so they leave this digest as it is.
+#
+# What the guarded change does (2d3915ee): the XY readout above the pad reserves 4 lines on a
+# phone (min-h-[5rem]; text-sm's line height is 1.25rem) instead of 3, and keeps 2 from sm and 1
+# from lg. A held Y with its Nyquist note took 4 lines at 318-334 px, so a longer reading moved
+# the pad about 20 px under the finger (x-view-phone). Markup class and comment only; no logic,
+# no audio path.
+#
+# How it was judged, measured by the reviewer:
+# - build:check exit 0 at b986d43b (Node 22.20.0, majordomus 1.0.1 first on PATH);
+#   xy-wiring.test, xy-default-patch.test and pro-page-frame.test: 70/70 pass.
+# - CI run 44650431485 at b986d43b: x-view-phone passes in every engine (xy-pad PASS in the
+#   three leg-2 logs), and in no leg does any check that reads xy-wiring.js fail.
+# - The line counts in the PR's own dist/index.html (chromium, isMobile, the readout's computed
+#   min-height 80 px, line height 20 px), with three readout texts in the shape the code builds:
+#   a held reading of 116 characters takes 4 lines at 264 px (viewport 320), 319 px (375) and
+#   334 px (390). One that is also out of range, or provisional ("do spuštění zvuku"), of
+#   133-137 characters, takes 4 lines at 375 and 390, but 5 at 320 (R1).
+#
+# Findings:
+# - R1 (P3, open, a follow-up, not a condition): at a 320 px viewport, a readout of about 130
+#   characters or more takes a 5th line, so the pad can still move 20 px there. The change is a
+#   strict gain over the 3 reserved lines; x-view-phone runs at 390 px only. A structural fix (a
+#   fixed height with the overflow handled, or a shorter phone wording) belongs to the Synth lane.
+#   The lg 1-line reservation is unchanged by this PR and was not judged.
+#
+# The builder's three table questions (not guarded; the decisions are recorded here so that the
+# verdict and the tables stay one judgement). All three linux engines (leg 1 chromium and
+# firefox, leg 2 webkit) measured the same sets at b986d43b:
+# 1. PHONE_WHOLE_PAIRS '@320:synth:overlap': ACCEPTED. It becomes 'keyboard.octave-down x
+#    synth.copy-link' and 'keyboard.octave-up x synth.copy-link' (25 px deep, firm), with the
+#    five tab grazes listed as '~3'. R320 is rewritten to say what is measured now: since F002's
+#    frame, the octave buttons cover Copy link (25 px) and no longer Open in Studio (they were
+#    33-39 px there): the same two covered controls, shallower. Name run 44650431485. The key is
+#    host-free, so a darwin ui-current run must show the same set before the hand-off to 43;
+#    otherwise scope the new set to linux and keep the darwin one.
+# 2. R375 host-free: ACCEPTED, as '@375:synth:overlap'. Six chip pairs, 30 px deep, in all
+#    three linux engines (MARGIN -39 px, where main's linux run had -3 px), and in every Mac
+#    engine since #385's train. The reason is rewritten to name F002's frame as the cause on
+#    linux, the 6 pairs and the MARGIN, and that every chip is reachable by scrolling (0 covered
+#    in firefox and webkit). This is a debt grown by F002 on linux, so it needs a plan issue
+#    that pays it, named in the reason.
+# 3. U108_DEBT keyed by safety as '@320:open:expanded': NOT ACCEPTED as asked. In CI, both
+#    'open' and 'collapsed' at 320 expanded are still not on top (the alert runs under
+#    keyboard.octave-up in both, chromium and firefox KNOWN lines). Keying only 'open' would make
+#    'collapsed' a red check. Keep '@320:expanded'. If a darwin run shows 'collapsed' on top,
+#    that is a host difference, so bring that run's line first.
+# 4. (c) chromium only, phone-whole-covered-synth-375 "osc-view-synth>BUTTON.snap-start under
+#    nothing": elementFromPoint returned null because the chip's centre lies outside the viewport
+#    after scrollIntoView. That is off screen, not covered: the same case the measure's `clipped`
+#    rule already treats for a clipping ancestor. Preferred: extend that rule to the viewport,
+#    with a negative control (a chip truly under the dock still counts). Otherwise a
+#    'chromium@375:synth:covered' entry with that reason.
+#
+# THE CONDITION of this verdict: it binds the guarded content above. Auto-merge is armed by the
+# integrator (oscilla-43), and only after:
+# - the table edits match 1-4 above;
+# - the visual-gate 'sentence' region and the SYN phone views are re-accepted (text from #619);
+# - the six browser legs of the run at the head that carries this file show no FAIL line and
+#   "run-suites: all K suites passed".
+# Any change to xy-wiring.js after b986d43b needs a new verdict.
+#
+# Verdict: merge, under the condition above. One P3 finding, open, not blocking.
+schema: review-verdict/v1
+pr: 601
+verdict: merge
+reviewer: oscilla-0b (claude-code bbcd8e21, a separate top-level session standing in for oscilla-c3; built none of b986d43b)
+content: ef726adff508f76053afa3a38f4a482df25c5087a0e03371015c29fa282ef2c5
+findings:
+  - { id: R1, severity: P3, status: open, title: "at 320 px a readout of about 130 or more characters takes a 5th line; the pad can still move 20 px (follow-up, Synth lane)" }

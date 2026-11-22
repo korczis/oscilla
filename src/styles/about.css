@@ -10,12 +10,6 @@
   align-content: start;
 }
 
-/* .osc-view's explicit min-height would otherwise cap the row at the scroll area's height and
-   let the content spill past the view's border; the row follows the content instead. */
-.osc-app[data-mode="about"] .osc-main {
-  grid-template-rows: max-content;
-}
-
 .osc-about p {
   margin: 0;
 }

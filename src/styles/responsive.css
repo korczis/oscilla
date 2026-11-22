@@ -23,7 +23,6 @@
     grid-auto-rows: max-content;
     align-content: start;
     gap: 10px;
-    padding: 10px;
   }
 
   .osc-top,
@@ -184,7 +183,6 @@
   .osc-main {
     grid-template-columns: minmax(0, 1fr);
     gap: 8px;
-    padding: 8px 8px 12px;
   }
 
   /* One column: the full-width panels (grid-column 1 / -1 above) span exactly it. The phone

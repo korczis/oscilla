@@ -31,7 +31,8 @@
 //     covered  no interactive element is covered: scrolled to the centre of the view,
 //              elementFromPoint at its centre hits it, a descendant, or its wrapping label
 //              (unrendered elements, checkVisibility() false, and a centre still outside a
-//              clipping ancestor are off screen, not covered);
+//              clipping ancestor or the viewport are off screen, not covered; a planted cover
+//              at 375 x 667 on the Synth proves a covered chip still counts);
 //     font     no visible text is under FONT_MIN px: every rendered element with a text node
 //              of its own and every form control, by computed font size (SVG text scaled by its
 //              screen matrix; canvas text is not in the DOM and not read);
@@ -120,24 +121,35 @@ const PHONE_SIZES = [{ width: 320, height: 568 }, { width: 375, height: 667 }, P
 // "<workspace>:<measure>" -> why it is still short and whose lane fixes it. Only shrinks. A key
 // may be scoped to a browser and a width: "<browser>@<width>:<ws>:<measure>",
 // "<browser>:<ws>:<measure>" or "@<width>:<ws>:<measure>"; the most specific listed key applies.
-// U108's one recorded debt, decided by oscilla-c3 (Q090, 2026-11-12): at 320 px the insert
-// alert with Více expanded (the whole sentence) may run under the keyboard dock; collapsed it
-// must not, at every size. Host- and engine-free; it only goes.
+// U108's recorded debt, decided by oscilla-c3 (Q090, 2026-11-12): at 320 px the insert alert
+// with Více expanded (the whole sentence) may run under the keyboard dock; collapsed it must
+// not, at every size. "@<width>:<safety>:<more>", where safety is the listening notice's state
+// (open or collapsed). A key may be scoped to a host, "<host>:@<width>:<safety>:<more>", as
+// PHONE_WHOLE_DEBT's keys are since #540; the most specific listed key applies. The split by
+// safety and host is Q090's debt measured per host at #601 (oscilla-0b standing in for
+// oscilla-c3, 2026-11-20). Engine-free; it only goes, and a key this host's run never applies
+// fails (u108-debt-current).
 const U108_DEBT = new Map([
-  ['@320:expanded', 'the whole insert sentence at 320 x 568 is taller than the room above the '
-    + 'dock; the short line and Close are on top collapsed (U108, oscilla-c3)'],
+  ['@320:open:expanded', 'the whole insert sentence at 320 x 568 is taller than the room above '
+    + 'the dock with the listening notice open; the short line and Close are on top collapsed '
+    + '(U108, oscilla-c3)'],
+  ['linux:@320:collapsed:expanded', 'on linux the whole insert sentence runs under '
+    + 'keyboard.octave-up with the listening notice collapsed too (CI run 44650431485); on darwin '
+    + 'it is on top in chromium, firefox and webkit (f8d004cc + table edits, 2026-11-20; '
+    + 'oscilla-0b for oscilla-c3, #601)'],
 ]);
-const R320 = 'the keyboard dock\'s octave buttons overlap the Synth\'s Open in Studio (33-39 px) '
-  + 'and graze Copy link (3 px, near-zero) at 320 x 568, under U108\'s alert: the Synth lane, #385 '
-  + 'and V635. Measured with Czech pass 3\'s dock (its toggle Vše no longer reaches Copy link), '
-  + 'alike in every Mac engine; CI judges linux (T19\'s run had the More-era set). Named in '
-  + 'PHONE_WHOLE_PAIRS (U112)';
+const R320 = 'the keyboard dock\'s octave buttons overlap the Synth\'s Copy link (25 px) at '
+  + '320 x 568, under U108\'s alert: the Synth lane, #385 and V635. Since F002\'s page frame (#601, '
+  + 'CI run 44650431485) they no longer reach Open in Studio (33-39 px before): the same two '
+  + 'controls, shallower; the five section-tab grazes are near-zero (3 px). Named in '
+  + 'PHONE_WHOLE_PAIRS (U112; accepted by oscilla-0b for oscilla-c3)';
 const R375 = 'the docked keyboard\'s octave and Vše buttons overlap the Synth\'s section '
-  + 'chips at 375 x 667 on the Mac since #385\'s train: the Synth lane, #385 and V635; measured '
-  + 'in the steady state, the insert alert closed (U107) and the link\'s notice gone (U108, '
-  + 'oscilla-c3), unscrolled (#540): 5 pairs in every Mac engine. On CI linux U108\'s phone '
-  + 'padding left none (run 43318837248: MARGIN -3 px, within the 2 px tolerance), a near-zero '
-  + 'margin the MARGIN line shows';
+  + 'chips at 375 x 667: the Synth lane, #385 and V635; measured in the steady state, the insert '
+  + 'alert closed (U107) and the link\'s notice gone (U108, oscilla-c3), unscrolled (#540). Every '
+  + 'Mac engine has shown it since #385\'s train. On linux F002\'s page frame (#601) is the cause: '
+  + '6 pairs 30 px deep, MARGIN -39 px (CI run 44650431485; main\'s linux run had -3 px). The chips '
+  + 'stay reachable by scrolling (0 covered in firefox and webkit). Host-free, accepted by '
+  + 'oscilla-0b for oscilla-c3; paid by U121';
 // U111 (C3-541-3, oscilla-c3): the pairs an overlap key owes, by identity (the px each pair
 // measured is logged on its KNOWN line); a key listed here fails when its pair set changes in
 // either direction. A key not listed is judged as a boolean, as before.
@@ -174,9 +186,11 @@ function comparePairs(measured, listed) {
   return { extra, gone, near };
 }
 const PHONE_WHOLE_PAIRS = new Map([
-  ['@320:synth:overlap', ['keyboard.octave-down x synth.studio',
-    'keyboard.octave-up x synth.studio', 'keyboard.octave-down x synth.copy-link ~3',
-    'keyboard.octave-up x synth.copy-link ~3']],
+  ['@320:synth:overlap', ['keyboard.octave-down x synth.copy-link',
+    'keyboard.octave-up x synth.copy-link', 'keyboard.octave-down x osc-synth-tab-panel ~3',
+    'keyboard.octave-down x osc-synth-tab-engines ~3',
+    'keyboard.octave-up x osc-synth-tab-engines ~3', 'keyboard.octave-up x osc-synth-tab-xy ~3',
+    'keyboard.more x osc-synth-tab-drums ~3']],
 ]);
 const PHONE_WHOLE_DEBT = new Map([
   ['studio:font', 'the Studio editor\'s graph, library and timeline labels are 9-10.5 px '
@@ -191,7 +205,7 @@ const PHONE_WHOLE_DEBT = new Map([
     + 'header actions (copy link, fullscreen, templates, open, save, export) at 320 x 568, where '
     + 'the navbar, the safety strip, the page header, the dock and the status bar leave them under '
     + 'the dock; first measured when #386 met main\'s Studio dock (#410): the Studio lane, U097'],
-  ['darwin:@375:synth:overlap', R375],
+  ['@375:synth:overlap', R375],
   ['@390:synth:overlap', 'the keyboard dock\'s arm and octave buttons overlap the Synth\'s mobile '
     + 'keys toggle (synth-m-keys): the Synth lane, #385 and V635'],
 ]);
@@ -422,7 +436,12 @@ function phoneWhole({ ws, gap, touchMin }) {
         const c = a.getBoundingClientRect();
         if (cx < c.left || cx > c.right || cy < c.top || cy > c.bottom) return true;
       }
-      return false;
+      // The viewport clips too: a centre still outside it after scrollIntoView (chromium at 375,
+      // a snap strip wider than the screen) is off screen (oscilla-0b, #601). elementFromPoint
+      // answers null exactly there, and under mobile emulation innerWidth/innerHeight need not
+      // be the box it judges by (CI run on ee258f9b), so its null is the test. A centre inside
+      // the viewport under another element hits that element and still counts as covered.
+      return cx < 0 || cy < 0 || document.elementFromPoint(cx, cy) === null;
     })();
     if (!clipped && !hits(el, cx, cy)) {
       const hit = document.elementFromPoint(cx, cy);
@@ -777,6 +796,25 @@ async function runOne(name) {
             .map((o) => Number((/ (\d+)x(\d+)$/.exec(o) || [])[2]) || 0));
           console.log(`  MARGIN ${name} ${at} synth controls to dock top: ${gap} px; deepest `
             + `overlap ${deep} px`);
+          if (size.width === 375) {
+            // The covered measure's negative control (oscilla-0b, #601): the viewport rule
+            // above must not hide a chip truly under something. A transparent cover planted over
+            // the whole screen leaves every on-screen centre under it; a section chip must then
+            // be listed as covered by it, or the rule has swallowed real coverage.
+            await p.evaluate(() => {
+              const cover = document.createElement('div');
+              cover.dataset.osc = 'test.cover';
+              cover.style.cssText = 'position:fixed;inset:0;z-index:2147483647';
+              document.body.append(cover);
+            });
+            const ctl = (await p.evaluate(phoneWhole,
+              { ws, gap: WORK_GAP, touchMin: TOUCH_MIN })).covered;
+            await p.evaluate(() => document.querySelector('[data-osc="test.cover"]').remove());
+            check('phone-whole-covered-control-synth-375',
+              ctl.some((c) => /^osc-view-synth>BUTTON\.snap-start under test\.cover$/.test(c)),
+              `a section chip under a planted cover is not listed as covered: `
+                + `${ctl.slice(0, 6).join('; ') || 'none listed'}`);
+          }
         }
         await p.close();
         const m = r.last;
@@ -853,6 +891,7 @@ async function runOne(name) {
     // 320, 375 and 390 px with the safety notice open (the first visit) and collapsed, with Více
     // collapsed; expanded at 375 and 390 too (320 expanded is recorded debt, U108_DEBT). It waits
     // for the alert: a missing alert fails here, it never passes for want of one (C3-540-2).
+    const u108Seen = new Set();
     for (const size of PHONE_SIZES) {
       for (const safety of ['open', 'collapsed']) {
         const fresh = await browser.newContext({ viewport: size, hasTouch: true,
@@ -898,11 +937,14 @@ async function runOne(name) {
               ok: facts && heading && [...a, ...c].every((x) => x === 'self') };
           }, [more === 'expanded', size.width !== 320]), (m) => m.shown && m.ok,
           `ui-current: U108 insert alert on top at ${size.width} px (${safety}, ${more})`);
-          const debt = U108_DEBT.get(`@${size.width}:${more}`);
+          const key = [`${process.platform}:@${size.width}:${safety}:${more}`,
+            `@${size.width}:${safety}:${more}`].find((k) => U108_DEBT.has(k));
+          const debt = key && U108_DEBT.get(key);
           if (debt) {
+            u108Seen.add(key);
             check(`u108-alert-on-top-${size.width}-${safety}-${more}`, !r.ok,
-              `@${size.width}:${more} passes now (${safety}): remove it from U108_DEBT`);
-            if (!r.ok) console.log(`  KNOWN ${name} U108 @${size.width}:${more} (${safety}): `
+              `${key} passes now: remove it from U108_DEBT`);
+            if (!r.ok) console.log(`  KNOWN ${name} U108 ${key}: `
               + `${JSON.stringify(r.last)} (${debt})`);
           } else {
             check(`u108-alert-on-top-${size.width}-${safety}-${more}`, r.ok,
@@ -923,6 +965,12 @@ async function runOne(name) {
         await fresh.close();
       }
     }
+    // A U108 key scoped to another host is judged by that host's run (as phone-whole-debt-current).
+    const u108Mine = [...U108_DEBT.keys()].filter((k) => !/^(darwin|linux|win32):/.test(k)
+      || k.startsWith(`${process.platform}:`));
+    check('u108-debt-current', u108Mine.every((k) => u108Seen.has(k)),
+      `U108_DEBT names a key no run applied: ${u108Mine.filter((k) => !u108Seen.has(k))
+        .join(', ')}`);
     // U100: on a short phone a Synth opened from a link, both notices shown, keeps room for its
     // tab. On Engines the docked keys fold to their handle (one rule, routes.js roomFolds), each
     // notice takes one line, Expand all takes a tap at its centre and SYNTH_ROOM_MIN px of the
