@@ -470,10 +470,11 @@
 
   <!-- ================= Main grid ================= -->
   <!-- K247: a workspace the docked keys cover (every one but the Playground, whose keys stay
-       under its panels; the Synth and the Studio reserve the band in their own views) keeps the
-       band below its content, so no control ends under the dock or its folded handle.
+       under its panels, and the Studio, which reserves the band in its own view) ends <main>
+       above the dock, so no control lies under the dock or its folded handle. The Synth too
+       since U121 (oscilla-d9's Q090 settlement): its scroller keeps no dock padding.
        Q110: one Pro page frame, on <main> or on the workspace's own view (shell.js). -->
-  <main class="osc-main scroll-pb-[var(--osc-dock-h,0px)]" id="osc-main" tabindex="-1" :class="[mainFrame(), workspace === 'synth' && '!block !pt-0 scroll-pt-[var(--osc-synth-nav-h,0px)]', kbdDocked && workspace !== 'synth' && workspace !== 'studio' && '!mb-[max(0px,calc(var(--osc-dock-h,0px)_-_var(--osc-statusbar-h)))]']">
+  <main class="osc-main scroll-pb-[var(--osc-dock-h,0px)]" id="osc-main" tabindex="-1" :class="[mainFrame(), workspace === 'synth' && '!block !pt-0 !scroll-pb-0 scroll-pt-[var(--osc-synth-nav-h,0px)]', kbdDocked && workspace !== 'studio' && '!mb-[max(0px,calc(var(--osc-dock-h,0px)_-_var(--osc-statusbar-h)))]']">
     <!-- The first screen (P002, Q004 option A): the positioning sentence of Q002 leads the
          Playground; the other workspaces lead with their own heading and keep it unseen. -->
     <h1 class="max-sm:-mt-1" :class="{ 'osc-sr-only': workspace !== 'playground' }">Vědecky poctivá
@@ -2727,7 +2728,7 @@
          src/js/ui/studio/workspace.js): every module plate, knob, switch and jack is generated
          from src/js/synth/panels/semi-mono.js and the registry's node descriptors. The keyboard
          docks at the bottom here and plays the panel. -->
-    <section class="pb-[max(1.5rem,var(--osc-dock-h,20rem))]" :class="PRO.pageDocked" id="osc-view-synth" data-osc="synth-view"
+    <section :class="PRO.pageDocked" id="osc-view-synth" data-osc="synth-view"
       data-osc-modes="synth" hidden :hidden="workspace !== 'synth'"
       aria-labelledby="osc-synth-title" tabindex="-1">
       <!-- U108: below md the insert alert comes first (order), clear of the dock. -->

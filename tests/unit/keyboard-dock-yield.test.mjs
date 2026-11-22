@@ -208,6 +208,23 @@ test("the pad's height follows the room: 100dvh less the chrome and the dock's b
   side.b = box(378, 1944, 0, 390); // a bar over the pad's column counts, a side bay does not
   assert.equal(yieldMod.roomTop(win, el), 240 + 16 + 1566);
   assert.equal(yieldMod.roomTop(win, null), 0);
+  // U121 (oscilla-d9): a surface whose top lies under that pinned bar is hidden as under the
+  // dock, so the settle re-places it; one px of rounding is allowed, and below the bar it is not
+  side.b = box(378, 1944, 1111, 1511);
+  let at = 493;
+  const pad = { isConnected: true, ownerDocument: doc, parentElement: main,
+    getBoundingClientRect: () => box(at, at + 121, 36, 354) };
+  assert.equal(yieldMod.underStickyBar(win, pad), false, 'below the bar (300): seen');
+  at = 241;
+  assert.equal(yieldMod.underStickyBar(win, pad), true, 'its top under the bar: hidden');
+  at = 299;
+  assert.equal(yieldMod.underStickyBar(win, pad), false, 'within a px of the bar\'s bottom');
+  at = 120; // above the scroller's own top (240): the user scrolled it away (R6), left there
+  assert.equal(yieldMod.underStickyBar(win, pad), false, 'scrolled above the scroller: left');
+  assert.equal(yieldMod.underStickyBar(win, null), false);
+  const dy2 = readFileSync(path.join(ROOT, 'src/js/midi/dock-yield.js'), 'utf8');
+  assert.match(dy2, /dockCovers\(surface, dock\) \|\| underStickyBar\(win, surface\)/,
+    'the settle re-places a surface the dock covers or a sticky bar hides');
 });
 
 // ---------------------------------------------------------------- the state machine
