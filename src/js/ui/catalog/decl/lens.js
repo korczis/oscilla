@@ -25,7 +25,7 @@ export default [
     kind: 'readout',
     label: 'Co zní',
     docs: 'Jmenuje zdroj, kterému právě patří výstup, nebo řekne, že nic nehraje.',
-    state: { none: 'čte vlastníka, kterého zveřejňuje sběrnice přehrávání, a nic nemění' },
+    state: { none: 'čte vlastníka zveřejněného sběrnicí přehrávání a nic nemění' },
     in: 'lens',
   }),
   defineComponent({

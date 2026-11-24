@@ -15,7 +15,7 @@
 //
 //   lensSubject({ owner, synthArmed }) -> { id, label, idle }       pure
 //   lensViews(subject)                 -> { views, marker, computedNote }  pure
-//   lensMarkerShown(owner, synthArmed) -> boolean (allocation-free; the Spectrum reads it per frame)
+//   lensMarkerShown(owner)             -> boolean (allocation-free; read by the Spectrum per frame)
 //   createLensPart({ relayout })       -> the component part (lensOpen, lensShow, lensClose, ...)
 //   bindLensKeys({ keys, cmp })        -> unbind: Escape closes an open sheet before the page's
 //                                         Escape (it never also stops the sound)
@@ -26,7 +26,8 @@ import { WORKSPACE_LABELS } from './shell.js';
 
 export const LENS_IDLE = 'Nic nehraje';
 export const LENS_CAPTION = 'Pozorovaný digitální výstup po omezovači, relativní dBFS';
-export const LENS_IDLE_NOTE = 'Výstup je tichý: Sonda nekreslí žádnou stopu, dokud něco nezazní.';
+export const LENS_IDLE_NOTE = 'Výstup je tichý: Sonda nekreslí žádnou stopu, dokud něco '
+  + 'nezazní.';
 export const LENS_COMPUTED_NOTE = 'Harmonické a signálová cesta se počítají z nastavení '
   + 'generátoru, ne z výstupu, a proto je Sonda neukazuje; najdete je v panelu Analýza.';
 /** The observed views, in the analysis panel's tab order: each reads the output analyser. */

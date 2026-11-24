@@ -693,7 +693,8 @@ function defineChecks() {
       { ms: LENS_LOAD_MS, what: 'the Synth panel is rendered' });
     await lensReveal(page, size);
     await (size === 'phone' ? page.tap('#osc-lens-toggle') : page.click('#osc-lens-toggle'));
-    const idle = await lensUntil(page, (s) => s.open && s.sheetShown && s.focus === 'osc-lens-close',
+    const idle = await lensUntil(page, (s) => s.open && s.sheetShown
+      && s.focus === 'osc-lens-close',
       'Sonda opens with focus on its Close');
     const idleOk = idle.expanded === 'true' && idle.subject === LENS_IDLE && idle.idleShown
       && idle.views.length === 0 && !idle.hostShown && !idle.waveShown && !idle.spgShown;
@@ -704,8 +705,8 @@ function defineChecks() {
     await lensUntil(page, (s) => s.subject === want && s.views.length === 3,
       `the sheet names ${want} and offers the observed views`);
     await page.click('[data-osc="lens.view"][data-value="spectrum"]');
-    const drawn = await lensUntil(page, (s) => s.hostShown && s.inked > 200,
-      'the Spectrum is drawn inside the sheet');
+    const drawn = await lensUntil(page, (s) => s.hostShown && s.inked > 200 && s.chartMax > -60,
+      'the Spectrum is drawn inside the sheet and its trace shows the note');
     const fundamentals = [C4 / 2, C4];
     const p = await lensSound(page, (q) => q.rmsDb > -40 && q.peakHz
       && fundamentals.some((hz) => Math.abs(q.peakHz - hz) <= 1.5 * q.binHz),
@@ -725,14 +726,15 @@ function defineChecks() {
     return { ok: idleOk && drawn.spectrumHosts === 1 && drawn.hostInSheet
       && drawn.requested === null && closed.owner === 'studio' && on.rmsDb > -40 && stopped,
     idle, drawn: { hosts: drawn.spectrumHosts, inSheet: drawn.hostInSheet, inked: drawn.inked,
-      requested: drawn.requested }, peakHz: p.peakHz, rmsDb: p.rmsDb, afterEscape: on.rmsDb,
-    shot };
+      requested: drawn.requested, chartMax: drawn.chartMax }, peakHz: p.peakHz, rmsDb: p.rmsDb,
+    afterEscape: on.rmsDb, shot };
   });
 
   lensDef('studio', '#m=studio', async ({ page, size, leg }) => {
     const { lensSubject } = await lensModule();
     await page.locator('[data-osc="page.title"]').click();
-    await (size === 'phone' ? page.tap('[data-osc="studio.play"]') : page.click('[data-osc="studio.play"]'));
+    await (size === 'phone' ? page.tap('[data-osc="studio.play"]')
+      : page.click('[data-osc="studio.play"]'));
     await until(() => page.evaluate(() => window.OSCILLA.studio.transport.playing),
       { ms: LENS_SOUND_MS, what: 'the Studio transport plays' });
     await lensReveal(page, size);
@@ -1417,6 +1419,9 @@ function lensSheet() {
     spgShown: shown(q('#osc-chart-analysis-spg')),
     inked,
     requested: chart ? chart.options.requested : 'no chart',
+    // The highest level the Spectrum's own trace holds now (dB rel): what the chart draws.
+    chartMax: chart && chart.uplot ? Math.max(-999, ...chart.uplot.data[1]
+      .filter((v) => v != null)) : null,
     owner: window.OSCILLA.bus.owner(),
   };
 }
