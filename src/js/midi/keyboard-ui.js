@@ -62,7 +62,8 @@ export const LETTER_PLACE_NAMES = (() => {
 })();
 
 /** The status bar's Pro toggle (Flowbite toggle on a role=switch button, U134): one class list
- *  for the button and one for its track, bound as kbdSwitch, so the markup carries them once. */
+ *  each for the button, its track and its label, bound as kbdSwitch, so the markup carries them
+ *  once. */
 export const KBD_SWITCH = Object.freeze({
   button: 'group inline-flex min-h-11 items-center gap-2 rounded-lg border-0 bg-transparent px-1 '
     + 'text-sm font-medium text-gray-900 focus:outline-none focus-visible:ring-2 '
@@ -75,6 +76,10 @@ export const KBD_SWITCH = Object.freeze({
     'after:transition', "after:content-['']", 'dark:after:border-gray-600',
     'group-aria-checked:bg-primary-600', 'group-aria-checked:after:translate-x-full',
     'group-aria-checked:after:border-white'].join(' '),
+  // The label is the accessible name everywhere; it is drawn except where the status bar has
+  // no room for it beside the readout (768-1023 px, and 1536-1919 px with the brand line and
+  // the status Play, navigation.cjs status-readout-fields).
+  label: ['md:max-lg:sr-only', '2xl:max-[1919.98px]:sr-only'].join(' '),
 });
 
 // The docked keys' frame (kbdDockClass), a Pro bottom bar above the status bar.

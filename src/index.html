@@ -3264,7 +3264,7 @@
         :class="{ 'is-open': menus.actions }">
         <button type="button" role="switch" data-osc="keyboard.arm" :aria-checked="String(kbdLetters)"
           :title="kbdSwitchTitle" @click="kbdToggle()" :class="kbdSwitch.button"><span
-          aria-hidden="true" :class="kbdSwitch.track"></span><span class="md:max-lg:sr-only">Klávesnice hraje</span></button>
+          aria-hidden="true" :class="kbdSwitch.track"></span><span :class="kbdSwitch.label">Klávesnice hraje</span></button>
         <!-- Sonda (ui/lens.js) on a phone, in the Akce menu; from 768 px the navbar's. -->
         <button type="button" id="osc-lens-toggle" data-osc="status.lens" aria-controls="osc-lens"
           :aria-expanded="String(lensOpen)" @click="lensToggle()"

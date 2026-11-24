@@ -178,7 +178,7 @@ test('the one switch is in the status bar: a Pro toggle, role=switch, aria-check
   assert.match(tag[0], /@click="kbdToggle\(\)"/);
   assert.match(tag[0], />Klávesnice hraje</);
   assert.equal(html.split(hook).length - 1, 1, 'one switch, no Arm in the dock');
-  for (const part of ['button', 'track']) {
+  for (const part of ['button', 'track', 'label']) {
     assert.match(tag[0], new RegExp(`:class="kbdSwitch\\.${part}"`), part);
   }
   assert.match(ui.KBD_SWITCH.track, /group-aria-checked:bg-primary-600/, 'the Flowbite toggle');
