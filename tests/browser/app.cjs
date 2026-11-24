@@ -325,6 +325,12 @@ function auditControls() {
         && s.tabIndex >= 0);
     }
     if (el.closest('.osc-stepper-keys')) return true; // pointer helpers of a focusable input
+    // A combobox's listbox (the command palette, U130): its options are reached from the
+    // focused combobox through aria-activedescendant, so the list itself takes no Tab stop.
+    if (role === 'listbox' && el.id) {
+      const box = document.querySelector(`[role="combobox"][aria-controls="${el.id}"]`);
+      if (box && box.tabIndex >= 0) return true;
+    }
     return false;
   };
   const out = [];
@@ -1072,6 +1078,13 @@ function defineChecks() {
       await collect();
       await page.evaluate((d) => window.OSCILLA.app.closeModal(d), id);
     }
+    // The command palette (U130), opened by its key with a query that lists rows.
+    await page.keyboard.press('Control+KeyK');
+    await page.waitForSelector('#osc-dlg-palette[open]', { timeout: 5000 });
+    await page.keyboard.type('lfo');
+    await page.waitForSelector('[data-osc="palette.list"] [role="option"]', { timeout: 5000 });
+    await collect();
+    await page.keyboard.press('Escape');
     await page.evaluate(() => {
       const a = window.OSCILLA.app;
       a.customPresets = [{ version: 1, id: 'gate', name: 'gate', created: 0,
