@@ -28,7 +28,7 @@ import { scopeWindow } from './p5-views.js';
 import { OUTPUT_OWNER_NAMES, outputOwnerOf } from '../visualization/output-owner.js';
 import { OSCILLA_VERSION } from './version.js';
 import { formatHz } from '../charts/axes.js';
-import { rovingKeydown } from './app.js';
+import { TABS_PART } from './tabs-part.js';
 import { LABS_INCLUDED_TEXT, SEQUENCE_NOT_INCLUDED_TEXT, labSectionsText } from './lab-state.js';
 import {
   LAB_HASH_KEY, LAB_PARAM_MAX, decodeLabParam, encodeLabParam,
@@ -87,21 +87,7 @@ export function createWorkbench(svc) {
   return {
     OSCILLA_VERSION,
     SWEEP_FORM,
-    rovingKeydown,
-    /**
-     * Tab `id` of the Synth tab strip (x-bind): the one roving tabs model of tab() (ui/app.js),
-     * over the Synth's own state, synth.tab, which synthTab selects (synth/ui.js). The selected
-     * tab is the one Tab stop; arrows, Home and End go through rovingKeydown, which focuses and
-     * clicks the next tab, so a key selects as a click does.
-     */
-    synthTabBind(id) {
-      return {
-        ':aria-selected'() { return String(this.synth.tab === id); },
-        ':tabindex'() { return this.synth.tab === id ? 0 : -1; },
-        '@click'() { this.synthTab(id); },
-        '@keydown'(e) { rovingKeydown(e); },
-      };
-    },
+    ...TABS_PART,
     timeWindowMs: 5,
     announceText: '',
     // The playback bus's one playing state (C051, core/output-bus.js publishes it here in the

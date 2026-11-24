@@ -7,9 +7,10 @@
 //   <template> renders its content in its own place, so it is transparent): axe's
 //   aria-required-parent, and the sibling set rovingKeydown (src/js/ui/app.js) walks.
 // - The Synth tabs bind the same roving model as tab() of the Analysis tabs, through
-//   synthTabBind (src/js/ui/workbench.js) over synth.tab: rovingKeydown on keydown, tabindex 0 on
-//   the selected tab and -1 on the rest, a click selecting through synthTab; aria-controls names
-//   the Synth tabpanel, which exists and is labelled by the selected tab.
+//   synthTabBind (src/js/ui/tabs-part.js, composed by the workbench) over synth.tab:
+//   rovingKeydown on keydown, tabindex 0 on the selected tab and -1 on the rest, a click
+//   selecting through synthTab; aria-controls names the Synth tabpanel, which exists and is
+//   labelled by the selected tab.
 // The keys themselves (arrows with wrap, Home, End, the yt= address and the shown panel) and
 // axe on the running page are tests/browser/synth.cjs s-tabs.
 import test from 'node:test';
@@ -19,6 +20,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseHtml } from './shell-lang.test.mjs';
 import { createWorkbench } from '../../src/js/ui/workbench.js';
+import { rovingKeydown } from '../../src/js/ui/app.js';
+
+// Imported so that a tree without the module fails these tests by assertion, not as a whole file.
+const { TABS_PART = {} } = await import('../../src/js/ui/tabs-part.js').catch(() => ({}));
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const HTML = fs.readFileSync(path.join(ROOT, 'src', 'index.html'), 'utf8');
@@ -97,7 +102,7 @@ function fakeTablist(ids, cmp) {
     getAttribute: (k) => (k === 'role' ? 'tab' : null),
     focus() { this.focused += 1; cmp.focus = id; },
     click() { bind(id)['@click'].call(cmp); } }));
-  const bind = (id) => createWorkbench({}).synthTabBind(id);
+  const bind = (id) => createWorkbench({}).synthTabBind(id); // as the component composes it
   return items;
 }
 
@@ -107,6 +112,9 @@ test('synthTabBind is the roving tabs model over synth.tab: one Tab stop, keys s
   const cmp = { synth: { tab: 'panel' }, focus: null,
     synthTab(id) { picked.push(id); this.synth.tab = id; } };
   const wb = createWorkbench({});
+  assert.equal(typeof TABS_PART.synthTabBind, 'function', 'ui/tabs-part.js binds the Synth tabs');
+  assert.equal(wb.synthTabBind, TABS_PART.synthTabBind, 'the workbench composes the tabs part');
+  assert.equal(wb.rovingKeydown, rovingKeydown, 'and its rovingKeydown is the shell\'s one');
   const items = fakeTablist(ids, cmp);
   const on = (id) => wb.synthTabBind(id);
   const stops = () => ids.filter((id) => on(id)[':tabindex'].call(cmp) === 0);
