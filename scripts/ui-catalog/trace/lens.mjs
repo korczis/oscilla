@@ -10,6 +10,7 @@ const entry = (e) => ({ plan: ['C069'], intents: ['coherent-state#views-describe
 
 export default {
   'status.lens': entry(),
+  'header.lens': entry(),
   lens: entry(),
   'lens.subject': entry(),
   'lens.view': entry(),

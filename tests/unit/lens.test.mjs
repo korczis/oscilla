@@ -277,3 +277,20 @@ test('on a phone the Sonda button waits in the closed Akce menu: focus goes to t
     cmp.lensClose();
     assert.equal(toggle.focused, 1, 'a shown Sonda button takes the focus back');
   });
+
+test('from a tablet up focus returns to the navbar\'s Sonda button, before the status bar\'s',
+  () => {
+    const { cmp, toggle, menu, doc } = component({ tabs: { analysis: 'spectrum' },
+      closeMenus() {} });
+    const header = doc.node('osc-lens-header');
+    header.getClientRects = () => [{}];
+    toggle.getClientRects = () => [];
+    cmp.lensShow();
+    cmp.lensClose();
+    assert.equal(header.focused, 1, 'the navbar button shown takes the focus back');
+    assert.equal(toggle.focused + menu.focused, 0, 'neither the phone toggle nor the Akce menu');
+    header.getClientRects = () => [];
+    cmp.lensShow();
+    cmp.lensClose();
+    assert.equal(menu.focused, 1, 'hidden (a phone): the Akce button, as before');
+  });

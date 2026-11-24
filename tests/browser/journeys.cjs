@@ -692,7 +692,7 @@ function defineChecks() {
     await until(() => page.evaluate(() => !!document.querySelector('[data-osc="synth.bay.svg"]')),
       { ms: LENS_LOAD_MS, what: 'the Synth panel is rendered' });
     await lensReveal(page, size);
-    await (size === 'phone' ? page.tap('#osc-lens-toggle') : page.click('#osc-lens-toggle'));
+    await (size === 'phone' ? page.tap('#osc-lens-toggle') : page.click('#osc-lens-header'));
     const idle = await lensUntil(page, (s) => s.open && s.sheetShown
       && s.focus === 'osc-lens-close',
       'Sonda opens with focus on its Close');
@@ -738,7 +738,7 @@ function defineChecks() {
     await until(() => page.evaluate(() => window.OSCILLA.studio.transport.playing),
       { ms: LENS_SOUND_MS, what: 'the Studio transport plays' });
     await lensReveal(page, size);
-    await (size === 'phone' ? page.tap('#osc-lens-toggle') : page.click('#osc-lens-toggle'));
+    await (size === 'phone' ? page.tap('#osc-lens-toggle') : page.click('#osc-lens-header'));
     const want = lensSubject({ owner: 'studio' }).text;
     const open = await lensUntil(page, (s) => s.open && s.subject === want
       && s.focus === 'osc-lens-close', `the sheet names ${want}, focus on Close`);
@@ -751,7 +751,7 @@ function defineChecks() {
     const heard = await lensSound(page, (q) => q.rmsDb > -60, 'the Studio run sounds on');
     // The Close button closes too, and the view returns to the analysis panel.
     await lensReveal(page, size);
-    await (size === 'phone' ? page.tap('#osc-lens-toggle') : page.click('#osc-lens-toggle'));
+    await (size === 'phone' ? page.tap('#osc-lens-toggle') : page.click('#osc-lens-header'));
     await lensUntil(page, (s) => s.open, 'Sonda opens again');
     await (size === 'phone' ? page.tap('#osc-lens-close') : page.click('#osc-lens-close'));
     const home = await lensUntil(page, (s) => !s.open && s.focus === lensBack(size),
@@ -768,7 +768,7 @@ function defineChecks() {
 
   lensDef('layout', '#m=synth', async ({ page, size }) => {
     const toggleBox = await lensReveal(page, size);
-    await (size === 'phone' ? page.tap('#osc-lens-toggle') : page.click('#osc-lens-toggle'));
+    await (size === 'phone' ? page.tap('#osc-lens-toggle') : page.click('#osc-lens-header'));
     await lensUntil(page, (s) => s.open && s.sheetShown, 'the sheet opens');
     // Sounding, so the sheet holds its views, the view buttons and the charts at full height.
     await page.locator('[data-osc="page.title"]').click();
@@ -816,7 +816,7 @@ function defineChecks() {
     const source = fs.readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
     await page.addScriptTag({ content: source });
     await lensReveal(page, size);
-    await (size === 'phone' ? page.tap('#osc-lens-toggle') : page.click('#osc-lens-toggle'));
+    await (size === 'phone' ? page.tap('#osc-lens-toggle') : page.click('#osc-lens-header'));
     await lensUntil(page, (s) => s.open && s.sheetShown, 'the sheet opens');
     const audit = () => page.evaluate(async () => {
       const r = await window.axe.run(document.getElementById('osc-lens'),
@@ -830,7 +830,11 @@ function defineChecks() {
     await lensUntil(page, (s) => s.views.length === 3, 'the sheet offers the views');
     const sounding = await audit();
     const toggle = await page.evaluate(async () => {
-      const r = await window.axe.run(document.getElementById('osc-lens-toggle'),
+      // The navbar's toggle from a tablet up; on a phone the status bar's, as before.
+      const head = document.getElementById('osc-lens-header');
+      const el = head && head.getClientRects().length ? head
+        : document.getElementById('osc-lens-toggle');
+      const r = await window.axe.run(el,
         { resultTypes: ['violations'] });
       return r.violations.filter((v) => v.impact === 'critical' || v.impact === 'serious')
         .map((v) => v.id);
@@ -1405,7 +1409,9 @@ function lensSheet() {
   const chart = window.OSCILLA.labs.analysis && window.OSCILLA.labs.analysis.chart;
   return {
     open: app.lensOpen,
-    expanded: q('[data-osc="status.lens"]').getAttribute('aria-expanded'),
+    // The navbar's toggle from a tablet up; on a phone the status bar's (in the Akce menu).
+    expanded: (shown(q('[data-osc="header.lens"]')) ? q('[data-osc="header.lens"]')
+      : q('[data-osc="status.lens"]')).getAttribute('aria-expanded'),
     sheetShown: shown(sheet),
     subject: (q('[data-osc="lens.subject"]').textContent || '').trim(),
     idleShown: shown(q('#osc-lens-idle')),
@@ -1458,17 +1464,19 @@ async function lensShot(page, name) {
 }
 
 
-/** Where focus returns when the sheet closes: the Sonda button, or on a phone the Akce button
- *  whose menu holds it. */
-const lensBack = (size) => (size === 'phone' ? 'osc-sb-actions-toggle' : 'osc-lens-toggle');
+/** Where focus returns when the sheet closes: the navbar's Sonda button from a tablet up, or on
+ *  a phone the Akce button whose menu holds the status bar's. */
+const lensBack = (size) => (size === 'phone' ? 'osc-sb-actions-toggle' : 'osc-lens-header');
 /** On a phone the Sonda button waits in the status bar's Akce menu: open it first. Returns the
  *  Sonda button's box as pressed. */
 async function lensReveal(page, size) {
+  // From a tablet up the navbar carries the Sonda button (it costs the status bar's readout no
+  // width); on a phone it is the status bar's, in the Akce menu.
+  if (size !== 'phone') return page.locator('#osc-lens-header').boundingBox();
   const shown = () => page.evaluate(() => document.getElementById('osc-lens-toggle')
     .getClientRects().length > 0);
   if (!(await shown())) {
-    await (size === 'phone' ? page.tap('#osc-sb-actions-toggle')
-      : page.click('#osc-sb-actions-toggle'));
+    await page.tap('#osc-sb-actions-toggle');
     await until(shown, { ms: LENS_UI_MS, what: 'the Akce menu shows the Sonda button' });
   }
   return page.locator('#osc-lens-toggle').boundingBox();

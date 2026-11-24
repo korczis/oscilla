@@ -199,6 +199,15 @@
           <svg class="w-5 h-5" aria-hidden="true" x-show="theme === 'dark'"><use href="#i-sun"/></svg>
           <svg class="w-5 h-5" aria-hidden="true" x-show="theme !== 'dark'" x-cloak><use href="#i-moon"/></svg>
         </button>
+        <!-- Sonda from a tablet up: an icon action of the navbar, costing the status bar's readout
+             no width (the status bar's own toggle serves a phone, in its Akce menu). -->
+        <button type="button" id="osc-lens-header" data-osc="header.lens" aria-controls="osc-lens"
+          aria-label="Sonda" aria-expanded="false" :aria-expanded="String(lensOpen)" @click="lensToggle()"
+          title="Sonda: co právě zní na výstupu, z kterékoli pracovní plochy"
+          class="items-center justify-center hidden w-11 h-11 text-gray-500 rounded-lg md:inline-flex hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-700"
+          :class="lensOpen && '!bg-primary-700 !text-white'">
+          <svg class="w-5 h-5" aria-hidden="true"><use href="#i-lens"/></svg>
+        </button>
         <button type="button" id="osc-help" data-osc="header.help" aria-label="Klávesové zkratky"
           title="Klávesové zkratky" aria-haspopup="dialog" @click="openDialog('help')"
           class="items-center justify-center hidden w-11 h-11 text-gray-500 rounded-lg sm:inline-flex hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-700">
@@ -3268,7 +3277,7 @@
         <button type="button" id="osc-lens-toggle" data-osc="status.lens" aria-controls="osc-lens"
           aria-expanded="false" :aria-expanded="String(lensOpen)" @click="lensToggle()"
           title="Sonda: co právě zní na výstupu, z kterékoli pracovní plochy"
-          class="inline-flex items-center flex-none h-11 gap-2 px-3 text-sm font-medium max-md:w-full text-gray-900 bg-white border border-solid border-gray-300 rounded-lg hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 dark:bg-gray-800 dark:text-white dark:border-gray-600 dark:hover:bg-gray-700 md:h-9"
+          class="inline-flex md:hidden items-center flex-none h-11 gap-2 px-3 text-sm font-medium max-md:w-full text-gray-900 bg-white border border-solid border-gray-300 rounded-lg hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 dark:bg-gray-800 dark:text-white dark:border-gray-600 dark:hover:bg-gray-700 md:h-9"
           :class="lensOpen && '!bg-primary-700 !text-white !border-primary-700'">
           <svg class="w-4 h-4" aria-hidden="true"><use href="#i-lens"/></svg><span>Sonda</span>
         </button>
