@@ -67,10 +67,11 @@ export const LETTER_PLACE_NAMES = (() => {
 export const KBD_SWITCH = Object.freeze({
   // From 1536 px to 1919 px, beside the status Play, the bar keeps the readout's level whole
   // (navigation.cjs status-readout-fields): the switch takes the small toggle, no padding and
-  // half the actions' gap.
+  // half the actions' gap. A coarse pointer keeps the 44 px target (V634, layout.cjs).
   button: ['group inline-flex min-h-11 items-center gap-2 rounded-lg border-0 bg-transparent',
     'p-0 text-sm font-medium text-gray-900 focus:outline-none focus-visible:ring-2',
-    'focus-visible:ring-primary-300 dark:text-white md:min-h-9',
+    'focus-visible:ring-primary-300 dark:text-white md:min-h-9 justify-center',
+    '[@media(pointer:coarse)]:min-h-11', '[@media(pointer:coarse)]:min-w-11',
     '2xl:max-[1919.98px]:-me-4'].join(' '),
   // One literal per knob class, so scripts/czech-prose.mjs reads no sentence in the list of the
   // Flowbite toggle knob, and Tailwind still finds every class whole.
