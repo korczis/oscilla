@@ -39,12 +39,13 @@ const { WORKSPACE_IDS: WORKSPACES } = require('../../../src/js/ui/shell.js');
 /**
  * A fresh context and page on dist, ready, with the safety notice collapsed and a running
  * AudioContext (created by a real pointer gesture). `query` and `hash` are appended to the
- * file URL; `audio: false` leaves the context unstarted.
+ * file URL; `audio: false` leaves the context unstarted; `contextOptions` go to newContext
+ * (touch, isMobile, reducedMotion).
  */
 async function openApp(browser, { dist, query = '', hash = '', audio = true, init = null,
-  keepAlerts = false, keepSafety = false,
+  keepAlerts = false, keepSafety = false, contextOptions = {},
   viewport = { width: 1536, height: 1024 }, timeout = 10000 } = {}) {
-  const context = await browser.newContext({ viewport, acceptDownloads: true });
+  const context = await browser.newContext({ ...contextOptions, viewport, acceptDownloads: true });
   for (const fn of [].concat(init || [])) await context.addInitScript(fn);
   const page = await context.newPage();
   page.setDefaultTimeout(timeout);
