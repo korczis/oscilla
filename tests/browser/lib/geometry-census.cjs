@@ -1,6 +1,6 @@
 // The DOM geometry census of plan issue U128: what a workspace shows of its panels, views and
 // in-panel links, per workspace x viewport x engine, and the diff that judges a run against the
-// committed baseline (tests/browser/geometry-census-baseline.json).
+// committed baseline (tests/browser/geometry-census-reference.json).
 //
 //   const gc = require('./lib/geometry-census.cjs');
 //   const cell = await page.evaluate(gc.censusInPage,

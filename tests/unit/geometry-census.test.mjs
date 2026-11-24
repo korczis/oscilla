@@ -1,6 +1,6 @@
 // Plan issue U128: the diff that judges the DOM geometry census
 // (tests/browser/lib/geometry-census.cjs) against its committed baseline
-// (tests/browser/geometry-census-baseline.json).
+// (tests/browser/geometry-census-reference.json).
 //
 // - an entry equal within the tolerance is no difference; a move or resize beyond it, a
 //   display or visibility change, an element that stops (or starts) being rendered, an element
@@ -23,7 +23,7 @@ import { WORKSPACE_IDS } from '../../src/js/ui/shell.js';
 const require = createRequire(import.meta.url);
 const gc = require('../browser/lib/geometry-census.cjs');
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const BASELINE = path.join(ROOT, 'tests', 'browser', 'geometry-census-baseline.json');
+const BASELINE = path.join(ROOT, 'tests', 'browser', 'geometry-census-reference.json');
 const TOL = gc.TOLERANCE_PX;
 
 const cellOf = (entries) => ({ chromium: { '1536x1024': { playground: entries } } });
@@ -202,7 +202,7 @@ test('the census reads its viewports and links from one place', () => {
 const committed = existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, 'utf8')) : null;
 
 test('the committed baseline covers every workspace and viewport per host and engine', () => {
-  assert.ok(committed, 'tests/browser/geometry-census-baseline.json exists');
+  assert.ok(committed, 'tests/browser/geometry-census-reference.json exists');
   assert.equal(committed.tolerancePx, TOL);
   const hosts = Object.keys(committed.hosts);
   assert.ok(hosts.length > 0, 'at least one host is recorded');

@@ -9,13 +9,15 @@
 // every in-panel link that navigates (lib/geometry-census.cjs LINK_SELECTOR).
 //
 // Default: each cell (engine x viewport x workspace) is compared with
-// tests/browser/geometry-census-baseline.json, and the run fails with one line per element that
+// tests/browser/geometry-census-reference.json, and the run fails with one line per element that
 // was added, removed, changed its display, visibility or rendering, or moved or resized by more
 // than the baseline's tolerancePx. Rects depend on the host's fonts, so the baseline keeps one
 // record per host (process.platform): on a host with a record everything is compared; on a host
 // without one only the membership is, against another host's record, and the run says so.
 // --update rewrites the measured engines and viewports of this host's record and prints what
 // changed; a pull request that updates it says why.
+// It is a reference, not a ratchet: it is not named *-baseline.json, which scripts/facts.mjs
+// reads as a debt that only falls.
 //
 // Pages run with reduced motion and the light colour scheme; a cell is read when its workspace
 // is shown, the fonts are loaded and three reads in a row are identical, a condition poll with
@@ -41,7 +43,7 @@ const arg = (name, fallback) => {
 const ROOT = path.resolve(__dirname, '..', '..');
 const DIST = path.resolve(arg('dist', path.join(ROOT, 'dist', 'index.html')));
 const BASELINE = path.resolve(arg('baseline',
-  path.join(__dirname, 'geometry-census-baseline.json')));
+  path.join(__dirname, 'geometry-census-reference.json')));
 const UPDATE = argv.includes('--update');
 const JSON_OUT = arg('json', '');
 const HOST = process.platform;
