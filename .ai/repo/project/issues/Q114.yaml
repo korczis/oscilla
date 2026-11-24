@@ -22,3 +22,16 @@ validation:
 evidence_required:
   - "owner_decision"
 created_at: 2026-11-24
+started_at: 2026-11-24T17:52:52Z
+started_event: sha256:0e194e212bdb87c4380e379359e667c8e8faadc51dc6d7ee54dd104376102752
+updated_at: 2026-11-24T17:53:54Z
+completed_at: 2026-11-24T17:53:54Z
+completed_event: sha256:b6d9fe9373c10a1f62de90a9d89e650bf87dd780505c4de9d4080c88d2e32d9b
+evidence:
+  - covers: "owner_decision"
+    type: manual
+    command: "AskUserQuestion in Claude Code session 40c3f589-de0d-4e90-ba18-aee761b5273a, 2026-11-24 16:30Z-16:34Z, after the owner pasted the prompt pack 'OSCILLA — Complete product experience reconstruction' and ordered /orchestrate proceed"
+    result: "Owner answered five questions, each with the option marked (Recommended): (1) Model: 'Adopt E + ADR 0089 (Recommended)'; (2) Places: 'Generator = Playground (Recommended)'; (3) Sound across places: 'Sound survives (Recommended)', a running measurement still stops on leaving Měření; (4) Letter keys: 'Instrument places + switch (Recommended)'; (5) Phone keys: 'Sheet from the strip (Recommended)'. The questions and options are quoted verbatim in docs/reconstruction/08-owner-decision-q114.md."
+    artifact: "docs/reconstruction/08-owner-decision-q114.md"
+    commit: e7e525ce2c91d43070a52ae647013b215db9f2e0
+    recorded_at: 2026-11-24T17:53:35Z
