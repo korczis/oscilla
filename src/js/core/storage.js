@@ -205,3 +205,56 @@ export function pushHistory(history, entry) {
   return same ? [entry, ...history.slice(1)] : [entry, ...history].slice(0, HISTORY_MAX);
 }
 
+
+// U138: the session draft. A reload restores the instrument, the lab settings, the Synth patch
+// and the sequence from it (ui/session-draft.js), each domain kept as the string or document its
+// own codec already writes (the `#v=1` hash, `lab=`, the Synth link, the sequence of the config
+// file), never a format of its own. sessionStorage: it survives a reload of the tab and dies
+// with the tab, so two tabs never overwrite each other's draft and nothing outlives the session.
+export const SESSION_DRAFT_KEY = 'oscilla.sessionDraft';
+export const SESSION_DRAFT_VERSION = 1;
+/** The largest draft kept, in characters (UTF-16 code units, what Web Storage counts). */
+export const SESSION_DRAFT_MAX = 65536;
+const DRAFT_STRINGS = ['instrument', 'labs', 'synth'];
+
+/** A draft as stored, checked: { v, at, hash, domains } or null when it is not one. */
+export function checkSessionDraft(d) {
+  if (!d || typeof d !== 'object' || d.v !== SESSION_DRAFT_VERSION || !isNum(d.at)
+    || typeof d.hash !== 'string' || !d.domains || typeof d.domains !== 'object') return null;
+  const domains = {};
+  for (const k of DRAFT_STRINGS) {
+    if (typeof d.domains[k] === 'string' && d.domains[k]) domains[k] = d.domains[k];
+  }
+  const seq = d.domains.sequence;
+  if (seq && typeof seq === 'object' && !Array.isArray(seq)) domains.sequence = seq;
+  return { v: d.v, at: d.at, hash: d.hash, domains };
+}
+
+/** The stored draft, checked; null when there is none or it is unreadable. */
+export function loadSessionDraft(store = sessionStore) {
+  return checkSessionDraft(readJSON(store, SESSION_DRAFT_KEY, null));
+}
+
+/**
+ * Store a draft ({ at, hash, domains }); a draft with no domain removes the stored one. A draft
+ * over SESSION_DRAFT_MAX drops its largest domains until it fits. Returns { ok, kept, dropped }:
+ * the domains stored and the ones left out for size.
+ */
+export function persistSessionDraft(store, { at, hash, domains }) {
+  const kept = { ...domains };
+  const dropped = [];
+  const text = () => JSON.stringify({ v: SESSION_DRAFT_VERSION, at, hash, domains: kept });
+  const size = (k) => JSON.stringify(kept[k]).length;
+  while (Object.keys(kept).length && text().length > SESSION_DRAFT_MAX) {
+    const k = Object.keys(kept).sort((a, b) => size(b) - size(a))[0];
+    dropped.push(k);
+    delete kept[k];
+  }
+  if (!Object.keys(kept).length) return { ok: store.remove(SESSION_DRAFT_KEY), kept: [], dropped };
+  return { ok: store.set(SESSION_DRAFT_KEY, text()), kept: Object.keys(kept), dropped };
+}
+
+/** Forget the draft. */
+export function clearSessionDraft(store = sessionStore) {
+  return store.remove(SESSION_DRAFT_KEY);
+}

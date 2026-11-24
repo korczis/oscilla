@@ -25,7 +25,7 @@
     }
   },
   "caps": {
-    "src/index.html": 317000,
+    "src/index.html": 318000,
     "src/js/audio/audio-engine.js": 73000,
     "src/js/core/instrument.js": 64000,
     "src/js/experiments/validate.js": 64000,
@@ -38,6 +38,7 @@
     "src/js/studio/runtime.js": 58000,
     "src/js/studio/transport.js": 92000,
     "src/js/studio/validate.js": 49000,
+    "src/js/synth/ui.js": 45000,
     "src/js/ui/experiments.js": 53000,
     "src/js/ui/studio/inspector.js": 81000,
     "src/js/ui/studio/timeline-editor.js": 53000
@@ -288,6 +289,18 @@
       "cap": 317000,
       "pr": 625,
       "reason": "U120 (oscilla-c3's option B, 2026-11-18): the header brand's description 'Otevřít Playground' as a hidden span outside the lang='en' link, read through aria-describedby, for its English title; measured 315962 -> 316037 B over main f282bd7c, next 1 000 above"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 318000,
+      "pr": 657,
+      "reason": "U138 (journey J9, owner decision Q114): the reload's recovery notice, a dismissible Pro info alert with role=status, Začít znovu and Zavřít, bound to ui/session-draft.js; measured 316537 -> 317171 B over main 35f002cd, next 1 000 above"
+    },
+    {
+      "file": "src/js/synth/ui.js",
+      "cap": 45000,
+      "pr": 657,
+      "reason": "U138 (journey J9): the session draft reads the Synth patch as its link (synthLinkHash) and applies it quietly (synthApplyLinkHash quiet), so a reload does not say 'Synth otevřen z odkazu'; measured 39974 -> 40115 B, past 40 000 for the first time, first cap at its headroom ceiling"
     }
   ]
 }

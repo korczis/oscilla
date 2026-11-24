@@ -349,6 +349,13 @@
       </div>
     </template>
   </div>
+  <!-- U138: the reload's recovery notice (ui/session-draft.js), a dismissible Pro info alert -->
+  <div role="status" data-osc="draft.notice"><div x-show="draft.shown" x-cloak
+    :class="PRO.alertInfo" class="mx-4 mt-3 items-center"><p class="m-0 min-w-0 flex-1"
+    x-text="draft.text"></p><button type="button" data-osc="draft.reset" @click="draftReset()"
+    :class="PRO.btnSecondary">Začít znovu</button><button type="button" data-osc="draft.close"
+    aria-label="Zavřít oznámení" @click="draftClose()" :class="PRO.alertClose"><svg
+    class="h-4 w-4" aria-hidden="true"><use href="#i-close"/></svg></button></div></div>
 
   <section class="osc-hints" data-osc="hints" aria-label="Explore hints" x-show="explore"
     style="display: none">
