@@ -44,9 +44,9 @@
 //        STOP gives the Playground level back (engine-sync-2);
 //   status-bar-studio  the Subtractive Synth looping at Master 0.05: the visible status bar says PLAYING
 //        with the playing dot, "Master -26.0 dB" (the level in effect) and pattern "Studio"; the
-//        status Play button stays the instrument's (aria-pressed false, ADR 0050); a Playground
-//        gain set while the Studio plays is shown as "Zesílení <dB>" (U106) and is the engine's
-//        level; after STOP the state is not PLAYING and the readout is the Playground gain
+//        status Play reads Stop (aria-pressed true, U127: it shows and stops what sounds); a
+//        Playground gain set while the Studio plays is shown as "Zesílení <dB>" (U106) and is the
+//        engine's level; after STOP the state is not PLAYING and the readout is the Playground gain
 //        (dup-stale-4);
 //   inspector-escape  the Subtractive Synth looping: Escape typed in the Master Output's level
 //        field and in the session's tempo field (§272 C2) shows the model's value again, keeps
@@ -399,8 +399,10 @@ async function statusBarStudio(key, page) {
   JSON.stringify(bar));
   check(key, 'status-bar-studio: the pattern readout names the Studio', bar.pattern === 'Studio',
     bar.pattern);
-  check(key, 'status-bar-studio: the status Play button stays the instrument\'s (ADR 0050)',
-    bar.playPressed === 'false', `aria-pressed=${bar.playPressed}`);
+  // U127 (C032, Q114): the status Play shows and stops what sounds, the Studio transport too; it
+  // used to stay the instrument's and start a tone over the Studio.
+  check(key, 'status-bar-studio: the status Play reads Stop while the Studio plays (U127)',
+    bar.playPressed === 'true', `aria-pressed=${bar.playPressed}`);
   // The Playground gain set while the Studio plays is the newer level: shown as such.
   const PLAYGROUND = 0.03;
   await page.evaluate((g) => { window.OSCILLA.app.gainLevel = g; }, PLAYGROUND);
@@ -461,8 +463,10 @@ async function claimOverStudio(key, page, what, selector) {
   { ms: 10000, what: `${what}: the voice stops` });
 }
 
+// U127: the status Play stops a playing Studio (it shows and stops what sounds, Q114), so the
+// Playground voice is started by its own Trigger.
 const playgroundOverStudio = (key, page) => claimOverStudio(key, page,
-  'playground-over-studio (status-bar Play)', '[data-osc="status.play"]');
+  'playground-over-studio (Playground Trigger)', '[data-osc="source.trigger"]');
 const sequencerOverStudio = (key, page) => claimOverStudio(key, page,
   'sequencer-over-studio (Pattern Sequencer PLAY)', '[data-osc="seq.play"]');
 

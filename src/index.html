@@ -3212,8 +3212,7 @@
   </aside>
 
   <!-- Status bar -->
-  <footer class="osc-statusbar" aria-label="Stavový řádek"
-    :class="statusPlayShown && '[@media(min-width:1536px)]:![grid-template-columns:auto_minmax(58px,134fr)_auto_auto_minmax(16px,213fr)_auto]'">
+  <footer class="osc-statusbar" aria-label="Stavový řádek" :class="statusBarClass">
     <div class="osc-sb-brand">
       <span class="osc-sb-name">OSCILLA</span>
       <span class="osc-sb-version" data-osc="status.version" x-text="'v' + BUILD.label"
@@ -3224,12 +3223,12 @@
     </div>
 
     <button type="button" class="osc-icon-btn osc-sb-play" id="osc-sb-play" data-osc="status.play"
-      aria-label="Přehrát" aria-pressed="false" :aria-pressed="String(isSounding)"
+      aria-label="Přehrát" aria-pressed="false" :aria-pressed="String(statusPlayStops)"
       :class="statusPlayShown && '!inline-flex md:justify-self-end md:me-3'"
-      :aria-label="statusPlayName" :title="statusPlayName"
+      x-show="!statusPlayHidden" :aria-label="statusPlayName" :title="statusPlayName"
       @click="statusPlay()" @keydown.enter="latchKey($event)">
-      <svg aria-hidden="true" x-show="!isSounding"><use href="#i-play"/></svg>
-      <svg aria-hidden="true" x-show="isSounding" style="display: none"><use href="#i-stop"/></svg>
+      <svg aria-hidden="true" x-show="!statusPlayStops"><use href="#i-play"/></svg>
+      <svg aria-hidden="true" x-show="statusPlayStops" style="display: none"><use href="#i-stop"/></svg>
     </button>
 
     <p class="osc-sr-only" role="status" aria-live="polite" aria-atomic="true"

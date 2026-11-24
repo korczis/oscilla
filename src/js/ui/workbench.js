@@ -42,8 +42,9 @@ import { sessionStore } from '../core/storage.js';
 import { OWNER, soundingOwner } from '../core/output-bus.js';
 import { learnReturnAction, learnToolOf } from './cross-links.js';
 import { deferDemoFocus } from './learn-focus.js';
-import { STATUS_PLAY_WORKSPACES, WORKSPACE_LABELS } from './shortcuts.js';
+import { WORKSPACE_LABELS } from './shortcuts.js';
 import { statusPlayHint } from '../core/play-hints.js';
+import { statusPlayPart } from './status-play.js';
 import { registerEmptyPredicate } from './empty-states.js';
 
 // Presets' empty state (registry field `empty`, ui/shell.js): the Custom category is in view
@@ -84,7 +85,7 @@ const CEILING_DB_TEXT = `${gainLevelDb(MAX_OUTPUT_GAIN).toFixed(1)} dBFS`;
 export function createWorkbench(svc) {
   // A `lab=` link the page opened at, validated, waiting for the labs to mount (C018).
   let pendingLabLink = null;
-  return {
+  const wb = {
     OSCILLA_VERSION,
     SWEEP_FORM,
     ...TABS_PART,
@@ -137,22 +138,6 @@ export function createWorkbench(svc) {
       return Number.isFinite(db) ? `${db.toFixed(1)} dB` : '-∞ dB';
     },
     get gainFill() { return `${this.gainPct}%`; },
-    // The status Play (ADR 0050), never Studio PLAY's: held notes sound on in every place
-    // (U133, Q114), so it stops them too.
-    get isSounding() { return this.playing || this.seqPlaying || this.notesSounding; },
-    /**
-     * Whether the status bar's Play shows at desktop width too (C030): in the instrument
-     * workspaces that lay out no Hold or Trigger (ui/shortcuts.js STATUS_PLAY_WORKSPACES).
-     */
-    get statusPlayShown() { return STATUS_PLAY_WORKSPACES.includes(this.workspace); },
-    /**
-     * The status Play's accessible name and title, in Czech (R2-C030-2): the word the prompts of
-     * core/play-hints.js name it by ("Přehrát") begins each name a screen reader announces.
-     */
-    get statusPlayName() {
-      if (this.isSounding) return 'Zastavit přehrávání';
-      return this.continuousAllowed && !this.isProgrammed ? 'Přehrát nepřetržitě' : 'Přehrát';
-    },
     /**
      * Who owns the one output now ('instrument' | 'sequencer' | 'studio' | null), for the views
      * that describe it (C013). The Studio is read through its transport (studioOwnsOutput);
@@ -445,21 +430,6 @@ export function createWorkbench(svc) {
     ppErrorId(d) { return `${this.ppId(d)}-error`; },
 
     // ------------------------------------------------------------------ transport extras
-    /**
-     * Status-bar play key: stop when sounding, else latch (continuous allowed) or trigger.
-     * Sounding is what the key shows (isSounding) or the sequencer's live state (C001: the
-     * `seqPlaying` copy lags by one poll); a stop goes through stopPlayback and starts nothing.
-     */
-    statusPlay() {
-      if (this.isSounding || svc.sequencerPlaying()) {
-        // The status-bar stop is the playback bus's stopAll (C050), else the older stopPlayback.
-        if (typeof svc.stopAll === 'function') svc.stopAll('status-stop');
-        else svc.stopPlayback(this);
-        return;
-      }
-      if (this.continuousAllowed && !this.isProgrammed) this.toggleLatch();
-      else this.trigger();
-    },
     onContinuousToggle() {
       // C011: setContinuous tells the sequencer (main.js onContinuousChange): its loop follows
       // the permission and its Loop control restates the cap.
@@ -806,4 +776,6 @@ export function createWorkbench(svc) {
     },
     presetParams(p) { return Array.isArray(p.params) ? p.params.join(' · ') : (p.params || ''); },
   };
+  // The status bar's Play (U127: one per-place play-target table), its own part.
+  return Object.defineProperties(wb, Object.getOwnPropertyDescriptors(statusPlayPart(svc)));
 }

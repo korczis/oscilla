@@ -105,8 +105,8 @@ identity unchanged and the verdict in-sync, `tests/unit/v4-presentation-edits.te
 `presentation-edit` in `tests/browser/v31-studio-runtime.cjs`);
 `mode`/`workspace` split state and three hash routers (W4, **closed** #130 with W2: one dispatcher, ADR 0045); Space has two meanings and two
 shortcut dialogs (W5, **closed** #159, ADR 0050: Space has one owner per workspace, the same
-at every width (Hold to Play in the seven workspaces that play, load or analyse the instrument's
-signal, the Studio transport in Studio, nothing in Measure, Experiments, Learn and About, where
+at every width (Hold to Play in the six workspaces that play, load or analyse the instrument's
+signal, the sequence in the Sequencer since U127, the Studio transport in Studio, nothing in Measure, Experiments, Learn and About, where
 it used to start the instrument), and one dialog lists the keys of the workspace in view and
 the global ones, each key once); disabled controls without a reason (W6, open: no pull request on `main` names it); WebKit absent from
 engine/dsp/labs/sequencer CI and the About provenance tests skip in CI's shallow clone (CI1,

@@ -1,24 +1,29 @@
 // The keyboard model of the whole page (ledger W5, ADR 0050): what Space means in each
 // workspace, and the ONE list the Keyboard shortcuts dialog shows. Pure: no DOM, no audio.
 //
-// Space has one owner in each workspace, the same at every width:
+// Space has one owner in each workspace, the same at every width, read from the one per-place
+// play-target table (core/play-target.js PLAY_TARGET, U127): the place's play target where its
+// row lets Space act on it, else nobody.
 //   'instrument'  the workspaces that play, load or analyse the instrument's signal:
-//                 Playground, Analyzer, Filter Lab, Compare, Synthesis, Sequencer and Presets
+//                 Playground, Analyzer, Filter Lab, Compare, Synthesis and Presets
 //                 (Load readies the instrument and says "Press Space to play it here"). Space is
 //                 Hold to Play (V1, frozen): held, it plays; released, it stops; a programmed
 //                 pattern triggers once. A Play is on screen beside it at every width (C030):
 //                 Hold and Trigger where the Source & Pattern panel is laid out, the status
 //                 bar's Play in the others (SOURCE_PANEL_WORKSPACES, STATUS_PLAY_WORKSPACES).
+//   'sequencer'   the Sequencer (U127). Space plays or stops the sequence, as its timeline's
+//                 Space (K003) and its Play and Stop do; Hold and Trigger keep the instrument.
 //   'studio'      Studio. Space plays or stops the Studio transport, as its Play button does.
-//   null          Measure, Experiments, Learn and About. Space starts nothing there (it used
-//                 to start the instrument, which none of them plays or loads).
+//   null          Measure, Experiments, Learn, the Synth and About. Space starts nothing there
+//                 (it used to start the instrument, which none of them plays or loads; the
+//                 Synth plays from its keys, Measure's stimulus only from its button).
 // Wherever it is pressed, a focused text field, native button, link, slider, tab or an open
 // dialog keeps Space first: dialogs.js keyGuard for the instrument, Studio's own control check.
 // A focused Studio timeline item (clip, marker, point, loop handle) is not such a control: its
 // activation is Enter and Space plays or stops Studio there (transport-view.js KEY_HELP).
-// The focused Sequencer timeline is a listbox, so it keeps Space from the instrument too; there
-// Space plays or stops the sequence (K003; sequencer/editor.js onKeydown), as Studio's timeline
-// plays Studio. With nothing focused, Space in the Sequencer is still the instrument's.
+// The focused Sequencer timeline is a listbox, so it keeps Space from the page's binding; there
+// Space plays or stops the sequence by its own listener (K003; sequencer/editor.js onKeydown),
+// and with nothing focused the page's Space does the same (U127): one meaning in the Sequencer.
 // The compact Studio panel of the Playground and the Sequencer has no Space of its own: every
 // focus target in it is a button. Its Play button is its control.
 
@@ -28,27 +33,17 @@ import { WORKSPACE_LABELS } from './shell.js';
 import { KEYBOARD_VIEWS } from '../midi/keyboard.js';
 import { OWNER } from './output-owner.js';
 import { STATUS_PLAY_WORKSPACES } from '../core/play-hints.js';
+import { PLAY_TARGET, spaceTarget } from '../core/play-target.js';
 import { createKeyRegistry, helpRows } from './keys/registry.js';
 
 /**
- * Who owns Space in each workspace (the keys are exactly app.js WORKSPACES); each owner is a
- * row of the one output-owner table (ui/output-owner.js OWNER, C036).
+ * Who owns Space in each workspace (the keys are exactly app.js WORKSPACES), derived from the
+ * one play-target table (core/play-target.js PLAY_TARGET, U127): each owner is a row of the
+ * one output-owner table (ui/output-owner.js OWNER, C036). The Synth plays from its keys and
+ * Measure's stimulus starts only from its button, so Space starts nothing there (ADR 0050).
  */
-export const SPACE_OWNER = Object.freeze({
-  playground: OWNER.instrument,
-  measure: null,
-  experiments: null,
-  analyzer: OWNER.instrument,
-  filter: OWNER.instrument,
-  compare: OWNER.instrument,
-  synthesis: OWNER.instrument,
-  sequencer: OWNER.instrument,
-  presets: OWNER.instrument,
-  learn: null,
-  studio: OWNER.studio,
-  synth: null, // the Synth plays from its keys; Space starts nothing there (ADR 0050)
-  about: null,
-});
+export const SPACE_OWNER = Object.freeze(Object.fromEntries(Object.keys(PLAY_TARGET)
+  .map((w) => [w, spaceTarget(w)]).map(([w, t]) => [w, t && OWNER[t] ? OWNER[t] : null])));
 
 /**
  * The instrument workspaces whose Source & Pattern panel lays out Hold to Play and Trigger: the
@@ -80,8 +75,15 @@ export { WORKSPACE_LABELS };
 const ownedBy = (owner) => Object.freeze(Object.keys(SPACE_OWNER)
   .filter((w) => SPACE_OWNER[w] === owner));
 const INSTRUMENT_VIEWS = ownedBy(OWNER.instrument);
+const SEQUENCE_VIEWS = ownedBy(OWNER.sequencer);
 const NO_SPACE_VIEWS = ownedBy(null);
 const STUDIO_VIEWS = ownedBy(OWNER.studio);
+/**
+ * Where the instrument's own keys apply: where Space is its Hold to Play, and where its Source &
+ * Pattern panel lays out Hold and Trigger beside another Space owner (the Sequencer, U127).
+ */
+const INSTRUMENT_KEY_VIEWS = Object.freeze(Object.keys(SPACE_OWNER)
+  .filter((w) => INSTRUMENT_VIEWS.includes(w) || SOURCE_PANEL_WORKSPACES.includes(w)));
 /** Where the step grid is mounted (W008): the Studio Inspector and the Synth's Drums tab. */
 const STEP_GRID_VIEWS = Object.freeze(['studio', 'synth']);
 
@@ -97,6 +99,11 @@ export const PAGE_KEYS = Object.freeze({
     scope: { workspace: '*' }, shownIn: INSTRUMENT_VIEWS, section: 'space', group: 'Instrument',
     label: 'Hold to play: sounds while held, stops on release (a programmed pattern: trigger '
       + 'once)' }),
+  // U127: Space in the place whose play target is the sequence plays or stops it, as its Play
+  // and Stop do (one place: the binding's scope is that workspace, more specific than '*').
+  sequence: Object.freeze({ id: 'sequence.space', row: 'space', keys: ['Space'],
+    scope: { workspace: SEQUENCE_VIEWS[0] }, shownIn: SEQUENCE_VIEWS, section: 'space',
+    group: 'Sekvencer', label: 'Přehrání / zastavení sekvence' }),
   // K223: R presses the Record switch wherever one is shown (the Drums tab, a notes clip's
   // step grid in the Studio).
   record: Object.freeze({ id: 'notes.record', row: 'step-grid-record', keys: ['KeyR'],
@@ -122,16 +129,18 @@ const STUDIO_DECLARATIONS = STUDIO_SHORTCUTS.map((s) => help(`studio.${s.id}`, s
 const INSTRUMENT_DECLARATIONS = [
   PAGE_KEYS.space,
   help('trigger', 'Enter', 'Spustit jednou', 'na Podržet a hrát nebo Spustit, kde jsou',
-    { shownIn: INSTRUMENT_VIEWS, group: 'Instrument' }),
+    { shownIn: INSTRUMENT_KEY_VIEWS, group: 'Instrument' }),
   help('octave', 'PgUp / PgDn', 'O oktávu výš / níž', 'na posuvníku frekvence, kde je',
-    { shownIn: INSTRUMENT_VIEWS, group: 'Instrument' }),
+    { shownIn: INSTRUMENT_KEY_VIEWS, group: 'Instrument' }),
 ];
 // The Sequencer's timeline rows are Czech (U106, Q104) and name it as the navigation does.
 const SEQUENCER_WHERE = 'na časové ose Sekvenceru';
 const sequencer = (id, shown, label) => help(id, shown, label, SEQUENCER_WHERE,
   { scope: { workspace: 'sequencer' }, group: 'Sekvencer' });
+// Its Space row is PAGE_KEYS.sequence, the Space meaning there (U127): with the timeline focused
+// or not, Space plays or stops the sequence, so no timeline row repeats it.
 const SEQUENCER_DECLARATIONS = [
-  sequencer('sequencer-space', 'Space', 'Přehrání / zastavení sekvence'),
+  PAGE_KEYS.sequence,
   sequencer('sequencer-timeline', 'Šipky, Alt + šipky, Del, Ctrl/⌘ D',
     'Výběr, posun, smazání a duplikace bloků'),
   sequencer('sequencer-history', 'Ctrl/⌘ Z, Shift + Ctrl/⌘ Z', 'Zpět, znovu'),
@@ -220,7 +229,8 @@ const spaceRow = (workspace) => {
   return r ? r.row : null;
 };
 export const SPACE_MEANING = Object.freeze({ instrument: spaceRow(INSTRUMENT_VIEWS[0]),
-  studio: spaceRow(STUDIO_VIEWS[0]), none: spaceRow(NO_SPACE_VIEWS[0]) });
+  sequencer: spaceRow(SEQUENCE_VIEWS[0]), studio: spaceRow(STUDIO_VIEWS[0]),
+  none: spaceRow(NO_SPACE_VIEWS[0]) });
 
 /** The keys that work in every workspace. */
 export const GLOBAL_SHORTCUTS = Object.freeze(helpRows(SHORTCUT_KEYS).flatMap((g) => g.rows)
@@ -236,7 +246,7 @@ const shown = (r) => (r.where ? `${r.keys} ${r.where}` : r.keys);
 
 const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 
-/** The owner of Space in `workspace`: 'instrument' | 'studio' | null. */
+/** The owner of Space in `workspace`: 'instrument' | 'sequencer' | 'studio' | null. */
 export function spaceOwner(workspace) {
   return has(SPACE_OWNER, workspace) ? SPACE_OWNER[workspace] : null;
 }
@@ -244,6 +254,11 @@ export function spaceOwner(workspace) {
 /** True when the instrument's Hold to Play may answer Space in `workspace`. */
 export function instrumentTakesSpace(workspace) {
   return spaceOwner(workspace) === OWNER.instrument;
+}
+
+/** True when Space plays or stops the sequence in `workspace` (U127). */
+export function sequenceTakesSpace(workspace) {
+  return spaceOwner(workspace) === OWNER.sequencer;
 }
 
 /** A Space key event, by character or by physical key. */

@@ -1,18 +1,21 @@
 // C030: what a prompt says to press in the instrument workspaces whose only Play is the status
 // bar's. Pure: no DOM, no audio.
 //
-// Analyzer, Filter Lab, Compare and Presets give Space to the instrument (ui/shortcuts.js
-// SPACE_OWNER) but lay out no HOLD TO PLAY or TRIGGER: the status bar's Play is theirs at every
+// Analyzer, Filter Lab, Compare and Presets play the instrument (core/play-target.js
+// PLAY_TARGET) but lay out no HOLD TO PLAY or TRIGGER: the status bar's Play is theirs at every
 // width. The V1 prompts that name HOLD TO PLAY and TRIGGER are frozen (tests/unit/freeze.test.mjs
 // against golden V1 outputs) and stay as they are wherever those controls exist; in these four
 // workspaces each prompt is replaced, by workspace, with a sentence of its own that names the
 // control on screen by its accessible name: the status Play is announced as "Přehrát",
 // "Přehrát nepřetržitě" or "Zastavit přehrávání" (ui/workbench.js statusPlayName, R2-C030-2).
-// tests/unit/workspace-play-visible.test.mjs holds the list equal to the workspaces SPACE_OWNER
-// gives the instrument without the Source & Pattern panel.
+// U127: the list is a read of the one play-target table, never a list of its own
+// (tests/unit/play-target-table.test.mjs).
+import { OWNER } from './output-bus.js';
+import { placesWhere } from './play-target.js';
 
-/** The instrument workspaces whose Play is the status bar's (C030). */
-export const STATUS_PLAY_WORKSPACES = Object.freeze(['analyzer', 'filter', 'compare', 'presets']);
+/** The instrument workspaces whose Play is the status bar's (C030), from PLAY_TARGET. */
+export const STATUS_PLAY_WORKSPACES = placesWhere((r) => r.target === OWNER.instrument
+  && !r.ownPlay);
 
 /** The sentences there, by the frozen prompt each one stands in for. */
 export const STATUS_PLAY_HINTS = Object.freeze({

@@ -148,8 +148,9 @@ test('dup-stale-4: while the Studio plays the status bar says PLAYING and shows 
     assert.equal(cmp.statusGainText, 'Master -26.0 dB');
     assert.equal(cmp.statusPatternText, 'Studio');
     assert.equal(cmp.statusFreqText, 'studio', 'not the Playground frequency');
-    // The status Play button stays the instrument's (ADR 0050): it triggers the instrument.
-    assert.equal(cmp.isSounding, false);
+    // U127 (C032, Q114): the status Play shows and stops what sounds, the Studio transport too
+    // (it used to stay the instrument's and start a tone over the Studio).
+    assert.equal(cmp.isSounding, true);
     // A level written since (the Playground's gain, resetDefaults) supersedes the Studio's.
     engine.masterWrites += 1;
     assert.equal(cmp.statusGainText, 'Zesílení -21.9 dB');
