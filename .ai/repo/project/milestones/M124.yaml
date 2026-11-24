@@ -1,0 +1,21 @@
+id: M124
+title: "One instrument: places, a persistent instrument strip, an observed probe and a palette instead of thirteen workspaces"
+slug: one-instrument-places-strip-probe-palette
+order: 94
+priority: p0
+problem: "Measured on main c3b15610 (v3.42.1), 2026-11-24 (docs/reconstruction/01 to 05): six of the thirteen workspaces are crops of one panel grid chosen by seven uncoordinated mechanisms the registry does not own; what sounds is derived (soundingOwner) but nothing shows it across workspaces, so analysing the Synth's output needs a switch that also stops it (LEAVE_POLICY); chrome leaves the Studio and Synth about 40 % of a 1024 px screen and a phone's first screen no instrument content; Space means three things and plays the tone in the Sequencer; a workspace switch is not announced and no h1 names it; the Synth tablist fails axe; Escape closing a menu stops all audio."
+outcome: "OSCILLA reads as one instrument (owner decision Q114): a few places (the landing, Generátor = Playground, Synth, Studio, Analýza, Měření, Experimenty, Výuka, per ADR 0089) whose panels the registry declares; one persistent instrument strip naming what sounds with one per-place Play, an observed level and the keys; Sonda, an observed-output probe sheet over every place; a command palette over the catalog; one merged title bar; a phone bottom bar; every inventoried deep link still opening; nothing retired before its replacement is live, reachable and sounding in three engines (Q090)."
+acceptance_criteria:
+  - "U123 to U137 are done with their evidence, or cancelled with their criteria moved."
+  - "The intent one-instrument's satisfaction criteria are met by their commands on main."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "milestone_verified"
+risks:
+  - "The composition declaration grows into a layout engine: it owns membership, order, phone primary and open state only; CSS keeps geometry (07 section 4.1)."
+  - "The probe shows a computed view as the sound: only observed views of the output after the ceiling, labelled, unless the subject is the V1 instrument (ADR 0063, project.no-fake-science)."
+  - "Pages retired before their replacement sounds: Q090's no-loss condition binds U132 and U137."
+  - "The shared machine and the CI cap: slices stay small and land through the merge queue (ADR 0083)."
+created_at: 2026-11-24
+updated_at: 2026-11-24

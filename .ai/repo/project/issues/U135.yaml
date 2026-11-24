@@ -1,0 +1,23 @@
+id: U135
+milestone: M124
+serves:
+  - "one-instrument#chrome-budget"
+title: "On a phone the keys open as a sheet from the instrument strip"
+slug: "phone-keys-sheet"
+priority: p1
+profile: implementation
+objective: "Per Q114 a phone shows the place first; the keys open as a bottom sheet from the strip with whole octaves and 44 px keys, open by default in the Synth and closed elsewhere (Q019 desktop docking stays)."
+why: "Product reconstruction audit of 2026-11-24 (docs/reconstruction/), target architecture 07, owner decision Q114."
+scope:
+  - "src/js/midi/"
+  - "src/index.html"
+  - "tests/"
+depends_on: ["Q114", "U131"]
+acceptance_criteria:
+  - "At 390x844 and 320x740 the keys sheet shows whole octaves with every key a 44 px target, opens and closes from the strip, and sounds on the first tap (project.a-phone-sounds), in Chromium and WebKit."
+validation:
+  - "node tests/browser/touch-audio.cjs"
+  - "node tests/browser/iphone.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-11-24
