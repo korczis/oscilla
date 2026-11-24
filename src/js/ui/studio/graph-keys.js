@@ -49,6 +49,19 @@ export function isEditingTarget(el) {
 }
 
 /**
+ * Escape typed in an Inspector field (§272 C2) is the field's own: `restore()` shows the model's
+ * value again and the key stops there, as the Synth's typed entry does, so neither the Studio's
+ * Escape (workspace/graph.js) nor the page's (page.escape: stop everything) sees it. The
+ * transport keeps playing and the focus stays in the field. -> true when it took the key.
+ */
+export function fieldEscape(e, restore) {
+  if (!e || e.key !== 'Escape') return false;
+  restore();
+  e.stopPropagation();
+  return true;
+}
+
+/**
  * The Studio command of a key event { key, code, ctrlKey, metaKey, shiftKey, altKey, repeat }:
  * { id, delta? } or null. Only plain keys and the editing chords above map to commands.
  */

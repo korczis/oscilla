@@ -85,6 +85,7 @@ import {
 } from './inspector-fields.js';
 import { h, replaceChildren, setAttr, setText } from './graph-dom.js';
 import { pressGuard } from './inspector-press.js';
+import { fieldEscape } from './graph-keys.js';
 import {
   BAD, TRACE_OPS_SHOWN, causeRef, entityRef, nodeOf, paramText, runtimeDiagnostics, runtimeState,
   shortHash, traceView,
@@ -632,11 +633,10 @@ export function mountInspector(host, svc) {
     ref.input.addEventListener('blur', () => {
       if (ref.input.getAttribute('aria-invalid') === 'true') restore();
     });
-    ref.input.addEventListener('keydown', (e) => {
-      if (e.key !== 'Escape') return;
+    ref.input.addEventListener('keydown', (e) => fieldEscape(e, () => {
       restore();
       showError(ref, '');
-    });
+    }));
   }
 
   /** The aria-describedby of a field: its unit, its lane note and its error, those it has. */
@@ -1108,9 +1108,9 @@ export function mountInspector(host, svc) {
     input.addEventListener('change', () => applySetting(key, input.value, () => {
       input.value = ref.field.input;
     }));
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') input.value = ref.field.input;
-    });
+    input.addEventListener('keydown', (e) => fieldEscape(e, () => {
+      input.value = ref.field.input;
+    }));
     refs.set(dataOsc, ref);
     return h('div', { class: cls }, [
       h('label', { class: 'osc-label osc-si-label', for: id, text: label }),
