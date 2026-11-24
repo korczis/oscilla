@@ -184,6 +184,8 @@ const CONTRACT = [
   ['presets.toSynth', 'open', 'a'], ['presets.altPlayground', 'open', 'a'],
   ['source.ceiling', 'readout', 'p'], ['status.ceiling', 'readout', 'span'],
   ['seq.unsaved', 'readout', 'span'], ['copy.note', 'readout', 'span'],
+  ['status.lens', 'switch', 'button'], ['lens', 'panel', 'section'],
+  ['lens.subject', 'readout', 'p'], ['lens.view', 'choice', 'button'],
   ['about.workspaces', 'readout', 'ul'],
   ['about.workspace.playground', 'readout', 'li'], ['about.workspace.measure', 'readout', 'li'],
   ['about.workspace.experiments', 'readout', 'li'], ['about.workspace.analyzer', 'readout', 'li'],
