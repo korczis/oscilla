@@ -39,9 +39,11 @@ test('no Synth text is under 12 px below the xl breakpoint', () => {
 
 test('the dock folds on a phone in the Synth and the keys and Octave stay', () => {
   const html = read('src/index.html');
-  // Velocity folds wherever the keys dock (Synth and Studio, M086); Arm only in the Synth,
-  // whose keys start armed (the Studio's start disarmed, so its Arm stays).
-  const folds = { 'keyboard.arm': "kbdView === 'synth' && !kbdMore && 'max-sm:hidden'",
+  // Velocity folds wherever the keys dock (Synth and Studio, M086). The Arm left the dock for
+  // the status bar's one switch (U134, Q114), so the dock folds no Arm.
+  assert.doesNotMatch(html.match(/<div[^>]*data-osc="keyboard"[\s\S]*?<canvas/)[0],
+    /data-osc="keyboard\.arm"/, 'no Arm in the dock');
+  const folds = {
     'keyboard.velocity-down': "kbdDocked && !kbdMore && 'max-sm:hidden'",
     'keyboard.velocity-up': "kbdDocked && !kbdMore && 'max-sm:hidden'" };
   for (const [id, fold] of Object.entries(folds)) {

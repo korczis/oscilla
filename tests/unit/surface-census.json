@@ -1837,7 +1837,7 @@
         "studio",
         "synth"
       ],
-      "purpose": "Whether the computer keyboard is armed in the view the link opens (kbd=1 arms, kbd=0 disarms)",
+      "purpose": "The letter keys' one switch for the page the link opens, not stored (kbd=1 on, kbd=0 off; U134)",
       "state": "src/js/midi/keyboard-ui.js",
       "evidence": "none",
       "deepLink": "#m=playground&kbd=1",

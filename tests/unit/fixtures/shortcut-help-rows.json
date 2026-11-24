@@ -24,19 +24,19 @@
       {
         "id": "keyboard-notes",
         "keys": "A W S E D F T G Y H U J K O L P ; '",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "where": "se zapnutým přepínačem Klávesnice hraje (nebo s odkazem kbd=1)",
         "text": "Play notes, C to the next F: a note sounds while its key is held"
       },
       {
         "id": "keyboard-octave",
         "keys": "Z / X",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "where": "se zapnutým přepínačem Klávesnice hraje (nebo s odkazem kbd=1)",
         "text": "Octave down / up"
       },
       {
         "id": "keyboard-velocity",
         "keys": "C / V",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "where": "se zapnutým přepínačem Klávesnice hraje (nebo s odkazem kbd=1)",
         "text": "Velocity down / up (steps of 20)"
       }
     ],
@@ -74,24 +74,6 @@
         "id": "measure-abort",
         "keys": "Esc",
         "text": "Stop immediately and abort a running measurement; close menus and dialogs"
-      },
-      {
-        "id": "keyboard-notes",
-        "keys": "A W S E D F T G Y H U J K O L P ; '",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
-        "text": "Play notes, C to the next F: a note sounds while its key is held"
-      },
-      {
-        "id": "keyboard-octave",
-        "keys": "Z / X",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
-        "text": "Octave down / up"
-      },
-      {
-        "id": "keyboard-velocity",
-        "keys": "C / V",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
-        "text": "Velocity down / up (steps of 20)"
       }
     ],
     "timeline": null,
@@ -118,26 +100,7 @@
       "keys": "Space",
       "text": "Nothing: Space starts no sound in this workspace"
     },
-    "rows": [
-      {
-        "id": "keyboard-notes",
-        "keys": "A W S E D F T G Y H U J K O L P ; '",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
-        "text": "Play notes, C to the next F: a note sounds while its key is held"
-      },
-      {
-        "id": "keyboard-octave",
-        "keys": "Z / X",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
-        "text": "Octave down / up"
-      },
-      {
-        "id": "keyboard-velocity",
-        "keys": "C / V",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
-        "text": "Velocity down / up (steps of 20)"
-      }
-    ],
+    "rows": [],
     "timeline": null,
     "note": null,
     "global": [
@@ -180,24 +143,6 @@
         "keys": "PgUp / PgDn",
         "where": "na posuvníku frekvence, kde je",
         "text": "O oktávu výš / níž"
-      },
-      {
-        "id": "keyboard-notes",
-        "keys": "A W S E D F T G Y H U J K O L P ; '",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
-        "text": "Play notes, C to the next F: a note sounds while its key is held"
-      },
-      {
-        "id": "keyboard-octave",
-        "keys": "Z / X",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
-        "text": "Octave down / up"
-      },
-      {
-        "id": "keyboard-velocity",
-        "keys": "C / V",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
-        "text": "Velocity down / up (steps of 20)"
       }
     ],
     "timeline": null,
@@ -242,24 +187,6 @@
         "keys": "PgUp / PgDn",
         "where": "na posuvníku frekvence, kde je",
         "text": "O oktávu výš / níž"
-      },
-      {
-        "id": "keyboard-notes",
-        "keys": "A W S E D F T G Y H U J K O L P ; '",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
-        "text": "Play notes, C to the next F: a note sounds while its key is held"
-      },
-      {
-        "id": "keyboard-octave",
-        "keys": "Z / X",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
-        "text": "Octave down / up"
-      },
-      {
-        "id": "keyboard-velocity",
-        "keys": "C / V",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
-        "text": "Velocity down / up (steps of 20)"
       }
     ],
     "timeline": null,
@@ -304,24 +231,6 @@
         "keys": "PgUp / PgDn",
         "where": "na posuvníku frekvence, kde je",
         "text": "O oktávu výš / níž"
-      },
-      {
-        "id": "keyboard-notes",
-        "keys": "A W S E D F T G Y H U J K O L P ; '",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
-        "text": "Play notes, C to the next F: a note sounds while its key is held"
-      },
-      {
-        "id": "keyboard-octave",
-        "keys": "Z / X",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
-        "text": "Octave down / up"
-      },
-      {
-        "id": "keyboard-velocity",
-        "keys": "C / V",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
-        "text": "Velocity down / up (steps of 20)"
       }
     ],
     "timeline": null,
@@ -366,24 +275,6 @@
         "keys": "PgUp / PgDn",
         "where": "na posuvníku frekvence, kde je",
         "text": "O oktávu výš / níž"
-      },
-      {
-        "id": "keyboard-notes",
-        "keys": "A W S E D F T G Y H U J K O L P ; '",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
-        "text": "Play notes, C to the next F: a note sounds while its key is held"
-      },
-      {
-        "id": "keyboard-octave",
-        "keys": "Z / X",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
-        "text": "Octave down / up"
-      },
-      {
-        "id": "keyboard-velocity",
-        "keys": "C / V",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
-        "text": "Velocity down / up (steps of 20)"
       }
     ],
     "timeline": null,
@@ -452,24 +343,6 @@
         "keys": "Ctrl/⌘ C, Ctrl/⌘ V",
         "where": "na časové ose Sekvenceru",
         "text": "Kopírování vybraného bloku a vložení za výběr"
-      },
-      {
-        "id": "keyboard-notes",
-        "keys": "A W S E D F T G Y H U J K O L P ; '",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
-        "text": "Play notes, C to the next F: a note sounds while its key is held"
-      },
-      {
-        "id": "keyboard-octave",
-        "keys": "Z / X",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
-        "text": "Octave down / up"
-      },
-      {
-        "id": "keyboard-velocity",
-        "keys": "C / V",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
-        "text": "Velocity down / up (steps of 20)"
       }
     ],
     "timeline": null,
@@ -514,24 +387,6 @@
         "keys": "PgUp / PgDn",
         "where": "na posuvníku frekvence, kde je",
         "text": "O oktávu výš / níž"
-      },
-      {
-        "id": "keyboard-notes",
-        "keys": "A W S E D F T G Y H U J K O L P ; '",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
-        "text": "Play notes, C to the next F: a note sounds while its key is held"
-      },
-      {
-        "id": "keyboard-octave",
-        "keys": "Z / X",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
-        "text": "Octave down / up"
-      },
-      {
-        "id": "keyboard-velocity",
-        "keys": "C / V",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
-        "text": "Velocity down / up (steps of 20)"
       }
     ],
     "timeline": null,
@@ -563,26 +418,7 @@
       "keys": "Space",
       "text": "Nothing: Space starts no sound in this workspace"
     },
-    "rows": [
-      {
-        "id": "keyboard-notes",
-        "keys": "A W S E D F T G Y H U J K O L P ; '",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
-        "text": "Play notes, C to the next F: a note sounds while its key is held"
-      },
-      {
-        "id": "keyboard-octave",
-        "keys": "Z / X",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
-        "text": "Octave down / up"
-      },
-      {
-        "id": "keyboard-velocity",
-        "keys": "C / V",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
-        "text": "Velocity down / up (steps of 20)"
-      }
-    ],
+    "rows": [],
     "timeline": null,
     "note": null,
     "global": [
@@ -780,19 +616,19 @@
       {
         "id": "keyboard-notes",
         "keys": "A W S E D F T G Y H U J K O L P ; '",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "where": "se zapnutým přepínačem Klávesnice hraje (nebo s odkazem kbd=1)",
         "text": "Play notes, C to the next F: a note sounds while its key is held"
       },
       {
         "id": "keyboard-octave",
         "keys": "Z / X",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "where": "se zapnutým přepínačem Klávesnice hraje (nebo s odkazem kbd=1)",
         "text": "Octave down / up"
       },
       {
         "id": "keyboard-velocity",
         "keys": "C / V",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "where": "se zapnutým přepínačem Klávesnice hraje (nebo s odkazem kbd=1)",
         "text": "Velocity down / up (steps of 20)"
       }
     ],
@@ -879,19 +715,19 @@
       {
         "id": "keyboard-notes",
         "keys": "A W S E D F T G Y H U J K O L P ; '",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "where": "se zapnutým přepínačem Klávesnice hraje (nebo s odkazem kbd=1)",
         "text": "Play notes, C to the next F: a note sounds while its key is held"
       },
       {
         "id": "keyboard-octave",
         "keys": "Z / X",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "where": "se zapnutým přepínačem Klávesnice hraje (nebo s odkazem kbd=1)",
         "text": "Octave down / up"
       },
       {
         "id": "keyboard-velocity",
         "keys": "C / V",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
+        "where": "se zapnutým přepínačem Klávesnice hraje (nebo s odkazem kbd=1)",
         "text": "Velocity down / up (steps of 20)"
       }
     ],
@@ -924,26 +760,7 @@
       "keys": "Space",
       "text": "Nothing: Space starts no sound in this workspace"
     },
-    "rows": [
-      {
-        "id": "keyboard-notes",
-        "keys": "A W S E D F T G Y H U J K O L P ; '",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
-        "text": "Play notes, C to the next F: a note sounds while its key is held"
-      },
-      {
-        "id": "keyboard-octave",
-        "keys": "Z / X",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
-        "text": "Octave down / up"
-      },
-      {
-        "id": "keyboard-velocity",
-        "keys": "C / V",
-        "where": "with the keyboard armed (Připravit klávesy, or a link with kbd=1)",
-        "text": "Velocity down / up (steps of 20)"
-      }
-    ],
+    "rows": [],
     "timeline": null,
     "note": null,
     "global": [

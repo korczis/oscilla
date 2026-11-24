@@ -38,7 +38,8 @@ audio signals, giving their sum and difference frequencies.
 keys play the keyboard's notes (docs/midi.md "The computer and on-screen keyboard"); disarmed,
 they keep their workspace meanings. The Playground and the Studio start disarmed, the Synth armed.
 In the Czech interface (Q104, `project.czech-prose`) the one term is *připravit* / *připravený*:
-"Arm keys" is "Připravit klávesy", armed is "připravený" ("když je Synth připravený ke hře"), and the
+"Arm keys" was "Připravit klávesy" (since U134 the letter keys have one global switch,
+"Klávesnice hraje"), armed is "připravený" ("když je Synth připravený ke hře"), and the
 Studio's armed chain and "Measurement armed" use the same word when they are translated.
 
 **Key registry.** The one place every key the page answers is bound (`src/js/ui/keys/`, K153),

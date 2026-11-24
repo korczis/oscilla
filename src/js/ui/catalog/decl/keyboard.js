@@ -1,6 +1,7 @@
 // Declarations: the on-screen keyboard (the panel in src/index.html, its controller
 // midi/keyboard-ui.js), docked in the Playground, the Studio and the Synth. The arm switch and
-// the octave and velocity steps write the component's page-only keys (ui.kbdArmed, ui.kbdBase,
+// the octave and velocity steps write the component's keys (ui.kbdLetters, the status bar's
+// switch kept per browser, U134; ui.kbdBase,
 // ui.kbdVelocity of sources.js), the docked keys' More switch ui.kbdMore, the dock's handle
 // ui.kbdDockExpanded (midi/dock-yield.js builds the handle and the status line, K171).
 // Trace: scripts/ui-catalog/trace/keyboard.mjs.
@@ -26,10 +27,11 @@ export default [
   defineComponent({
     id: 'keyboard.arm',
     kind: 'switch',
-    label: 'Připravit klávesy',
-    docs: 'Arms or disarms the computer keyboard in the view in sight, each view on its own.',
-    state: 'ui.kbdArmed',
-    in: 'keyboard',
+    label: 'Klávesnice hraje',
+    docs: 'Jeden přepínač ve stavovém řádku zapne nebo vypne hraní not z písmen klávesnice '
+      + 'počítače všude; hrají jen v nástrojových místech tabulky tras (U134, Q114).',
+    state: 'ui.kbdLetters',
+    related: ['keyboard'],
   }),
   defineComponent({
     id: 'keyboard.octave-down',
@@ -67,8 +69,8 @@ export default [
     id: 'keyboard.readout',
     kind: 'readout',
     label: 'Keyboard readout',
-    docs: 'Says whether the keys are armed here, the range they play and the velocity.',
-    state: 'ui.kbdArmed',
+    docs: 'Says whether the letter keys play here, the range they play and the velocity.',
+    state: 'ui.kbdLetters',
     in: 'keyboard',
   }),
   defineComponent({

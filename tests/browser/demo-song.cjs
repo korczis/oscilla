@@ -770,7 +770,8 @@ async function journey(browser, leg) {
       if (!(await keysImage(page))) throw new Unmet('no keyboard canvas in the page');
       const arm = page.locator('[data-osc="keyboard.arm"]:visible').first();
       let armed = false;
-      if (await arm.count() && (await arm.getAttribute('aria-pressed')) !== 'true') {
+      // U134: the status bar's one switch of the letter keys (role=switch, aria-checked).
+      if (await arm.count() && (await arm.getAttribute('aria-checked')) !== 'true') {
         await arm.click();
         armed = true;
       }

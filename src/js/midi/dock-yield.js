@@ -14,8 +14,9 @@
 //     a one-line handle (data-osc="keyboard.handle", aria-expanded) and a status line, both
 //     made here so src/index.html carries nothing; folded, every other child of the dock is
 //     hidden, the keys' held notes are released (the keyboard's fold release: its own inputs,
-//     never the pad's), the component's kbdNoteOwner and kbdDockExpanded are set (its
-//     kbdKeysShown reads them through routes.js keysShown), the band the
+//     never the pad's; not on a workspace change, where they sound on, U133), the component's
+//     kbdNoteOwner and kbdDockExpanded are set (its kbdKeysShown reads them through routes.js
+//     keysShown), the band the
 //     dock covers is measured again (--osc-dock-h) and the owner's surface is brought into view
 //     above the handle (reveal); unfolded by the user, the surface is brought above the dock
 //     where it fits there whole (routes.js dockRoom), else its top to the top of the room. A
@@ -99,6 +100,7 @@ export function createDockYield({ read, apply, release = () => 0, defer = queueM
   let expanded = false; // the user's expansion, until the owner changes
   let pending = null; // the reason of a scheduled evaluation
   let surface = null; // the owner's surface element as last applied
+  let shown = null; // the workspace the state was last evaluated in
 
   const ownerOf = (ws) => {
     let found = null;
@@ -109,6 +111,12 @@ export function createDockYield({ read, apply, release = () => 0, defer = queueM
   function evaluate(why) {
     pending = null;
     const v = read();
+    // Only a fold the note owner or the user makes releases the keys' notes: one that comes
+    // with a workspace change, or with the room the next place keeps (its first layout), does
+    // not (U133, the owner's Q114 'Sound survives'): a held key sounds on in the next place, and
+    // its keyup (a pointer's captured pointerup) still ends it.
+    const moved = shown !== null && v.workspace !== shown;
+    shown = v.workspace;
     const c = ownerOf(v.workspace);
     const now = c ? c.owner : null;
     if (now !== owner) {
@@ -132,7 +140,8 @@ export function createDockYield({ read, apply, release = () => 0, defer = queueM
     yields = y;
     foldable = f;
     surface = el;
-    if (next === 'collapsed' && was !== 'collapsed') release();
+    if (next === 'collapsed' && was !== 'collapsed' && (why === 'owner' || why === 'user')
+      && !moved) release();
     apply(next, { yields: y, foldable: f, why, owner, expanded, el, replace });
     return state;
   }
