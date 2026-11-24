@@ -2,7 +2,7 @@
 
 Product reconstruction, deliverables 1, 5, 6 and 12 (architecture inventory, current
 information architecture, duplication report, state ownership map). Measured read-only on
-`main` at `c3b15610` (v3.42.1), 2026-11-24. Line references are to that commit; they drift,
+`main` at `c3b15610`, 2026-11-24. Line references are to that commit; they drift,
 so re-measure before acting on one. Anything not confirmed directly is marked INFERRED.
 
 ## 1. Composition

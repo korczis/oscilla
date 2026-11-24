@@ -6,7 +6,7 @@ workspaces sharing a navigation bar.
 **Origin.** The owner ordered it on 2026-11-24 with the prompt pack "OSCILLA — Complete product
 experience reconstruction".
 
-**Base.** `main` at `c3b15610` (v3.42.1).
+**Base.** `main` at `c3b15610`.
 
 **Plan.** Intent `one-instrument`, milestone M124, issues U123 to U140, owner decision Q114 and
 ADR 0089.

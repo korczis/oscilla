@@ -1,6 +1,6 @@
 # 05. Accessibility and keyboard audit (measured in browsers)
 
-Deliverable 4 (accessibility half), measured on `main` at `c3b15610` (v3.42.1), 2026-11-24.
+Deliverable 4 (accessibility half), measured on `main` at `c3b15610`, 2026-11-24.
 
 ## Method
 

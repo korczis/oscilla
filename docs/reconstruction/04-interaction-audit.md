@@ -1,7 +1,7 @@
 # 04. Interaction audit and control-family contracts
 
 Deliverables 4 and 9 (interaction audit, interaction specification). Read from source on
-`main` at `c3b15610` (v3.42.1), 2026-11-24.
+`main` at `c3b15610`, 2026-11-24.
 
 - **Counts.** Instance counts are static markup in `src/index.html`. The Synth counts come
   from importing `synth/panels/semi-mono.js`: 23 modules, 96 knobs, 16 switches, 6 amounts,

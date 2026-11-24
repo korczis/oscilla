@@ -1,7 +1,7 @@
 # 02. Feature-to-UI traceability matrix
 
-Deliverable 2 of the product reconstruction. Read-only pass over `main` at `c3b15610`
-(v3.42.1), 2026-11-24.
+Deliverable 2 of the product reconstruction. Read-only pass over `main` at `c3b15610`,
+2026-11-24.
 
 Conventions:
 - Module paths are relative to `src/js/`.

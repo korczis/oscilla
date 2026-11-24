@@ -1,7 +1,7 @@
 # 03b. User journeys, walked in a real browser
 
 These are the ten journeys of the reconstruction pack, measured on `main` at `c3b15610`
-(v3.42.1) on 2026-11-24.
+on 2026-11-24.
 
 ## Method
 

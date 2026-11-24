@@ -1,6 +1,6 @@
 # 03. UX/HCI audit of the current application
 
-Deliverable 3, measured on `main` at `c3b15610` (v3.42.1), 2026-11-24.
+Deliverable 3, measured on `main` at `c3b15610`, 2026-11-24.
 
 ## Coverage
 

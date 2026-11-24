@@ -4,7 +4,7 @@ This document covers deliverables 7, 8, 10, 11 and 13 of the product reconstruct
 competing architectures, the recommended target, the visual system, desktop and phone
 composition, and the migration strategy.
 
-- **Base.** `main` at `c3b15610` (v3.42.1), 2026-11-24.
+- **Base.** `main` at `c3b15610`, 2026-11-24.
 - **Evidence.** Documents 01 to 05 and the screenshot census in `evidence/`.
 - **Critique.** An independent critic tried to falsify the first draft against the code and
   the binding records. Every amendment it made is folded in here and marked *(critique)*.
