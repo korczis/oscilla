@@ -1,0 +1,24 @@
+id: U136
+milestone: M124
+serves:
+  - "one-instrument#accessible-places"
+title: "The accessibility model of the places"
+slug: "places-accessibility-model"
+priority: p1
+profile: implementation
+objective: "docs/reconstruction/05: no h1 names the workspace, a switch is not announced, 25 to 28 Tab stops precede content, forced colours lose selection, English accessible names, duplicate names, contrast of the selected dock state 3.67:1, live-region noise. Implements requirements 1 to 15 of 05 that U125, U130 and U132 do not."
+why: "Product reconstruction audit of 2026-11-24 (docs/reconstruction/), target architecture 07, owner decision Q114."
+scope:
+  - "src/index.html"
+  - "src/js/ui/"
+  - "src/styles/"
+  - "tests/"
+depends_on: ["U132"]
+acceptance_criteria:
+  - "axe (wcag2a, wcag2aa, wcag21aa, best-practice) reports no critical or serious finding on every place at 1536 and 390 in both themes."
+  - "A skip link reaches each place's declared primary control within 3 Tab stops; forced-colours screenshots show selection by shape; three engines."
+validation:
+  - "npm run test:browser"
+evidence_required:
+  - "verified"
+created_at: 2026-11-24

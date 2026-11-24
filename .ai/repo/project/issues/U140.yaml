@@ -1,0 +1,23 @@
+id: U140
+milestone: M124
+serves:
+  - "one-instrument#keys-mean-one-thing"
+title: "A key never rewrites the Studio document silently"
+slug: "no-silent-document-rewrite-by-a-key"
+priority: p0
+profile: implementation
+objective: "Journey J1: on the Playground one letter key inserted the Synth panel into the Studio document, took over the Master Output input from Filter 1 and played 129 Hz instead of the 220 Hz saw, while the analysis panel said nothing plays and the status bar said ZASTAVENO. A key plays the instrument of the place in view (U134, U127); inserting into a document happens only on an explicit action, and the strip names what sounds."
+why: "User journeys of 2026-11-24 (docs/reconstruction/03b-journeys.md), owner decision Q114."
+scope:
+  - "src/js/midi/"
+  - "src/js/ui/"
+  - "tests/"
+depends_on: []
+acceptance_criteria:
+  - "A browser check: on the Generátor/Playground a letter key does not change the Studio document (studioHash unchanged) and the sounding subject the strip names equals the voice the analyser hears; three engines."
+validation:
+  - "npm run verify"
+  - "node tests/browser/midi.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-11-24
