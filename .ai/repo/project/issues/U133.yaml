@@ -1,0 +1,23 @@
+id: U133
+milestone: M124
+serves:
+  - "one-instrument#see-what-sounds"
+title: "The sound survives a place change; a running measurement still stops on leaving Měření"
+slug: "sound-survives-place-change"
+priority: p1
+profile: implementation
+objective: "LEAVE_POLICY (core/output-bus.js:104-151) disarms an armed Synth, releases held notes and stops a sequence on every switch, so playing the Synth and then analysing it loses the sound. Per Q114 the sound keeps playing across places and the strip names and stops it; a running measurement still stops on leaving Měření (run integrity). Revises C053."
+why: "Product reconstruction audit of 2026-11-24 (docs/reconstruction/), target architecture 07, owner decision Q114."
+scope:
+  - "src/js/core/output-bus.js"
+  - "src/js/ui/"
+  - "tests/"
+depends_on: ["Q114"]
+acceptance_criteria:
+  - "A browser check: an armed Synth with a held note keeps sounding after switching to Analýza and back, and the strip names it and stops it; a running measurement stops on leaving Měření; three engines."
+validation:
+  - "npm run verify"
+  - "npm run test:browser"
+evidence_required:
+  - "verified"
+created_at: 2026-11-24

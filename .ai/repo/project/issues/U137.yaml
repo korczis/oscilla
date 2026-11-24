@@ -1,0 +1,22 @@
+id: U137
+milestone: M124
+serves:
+  - "one-instrument#nothing-obsolete"
+title: "Retire the superseded composition paths"
+slug: "retire-superseded-paths"
+priority: p2
+profile: implementation
+objective: "After the places and the folds land: the nav groups (GROUP_REGISTRY), the V1 mode gating of views (not the frozen URL codec, ADR 0014), the duplicate export menu, the six visibility mechanisms' remains and the stale docs/ui-audit.md go; nothing is retired before its replacement is live, reachable and sounding in three engines (Q090)."
+why: "Product reconstruction audit of 2026-11-24 (docs/reconstruction/), target architecture 07, owner decision Q114."
+scope:
+  - "src/"
+  - "tests/"
+  - "docs/"
+depends_on: ["U132", "U069", "U070", "U071", "U072", "U073", "U074"]
+acceptance_criteria:
+  - "grep finds no GROUP_REGISTRY, no view gated on the V1 mode and one export menu; the deep-link inventory passes; the census of U129 is empty."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-11-24

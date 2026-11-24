@@ -1,0 +1,24 @@
+id: U130
+milestone: M124
+serves:
+  - "one-instrument#everything-reachable"
+title: "A command palette over places, panels, actions, templates, presets, records and Learn topics"
+slug: "command-palette"
+priority: p1
+profile: implementation
+objective: "MIDI, riffs, seven templates, tabs and records are reachable only through a dialog, a tab or a URL (docs/reconstruction/02). The palette extends the shell search (ui/shell.js navSearch) over the catalog (ADR 0081) and the data registries, Czech entries, Ctrl/Cmd+K and the header search field, a Flowbite Pro modal."
+why: "Product reconstruction audit of 2026-11-24 (docs/reconstruction/), target architecture 07, owner decision Q114."
+scope:
+  - "src/js/ui/"
+  - "src/index.html"
+  - "tests/"
+depends_on: ["U125"]
+acceptance_criteria:
+  - "Every catalog component, template, preset and Learn topic has exactly one entry, derived, never hand-listed."
+  - "Every entry, executed in a browser, reaches its target (link-walk), in three engines; the dialog passes axe."
+validation:
+  - "npm run verify"
+  - "npm run test:browser"
+evidence_required:
+  - "verified"
+created_at: 2026-11-24

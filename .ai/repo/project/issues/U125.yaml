@@ -1,0 +1,24 @@
+id: U125
+milestone: M124
+serves:
+  - "one-instrument#accessible-places"
+title: "fix(ui): the Synth tablist is one roving tablist with valid ARIA"
+slug: "synth-tablist-valid-aria"
+priority: p1
+profile: implementation
+objective: "axe on #m=synth: aria-required-parent x4, aria-required-children, listitem x4; every tab is a Tab stop and arrows do nothing (docs/reconstruction/05 problem 4). The Synth tabs use the one tab binder the other tablists use."
+why: "Product reconstruction audit of 2026-11-24 (docs/reconstruction/), target architecture 07, owner decision Q114."
+scope:
+  - "src/index.html"
+  - "src/js/ui/"
+  - "tests/"
+depends_on: []
+acceptance_criteria:
+  - "axe on #m=synth reports none of aria-required-parent, aria-required-children, listitem."
+  - "ArrowRight/Left move and select with wrap, Home/End work, one tab has tabindex 0, the yt= address and the panel follow, in three engines."
+validation:
+  - "npm run verify"
+  - "node tests/browser/synth.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-11-24
