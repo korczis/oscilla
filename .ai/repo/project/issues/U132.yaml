@@ -1,0 +1,24 @@
+id: U132
+milestone: M124
+serves:
+  - "one-instrument#one-instrument-places"
+title: "Places: Generátor = Playground, a slim rail without groups, a phone bottom bar, route aliases"
+slug: "places-rail-bottom-bar-aliases"
+priority: p0
+profile: implementation
+objective: "Per Q114 and ADR 0089: the places are the landing (Q089), Generátor (answering #m=playground and #m=generator; Q033), Synth, Studio, Analýza, Měření, Experimenty, Výuka; O aplikaci in the header menu; no groups; a phone bottom bar of four places plus Více. One alias table in ui/navigation.js maps every old workspace id, V1 mode id (sweep, dual, presets, learn) and record key to a place and a focus; the V1 codec stays frozen (ADR 0014)."
+why: "Product reconstruction audit of 2026-11-24 (docs/reconstruction/), target architecture 07, owner decision Q114."
+scope:
+  - "src/js/ui/shell.js"
+  - "src/js/ui/navigation.js"
+  - "src/index.html"
+  - "tests/"
+depends_on: ["Q114", "U129", "U131"]
+acceptance_criteria:
+  - "The deep-link inventory (tests/browser/ui-flowbite-pro.cjs, link-integrity.cjs) passes unchanged in three engines."
+  - "Every place has one h1 naming it, focus moves to it on a switch at every viewport and one polite region announces it."
+validation:
+  - "npm run release-gate"
+evidence_required:
+  - "verified"
+created_at: 2026-11-24

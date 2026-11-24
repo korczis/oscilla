@@ -1,0 +1,23 @@
+id: U134
+milestone: M124
+serves:
+  - "one-instrument#keys-mean-one-thing"
+title: "Letter keys play notes only in Synth, Studio and Generátor, with one global switch"
+slug: "letter-keys-instrument-places"
+priority: p1
+profile: implementation
+objective: "Today letter keys play notes in every workspace (docs/reconstruction/05 problem 5; Q105). Per Q114 they play only in the instrument places, with one global on/off switch in the instrument strip (WCAG 2.1.4); the text-field guard stays."
+why: "Product reconstruction audit of 2026-11-24 (docs/reconstruction/), target architecture 07, owner decision Q114."
+scope:
+  - "src/js/midi/"
+  - "src/js/ui/"
+  - "tests/"
+depends_on: ["Q114"]
+acceptance_criteria:
+  - "A browser check: KeyA plays in Synth, Studio and Generátor and plays nothing in Měření, Experimenty, Výuka and O aplikaci; the global switch turns it off everywhere; typing in every text, number and search field plays nothing; three engines."
+validation:
+  - "npm run verify"
+  - "node tests/browser/midi.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-11-24

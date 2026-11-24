@@ -48,6 +48,10 @@
 //        gain set while the Studio plays is shown as "Zesílení <dB>" (U106) and is the engine's
 //        level; after STOP the state is not PLAYING and the readout is the Playground gain
 //        (dup-stale-4);
+//   inspector-escape  the Subtractive Synth looping: Escape typed in the Master Output's level
+//        field and in the session's tempo field (§272 C2) shows the model's value again, keeps
+//        the focus there and leaves the transport playing for 150 ms of audio clock; Escape on
+//        the graph then still stops it;
 //   app: no console error or page error.
 // --app-only (diagnostic) runs only the dist checks.
 // Runs in `npm run test:studio` (release-gate and the CI studio job).
@@ -481,6 +485,62 @@ async function resetOverStudio(key, page) {
     JSON.stringify(b));
 }
 
+/**
+ * Escape typed in an Inspector field while the Studio plays (§272 C2): the Master Output's level
+ * field (a node selected) and the session's tempo field (nothing selected) each show the model's
+ * value again, keep the focus and leave the transport playing on the audio clock; Escape on the
+ * graph then still stops it (page.escape, C050).
+ */
+async function inspectorEscapeKeepsTransport(key, page) {
+  const STUDIO = 0.02;
+  await loadStudio(page, 'subtractive-synth', STUDIO);
+  await playStudio(page, STUDIO, 'inspector-escape: PLAY at the Master level');
+  const fields = [
+    { name: 'the Master level field', sel: '#osc-si-master-1-level',
+      select: () => page.click('.osc-sg-node[data-node-id="master-1"] .osc-sg-title') },
+    { name: 'the session tempo field', sel: '#osc-si-studio-tempo',
+      select: () => page.evaluate(() => window.OSCILLA.studio.store.dispatch({
+        type: 'SELECTION_CHANGE', selection: { nodes: [] } })) },
+  ];
+  for (const fld of fields) {
+    await fld.select();
+    const shown = await until(() => page.evaluate((sel) => {
+      const el = document.querySelector(sel);
+      return el && el.getClientRects().length > 0 ? el.value : null;
+    }, fld.sel), { ms: 10000, what: `inspector-escape: ${fld.name} is shown` });
+    await page.fill(fld.sel, '123');
+    const typed = await page.evaluate((sel) => document.querySelector(sel).value, fld.sel);
+    const before = await engineLevel(page);
+    await page.keyboard.press('Escape');
+    const after = await until(() => page.evaluate(([sel, t]) => {
+      const el = document.querySelector(sel);
+      const e = window.OSCILLA.engine;
+      return e.ctx.currentTime > t + 0.15 ? { value: el && el.value,
+        focused: !!el && document.activeElement === el,
+        playing: window.OSCILLA.studio.transport.playing } : null;
+    }, [fld.sel, before.time]), { ms: 10000,
+      what: `inspector-escape: 150 ms of audio clock after Escape in ${fld.name}` });
+    check(key, `inspector-escape: Escape in ${fld.name} restores the model value`,
+      typed === '123' && after.value === shown, `shown ${shown}, typed ${typed}, after `
+        + `${after.value}`);
+    check(key, `inspector-escape: the focus stays in ${fld.name}`, after.focused,
+      JSON.stringify(after));
+    check(key, `inspector-escape: the transport keeps playing after Escape in ${fld.name}`,
+      after.playing, JSON.stringify(after));
+  }
+  const level = await page.evaluate(() => window.OSCILLA.studio.store.getModel().graph.nodes
+    .find((n) => n.id === 'master-1').params.level);
+  check(key, 'inspector-escape: the Master level in the model is unchanged', near(level, STUDIO,
+    1e-12), `${level}`);
+  // Escape outside a field keeps its meaning: on the graph it stops the transport.
+  await page.focus('[data-osc="studio.graph.viewport"]');
+  await page.keyboard.press('Escape');
+  const stopped = await until(() => page.evaluate(() => !window.OSCILLA.studio.transport.playing),
+    { ms: 10000, what: 'inspector-escape: Escape on the graph stops the transport' })
+    .catch(() => false);
+  check(key, 'inspector-escape: Escape on the graph still stops the transport', stopped);
+}
+
 async function runApp(browserName) {
   const key = browserName;
   const browser = await playwright[browserName].launch(LAUNCH[browserName]);
@@ -498,7 +558,7 @@ async function runApp(browserName) {
     await page.evaluate(() => { const a = window.OSCILLA.app; a.alerts = [];
       if (!a.safetyCollapsed) a.collapseSafety(); });
     for (const fn of [studioLevelSurvivesGesture, statusBarStudio, playgroundOverStudio,
-      sequencerOverStudio, resetOverStudio]) {
+      sequencerOverStudio, resetOverStudio, inspectorEscapeKeepsTransport]) {
       try {
         await fn(key, page);
       } catch (err) {

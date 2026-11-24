@@ -1,0 +1,23 @@
+id: U139
+milestone: M124
+serves:
+  - "one-instrument#keys-mean-one-thing"
+title: "The keys play over a running sequence"
+slug: "keys-over-running-sequence"
+priority: p1
+profile: implementation
+objective: "Journey J8: with the Pattern Sequencer running, the dock keys are muted with the alert \"Noty z klávesnice nehrají, dokud hraje sekvencer\". Playing over a running pattern is the instrument's basic performance case. The output bus admits a held key as a second owner while a sequence plays (ADR 0062 exempts a held key from the playback limit)."
+why: "User journeys of 2026-11-24 (docs/reconstruction/03b-journeys.md), owner decision Q114."
+scope:
+  - "src/js/midi/"
+  - "src/js/ui/"
+  - "tests/"
+depends_on: []
+acceptance_criteria:
+  - "A browser check: with the sequence looping, a held key sounds (analyser peak at the note) and the sequence keeps playing; releasing the key leaves the sequence untouched; three engines."
+validation:
+  - "npm run verify"
+  - "node tests/browser/sequencer.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-11-24
