@@ -65,13 +65,17 @@ export const LETTER_PLACE_NAMES = (() => {
  *  each for the button, its track and its label, bound as kbdSwitch, so the markup carries them
  *  once. */
 export const KBD_SWITCH = Object.freeze({
-  button: 'group inline-flex min-h-11 items-center gap-2 rounded-lg border-0 bg-transparent px-1 '
-    + 'text-sm font-medium text-gray-900 focus:outline-none focus-visible:ring-2 '
-    + 'focus-visible:ring-primary-300 dark:text-white md:min-h-9',
+  // From 1536 px to 1919 px, beside the status Play, the bar keeps the readout's level whole
+  // (navigation.cjs status-readout-fields): the switch takes the small toggle, no padding and
+  // half the actions' gap.
+  button: ['group inline-flex min-h-11 items-center gap-2 rounded-lg border-0 bg-transparent',
+    'p-0 text-sm font-medium text-gray-900 focus:outline-none focus-visible:ring-2',
+    'focus-visible:ring-primary-300 dark:text-white md:min-h-9',
+    '2xl:max-[1919.98px]:-me-4'].join(' '),
   // One literal per knob class, so scripts/czech-prose.mjs reads no sentence in the list of the
   // Flowbite toggle knob, and Tailwind still finds every class whole.
-  track: ['relative h-6 w-11 shrink-0 rounded-full bg-gray-200 dark:bg-gray-700',
-    'after:absolute', 'after:start-[2px]', 'after:top-[2px]', 'after:h-5', 'after:w-5',
+  track: ['relative h-5 w-9 shrink-0 rounded-full bg-gray-200 dark:bg-gray-700',
+    'after:absolute', 'after:start-[2px]', 'after:top-[2px]', 'after:h-4', 'after:w-4',
     'after:rounded-full', 'after:border', 'after:border-gray-300', 'after:bg-white',
     'after:transition', "after:content-['']", 'dark:after:border-gray-600',
     'group-aria-checked:bg-primary-600', 'group-aria-checked:after:translate-x-full',
