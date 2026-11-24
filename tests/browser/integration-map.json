@@ -27,6 +27,10 @@
     {
       "id": "measure-loopback-param",
       "why": "keeps ?measure=loopback (TEST CONTEXT) in step with the page; a query parameter, no route"
+    },
+    {
+      "id": "palette",
+      "why": "the command palette (ui/palette.js, U130) assigns a chosen template's or record's address, which the one hash dispatcher then applies as a followed link"
     }
   ],
   "reloadDebt": [

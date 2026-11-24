@@ -841,11 +841,11 @@
       "purpose": "Freeze, averaging and peak hold of the microphone spectrum",
       "state": "src/js/labs/mic-analyzer.js",
       "evidence": "measured",
-      "deepLink": null,
-      "deepLinkWhyNot": "the microphone view is shell tab state (src/js/ui/app.js tabs.mic); no key of the address names it",
+      "deepLink": "#m=compare",
       "tests": [
         "tests/browser/labs.cjs",
-        "tests/browser/app.cjs"
+        "tests/browser/app.cjs",
+        "tests/browser/palette.cjs"
       ],
       "plan": [
         "F006"
@@ -1371,6 +1371,37 @@
       "tests": [],
       "plan": [
         "F010"
+      ]
+    },
+    {
+      "id": "osc-dlg-palette",
+      "kind": "dialog",
+      "reachedFrom": [
+        "playground",
+        "measure",
+        "experiments",
+        "analyzer",
+        "filter",
+        "compare",
+        "synthesis",
+        "sequencer",
+        "presets",
+        "learn",
+        "studio",
+        "synth",
+        "about"
+      ],
+      "purpose": "The command palette: one search over every place, action, template, preset, riff, record, Learn topic and catalogue component, each run by its own owner (U130)",
+      "state": "src/js/ui/palette.js",
+      "evidence": "none",
+      "deepLink": null,
+      "deepLinkWhyNot": "a dialog opens from Ctrl/Cmd+K or the workspace search; no key of the address opens a dialog",
+      "tests": [
+        "tests/browser/palette.cjs",
+        "tests/unit/palette.test.mjs"
+      ],
+      "plan": [
+        "U130"
       ]
     },
     {

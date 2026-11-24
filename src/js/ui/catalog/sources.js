@@ -74,7 +74,7 @@ export const FAMILIES = Object.freeze([
     'kbdBase', 'kbdVelocity', 'kbdMore', 'kbdDockExpanded', 'synthTab', 'synthPadShown',
     'synthDock',
     'aboutLaterOpen', 'summaryOpen', 'summaryFull', 'midiResponse',
-    'midiClockOut', 'lensOpen', 'analysisTab'],
+    'midiClockOut', 'lensOpen', 'analysisTab', 'paletteOpen', 'paletteQuery', 'paletteActive'],
   'The theme (oscilla.theme), the sidebar collapse (oscilla.v2.sidebar), the expanded '
     + 'navigation groups (oscilla.v2.navGroups) and the analysis tab (oscilla.v2.analysisTab) '
     + 'in local storage and the workspace in the URL key m; every other key lasts for the page '

@@ -11,10 +11,13 @@
 //     activate?(i), escape?(e, el),                     // Enter (and Space with spaceActivates);
 //                                                       // escape owns the key (prevents and
 //                                                       // stops it) only when it returns true
-//     spaceActivates: false });
+//     spaceActivates: false,
+//     homeEndInText: false });                          // a combobox: Home and End are the
+//                                                       // list's even from its text input
 //
 // A text input may be an item (a combobox into its list): while one has focus, only ArrowUp,
-// ArrowDown and Escape are roving's; Home, End, Space, Enter and letters stay the input's.
+// ArrowDown and Escape are roving's (and Home and End with homeEndInText, the command palette's
+// list, ui/palette.js); Space, Enter and letters stay the input's.
 // Home and End go to the first and last item. A handled key is prevented and stops
 // propagation: the page dispatcher listens on window, so the Escape that closes a menu never
 // also reaches the page's Escape (stop). Keys it does not handle bubble untouched.
@@ -47,7 +50,7 @@ function isText(el) {
 
 export function roving(container, opts) {
   const { count, index, move, activate, escape, orientation = 'vertical', wrap = true,
-    spaceActivates = false } = opts;
+    spaceActivates = false, homeEndInText = false } = opts;
   const onKey = (e) => {
     if (e.isComposing || e.altKey || e.ctrlKey || e.metaKey) return;
     const own = () => { e.preventDefault(); e.stopPropagation(); };
@@ -55,7 +58,9 @@ export function roving(container, opts) {
       if (escape(e, container) === true) own();
       return;
     }
-    if (isText(e.target) && e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    const listKey = e.key === 'ArrowDown' || e.key === 'ArrowUp'
+      || (homeEndInText && (e.key === 'Home' || e.key === 'End'));
+    if (isText(e.target) && !listKey) return;
     if (activate && (e.key === 'Enter' || (spaceActivates && e.key === ' '))) {
       const i = index();
       if (i >= 0) {

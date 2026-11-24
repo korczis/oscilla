@@ -189,7 +189,7 @@
           </div>
         </form>
         <p class="sr-only" id="osc-nav-search-result" role="status" aria-live="polite"
-          x-text="navQuery.trim() ? 'Nalezené pracovní plochy: ' + navSearchResults().length + '; Enter otevře první' : ''"></p>
+          x-text="navSearchStatus()"></p>
       </div>
       <div class="flex items-center flex-none gap-1" data-osc="header.actions">
         <button type="button" id="osc-theme-toggle" data-osc="header.theme"
@@ -221,7 +221,7 @@
           <div id="osc-overflow-menu" role="menu" hidden aria-labelledby="osc-overflow"
             x-bind="menuPanel('overflow')"
             class="absolute right-0 z-50 w-56 py-1 mt-2 text-base list-none bg-white rounded-lg shadow-lg top-full dark:bg-gray-700">
-            <button type="button" role="menuitem" data-osc="config.import" @click="importConfigClick()" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Importovat nastavení…</button>
+            <button type="button" role="menuitem" data-osc="config.import" @click="importConfigClick()" :class="PRO.menuItem">Importovat nastavení…</button>
             <button type="button" role="menuitem" data-osc="config.export" @click="exportConfig()" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Exportovat nastavení</button>
             <button type="button" role="menuitemcheckbox" data-osc="header.explore"
               :aria-checked="String(explore)" aria-checked="false" @click="explore = !explore" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Tipy k prozkoumání</button>
@@ -3984,6 +3984,7 @@
   <dialog class="osc-dialog osc-dialog--wide" id="osc-dlg-studio-library" data-oscilla-modal
     data-osc-studio-dialog></dialog>
   <dialog class="osc-dialog" id="osc-dlg-studio-patch" data-oscilla-modal data-osc-studio-dialog></dialog>
+  <dialog id="osc-dlg-palette" data-oscilla-modal data-osc="palette" class="bg-white rounded-lg shadow dark:bg-gray-800"></dialog>
 </div>
 <!-- @inline-js -->
 </body>

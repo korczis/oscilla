@@ -187,6 +187,8 @@ const CONTRACT = [
   ['status.lens', 'switch', 'button'], ['header.lens', 'switch', 'button'],
   ['lens', 'panel', 'section'],
   ['lens.subject', 'readout', 'p'], ['lens.view', 'choice', 'button'],
+  ['palette', 'panel', 'dialog'], ['palette.input', 'param', 'input'],
+  ['palette.list', 'choice', 'ul'],
   ['about.workspaces', 'readout', 'ul'],
   ['about.workspace.playground', 'readout', 'li'], ['about.workspace.measure', 'readout', 'li'],
   ['about.workspace.experiments', 'readout', 'li'], ['about.workspace.analyzer', 'readout', 'li'],

@@ -18,6 +18,7 @@ import {
 } from './shell.js';
 import { pageRelatedOf, relatedLang, relatedText } from './cross-links.js';
 import { emptyPredicateHolds } from './empty-states.js';
+import { createPalettePart } from './palette.js';
 
 const THEME_KEY = 'oscilla.v2.theme';
 const ANALYSIS_TAB_KEY = 'oscilla.v2.analysisTab';
@@ -299,6 +300,7 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
         }
       });
       this.shellInit();
+      this.paletteInit();
       document.addEventListener('keydown', (e) => this.menuEscape(e));
     },
 
@@ -687,6 +689,8 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
   // The shell part (sidebar, drawer, groups, search); merged by descriptor so its getter stays
   // a getter (main.js composes the same way).
   Object.defineProperties(ui, Object.getOwnPropertyDescriptors(createShell()));
+  // The command palette (U130): its open state, query and active row, the same way.
+  Object.defineProperties(ui, Object.getOwnPropertyDescriptors(createPalettePart()));
   return ui;
 }
 

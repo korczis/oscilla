@@ -75,6 +75,7 @@
     ],
     "migrated": [
       "card#osc-lens",
+      "modal#osc-dlg-palette",
       "page#osc-view-about",
       "page#osc-view-experiments",
       "page#osc-view-learn",

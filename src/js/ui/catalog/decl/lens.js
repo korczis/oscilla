@@ -12,6 +12,7 @@ export default [
     docs: 'Otevře nebo zavře Sondu nad kteroukoli pracovní plochou; zvuk nechá hrát.',
     state: 'ui.lensOpen',
     related: ['lens'],
+    links: { opens: ['lens'] },
   }),
   defineComponent({
     id: 'header.lens',
@@ -20,6 +21,7 @@ export default [
     docs: 'Otevře nebo zavře Sondu z navigační lišty od šířky tabletu; zvuk nechá hrát.',
     state: 'ui.lensOpen',
     related: ['lens', 'status.lens'],
+    links: { opens: ['lens'] },
   }),
   defineComponent({
     id: 'lens',
@@ -27,6 +29,7 @@ export default [
     label: 'Sonda',
     docs: 'Ukazuje pozorovaný výstup za omezovačem a jmenuje zdroj, který právě zní.',
     state: { none: 'panel rozkládá pozorované pohledy a nevlastní žádnou hodnotu' },
+    links: { openedBy: ['header.lens', 'status.lens'] },
   }),
   defineComponent({
     id: 'lens.subject',

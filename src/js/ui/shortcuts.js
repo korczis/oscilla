@@ -103,6 +103,11 @@ export const PAGE_KEYS = Object.freeze({
     place: 'u přepínače Nahrávat', scope: { workspace: '*' }, shownIn: STEP_GRID_VIEWS,
     group: 'Kroková mřížka',
     label: 'Nahrávání živých úderů do notového klipu: zapnout nebo vypnout' }),
+  // U130: Ctrl/Cmd+K opens the command palette (ui/palette.js) from any place and focus; over
+  // another modal dialog the key passes on (clients.js).
+  palette: Object.freeze({ id: 'palette.open', row: 'palette', keys: ['Ctrl+KeyK', 'Meta+KeyK'],
+    shown: 'Ctrl/⌘ K', scope: { workspace: '*', focus: '*' }, group: 'Page',
+    label: 'Paleta příkazů: hledání míst, akcí, šablon, předvoleb a výuky' }),
 });
 
 /** A help-only declaration: `shown` keys, `label`, optional `place`, listed per `scope`. */
@@ -180,6 +185,7 @@ const KEYBOARD_DECLARATIONS = [
 /** The keys that work in every workspace. */
 const GLOBAL_DECLARATIONS = [
   PAGE_KEYS.escape,
+  PAGE_KEYS.palette,
   help('roving', '← →', 'Move and select', 'on tabs and segments', { group: 'Page' }),
   help('tab', 'Tab', 'Move focus (never taken by a shortcut)', null, { group: 'Page' }),
 ];
