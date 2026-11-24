@@ -97,6 +97,8 @@ export function lensViewFor(tab) {
 const VIEW_SELECTOR = '#osc-panel-analysis [role="tabpanel"]';
 const SLOT_ID = 'osc-lens-slot';
 const TOGGLE_ID = 'osc-lens-toggle';
+/** The navbar's Sonda button, from a tablet up (the status bar's toggle serves a phone). */
+const HEADER_ID = 'osc-lens-header';
 const CLOSE_ID = 'osc-lens-close';
 /** The status bar's Akce button: on a phone the Sonda button waits in its menu. */
 const MENU_ID = 'osc-sb-actions-toggle';
@@ -167,8 +169,8 @@ export function createLensPart({ relayout = () => {} } = {}) {
       if (LENS_VIEWS.includes(view)) this.setTab('analysis', view);
     },
     /**
-     * Close; focus returns to the status bar's Sonda button (on a phone, where it waits in the
-     * closed Akce menu, to the Akce button) unless `focus` is false.
+     * Close; focus returns to the Sonda button shown (the navbar's from a tablet up; on a phone
+     * the status bar's, or the Akce button whose closed menu holds it) unless `focus` is false.
      */
     lensClose({ focus = true } = {}) {
       if (!this.lensOpen) return;
@@ -177,10 +179,13 @@ export function createLensPart({ relayout = () => {} } = {}) {
       this.$nextTick(() => {
         relayout();
         if (!focus) return;
-        // The Sonda button, or the Akce button whose closed menu holds it on a phone.
-        const toggle = document.getElementById(TOGGLE_ID);
-        const shown = toggle && (!toggle.getClientRects || toggle.getClientRects().length > 0);
-        const target = shown ? toggle : document.getElementById(MENU_ID);
+        // The Sonda button shown (the navbar's from a tablet up, the status bar's otherwise), or
+        // the Akce button whose closed menu holds it on a phone.
+        const shownEl = (id) => {
+          const el = document.getElementById(id);
+          return el && (!el.getClientRects || el.getClientRects().length > 0) ? el : null;
+        };
+        const target = shownEl(HEADER_ID) || shownEl(TOGGLE_ID) || document.getElementById(MENU_ID);
         if (target) target.focus();
       });
     },

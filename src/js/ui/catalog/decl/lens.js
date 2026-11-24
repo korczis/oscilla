@@ -14,6 +14,14 @@ export default [
     related: ['lens'],
   }),
   defineComponent({
+    id: 'header.lens',
+    kind: 'switch',
+    label: 'Sonda',
+    docs: 'Otevře nebo zavře Sondu z navigační lišty od šířky tabletu; zvuk nechá hrát.',
+    state: 'ui.lensOpen',
+    related: ['lens', 'status.lens'],
+  }),
+  defineComponent({
     id: 'lens',
     kind: 'panel',
     label: 'Sonda',
