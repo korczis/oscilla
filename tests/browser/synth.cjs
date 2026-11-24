@@ -225,6 +225,14 @@
 //              chip brings the cards back (aria-pressed) and hides the bay, a section chip
 //              brings the cards back and lands its plate's heading below the sticky chip bar,
 //              the docked keys are visible and a tap on them sounds
+//   s-tabs     the tablist (axe 4.14 on #m=synth): axe finds no aria-required-parent,
+//              aria-required-children or listitem violation; the tabs (the panel's tabs from the
+//              source, in order) are the tablist's children, the selected one the only Tab stop,
+//              each controlling the tabpanel; from Panel, ArrowRight selects Engines (focus,
+//              aria-selected, yt=engines in the Synth's link, its engine chips shown),
+//              ArrowLeft goes back and then wraps to the last tab, ArrowRight wraps to the
+//              first, End and Home select the last and first. Fails on c3b15610 (each tab
+//              inside an <li>)
 //   s-xlfaces  V636 at 1536 x 1024: the cards and the bay side by side, each hit where drawn;
 //              no chip nav on the Panel tab, no Panel chip on the Engines tab, whose Patch bay
 //              chip hides no card
@@ -250,6 +258,9 @@ const DIST = path.join(ROOT, 'dist', 'index.html');
 const panelJacks = () => import(pathToFileURL(path.join(ROOT, 'src', 'js', 'synth', 'panels',
   'semi-mono.js')).href).then(({ default: p }) => p.modules
   .reduce((n, m) => n + p.jacksOf(m.id).length, 0));
+/** The panel's tabs in order (its declaration's tabs), read from the source, not the page. */
+const panelTabs = () => import(pathToFileURL(path.join(ROOT, 'src', 'js', 'synth', 'panels',
+  'semi-mono.js')).href).then(({ default: p }) => p.tabs.map((t) => t.id));
 /** What the panel's Insert says when it takes Master Output (synth/insert.js SYNTH_TEXT.took), up
  *  to the names it takes it from: read from the source, not copied, whatever its language. */
 const tookPrefix = () => import(pathToFileURL(path.join(ROOT, 'src', 'js', 'synth', 'insert.js'))
@@ -3007,6 +3018,79 @@ function defineChecks() {
     return { ok: m.scroll <= m.inner && m.small.length === 0 && m.tiny.length === 0
       && m.kb.bottom <= m.kb.h
       && m.kb.top > 0, ...m, bay, back, reach, chip, rmsDb: p.rmsDb };
+  });
+
+  // The Synth tablist (axe on #m=synth, 2026-11-24): each tab sat in an <li> under
+  // ul[role=tablist] (aria-required-parent x4, aria-required-children, listitem x4), every tab
+  // was a Tab stop and the arrows did nothing. The tabs are now the shared roving tablist of
+  // ui/app.js rovingKeydown (synthTabBind, as tab()): one Tab stop, the arrows select and wrap.
+  def('s-tabs', async ({ page }) => {
+    const ids = await panelTabs();
+    const n = ids.length;
+    const state = () => page.evaluate(() => {
+      const tabs = [...document.querySelectorAll('[role="tablist"] > [data-osc="synth.tab"]')];
+      const host = document.querySelector('[data-osc="synth.panel"]');
+      return { tabs: tabs.map((b) => b.dataset.value),
+        stops: tabs.filter((b) => b.tabIndex === 0).map((b) => b.dataset.value),
+        selected: tabs.filter((b) => b.getAttribute('aria-selected') === 'true')
+          .map((b) => b.dataset.value),
+        controls: [...new Set(tabs.map((b) => b.getAttribute('aria-controls')))],
+        focus: document.activeElement && document.activeElement.dataset
+          ? document.activeElement.dataset.value || null : null,
+        tab: window.OSCILLA.app.synthDebug().tab, link: window.OSCILLA.app.synthDebug().link,
+        hash: window.location.hash,
+        labelledBy: host.getAttribute('aria-labelledby'), hostId: host.id,
+        hostRole: host.getAttribute('role'),
+        engineChips: host.querySelectorAll('[data-engine]').length };
+    });
+    // The Synth's address is its link (Copy link writes it, docs/synth.md; the page's own
+    // location keeps #m=synth while the tabs change, as it did for a click before this check):
+    // it names the selected tab as yt= (Panel, the default, as no yt).
+    const yt = (h) => new URLSearchParams(h.replace(/^#/, '')).get('yt');
+    /** Tab `id` is selected, focused, the one Tab stop, in the Synth's link and shown. */
+    const isOn = (s, id) => s.tab === id && s.focus === id && s.selected.join() === id
+      && s.stops.join() === id && yt(s.link) === (id === 'panel' ? null : id)
+      && s.labelledBy === `osc-synth-tab-${id}`
+      && (id === 'engines' ? s.engineChips > 0 : id === 'panel' ? s.engineChips === 0 : true);
+    const log = [];
+    const press = async (key, id) => {
+      await page.keyboard.press(key);
+      let last = null;
+      await until(async () => {
+        last = await state();
+        return isOn(last, id);
+      }, { ms: 10000, what: `${key} selects the ${id} tab (focus, aria-selected, one Tab stop, `
+        + `yt= in the Synth's link, the panel)` }).catch((e) => {
+        throw new Error(`${e.message}; read ${JSON.stringify(last)}`);
+      });
+      log.push(`${key}->${id}`);
+    };
+
+    const axeRules = ['aria-required-parent', 'aria-required-children', 'listitem'];
+    await page.addScriptTag({ content: fs.readFileSync(require.resolve('axe-core/axe.min.js'),
+      'utf8') });
+    const axe = await page.evaluate(async (rules) => {
+      const r = await window.axe.run(document, { runOnly: { type: 'rule', values: rules } });
+      return { violations: r.violations.map((v) => `${v.id}: ${v.nodes.length}`),
+        passes: r.passes.map((v) => `${v.id}: ${v.nodes.length}`) };
+    }, axeRules);
+    const s0 = await state();
+    if (s0.tabs.join() !== ids.join() || axe.violations.length) {
+      return { ok: false, detail: 'the panel\'s tabs are the children of the tablist and axe '
+        + 'finds none of its three rules', ids, s0, axe };
+    }
+    if (s0.stops.join() !== 'panel' || s0.controls.join() !== s0.hostId
+      || s0.hostRole !== 'tabpanel') {
+      return { ok: false, detail: 'one Tab stop (Panel) and every tab controls the tabpanel', s0 };
+    }
+    await page.locator('#osc-synth-tab-panel').focus();
+    await press('ArrowRight', ids[1]);
+    await press('ArrowLeft', ids[0]);
+    await press('ArrowLeft', ids[n - 1]); // wraps to the last
+    await press('ArrowRight', ids[0]); // and back round to the first
+    await press('End', ids[n - 1]);
+    await press('Home', ids[0]);
+    return { ok: true, ids, log, axe };
   });
 
   // V636's xl negative case, rendered at 1536 x 1024 (not read from class names): both faces

@@ -88,6 +88,20 @@ export function createWorkbench(svc) {
     OSCILLA_VERSION,
     SWEEP_FORM,
     rovingKeydown,
+    /**
+     * Tab `id` of the Synth tab strip (x-bind): the one roving tabs model of tab() (ui/app.js),
+     * over the Synth's own state, synth.tab, which synthTab selects (synth/ui.js). The selected
+     * tab is the one Tab stop; arrows, Home and End go through rovingKeydown, which focuses and
+     * clicks the next tab, so a key selects as a click does.
+     */
+    synthTabBind(id) {
+      return {
+        ':aria-selected'() { return String(this.synth.tab === id); },
+        ':tabindex'() { return this.synth.tab === id ? 0 : -1; },
+        '@click'() { this.synthTab(id); },
+        '@keydown'(e) { rovingKeydown(e); },
+      };
+    },
     timeWindowMs: 5,
     announceText: '',
     // The playback bus's one playing state (C051, core/output-bus.js publishes it here in the
