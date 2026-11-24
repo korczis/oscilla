@@ -937,10 +937,10 @@ function createOscillaComponent(ui) {
   Object.defineProperty(cmp, 'init', {
     value() {
       // What leaving a workspace does to each owner is the playback bus's one table (C053:
-      // core/output-bus.js LEAVE_POLICY): a measurement stops, held keys are released, an
-      // armed-only Synth or Studio run is disarmed, the rest sounds on and the status bar says
-      // so. Registered first, so it reads every owner before another watcher of the workspace
-      // (the keys' dock folding releases them too) has changed it.
+      // core/output-bus.js LEAVE_POLICY, U133 under Q114): a running measurement stops, the rest
+      // sounds on (the Synth's Arm, the Studio, held keys included) and the status bar says so.
+      // Registered first, so it reads every owner before another watcher of the workspace has
+      // changed it.
       this.$watch('workspace', (ws, old) => bus.leave(old, ws));
       shellInit.call(this);
       this.measureInit();

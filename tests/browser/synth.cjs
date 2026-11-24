@@ -81,7 +81,7 @@
 //              the cable removed there: the EG 2 normal is back at 3.5 and the knob reads 3.50.
 //              Fails on 3c22d01a (the receiver brings it back at its declared 2)
 //   s-studio   Open in Studio: #m=studio, the panel's nodes selected, the same revision
-//   s-escape   Escape releases a held note; leaving the workspace disarms: runtime census 0
+//   s-escape   Escape releases a held note and disarms: the Studio then runs nothing (census 0)
 //   s-connect-escape K236 (329 R6): a pending connect from MG CV, its connection list shown,
 //              then Escape: the list is hidden with no Patch button left, and Enter on LPF
 //              Cutoff starts a new connect from there instead of patching MG into it.
@@ -90,14 +90,17 @@
 //   s-armstop  the Arm button follows the transport (review S1): Arm, then a transport Stop
 //              made outside the Synth while it is shown (page hide; before any Studio visit):
 //              the button reads Arm and Arm arms; Arm, the Studio and its Stop, back to the
-//              Synth: it reads Arm, Arm arms and a key sounds. Fails on 9cf786ac (Disarm stays)
+//              Synth: still armed (U133, Q114; K104 STOP keeps it armed), it reads Disarm;
+//              Escape in the Studio, back to the Synth: it reads Arm, Arm arms and a key
+//              sounds. Fails on 9cf786ac (Disarm stays)
 //   s-armed    K104 (desktop and phone): Arm by pointer (a tap on the phone) stops a playing
 //              Playground voice and checks the role=switch; Enter and Space on it disarm and
 //              arm, Escape disarms; armed and stopped, QWERTY A is held on the running Keys
-//              node and sounds. Desktop: leaving the Synth disarms (census 0); in the Studio a
-//              key arms it and the transport bar's armed indicator shows, PLAY plays, and STOP
-//              leaves the keys armed (indicator and Synth state) with A still sounding (the
-//              owner's 'STOP keeps it armed', 2026-11-03); leaving the Studio disarms it
+//              node and sounds. Desktop: leaving the Synth keeps it armed (U133, Q114); in the
+//              Studio a key plays it and the transport bar's armed indicator shows, PLAY plays,
+//              and STOP leaves the keys armed (indicator and Synth state) with A still sounding
+//              (the owner's 'STOP keeps it armed', 2026-11-03); back in the Synth it is still
+//              armed and its switch disarms it (census 0)
 //   s-svs      K226: a step-voltage sequencer on the panel's Keys Gate, row A into VCO 1's pitch;
 //              while the Studio plays, the Inspector's Krok button by pointer (tap on the phone)
 //              and keyboard steps it: each press says its step (Krok 1, 2, 3; a lost or refused
@@ -1670,15 +1673,27 @@ function defineChecks() {
     await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
     await readsArm(page, 'a transport Stop made outside the Synth reads Arm');
     await armedNow(page, 'Arm arms after a Stop made outside the Synth');
-    // The review's path: to the Studio, its Stop, back to the Synth.
-    await page.locator('[data-osc="nav.studio"]').click();
-    await until(() => page.evaluate(() => window.OSCILLA.app.workspace === 'studio'),
-      { ms: 10000, what: 'the Studio opens' });
+    // The review's path: to the Studio, its Stop, back to the Synth. Since U133 (the owner's
+    // Q114, 'Sound survives') leaving keeps the Synth armed, and the Studio's STOP keeps an
+    // armed run armed (K104, 'STOP keeps it armed'): the button still reads Disarm.
+    const to = async (ws) => {
+      await page.locator(`[data-osc="nav.${ws}"]`).click();
+      await until(() => page.evaluate((w) => window.OSCILLA.app.workspace === w, ws),
+        { ms: 10000, what: `the ${ws} workspace opens` });
+    };
+    await to('studio');
     await page.locator('[data-osc="studio.stop"]').click();
-    await page.locator('[data-osc="nav.synth"]').click();
-    await until(() => page.evaluate(() => window.OSCILLA.app.workspace === 'synth'),
-      { ms: 10000, what: 'back in the Synth' });
-    await readsArm(page, 'after the Studio and its Stop the button reads Arm');
+    await to('synth');
+    await until(async () => (await dbg(page)).armed && (await armText(page)) === 'Odpojit',
+      { ms: 10000, what: 'after the Studio and its Stop the keys stay armed: Disarm' });
+    // A Stop that disarms, made in the Studio (Escape: stop everything), read back here.
+    await to('studio');
+    await page.evaluate(() => document.activeElement && document.activeElement.blur());
+    await page.keyboard.press('Escape');
+    await until(() => page.evaluate(() => !window.OSCILLA.studio.transport.armed),
+      { ms: 10000, what: 'Escape in the Studio disarms the transport' });
+    await to('synth');
+    await readsArm(page, 'after Escape in the Studio the button reads Arm');
     await armedNow(page, 'Arm arms again after the Studio Stop');
     await hold(page, 'KeyA');
     const on = await sound(page, (q) => q.rmsDb > -40, 'the re-armed panel sounds');
@@ -1723,12 +1738,13 @@ function defineChecks() {
     await page.keyboard.up('KeyA');
     await silent(page, 'the key up releases it');
     if (size === 'phone') return { ok: role === 'switch', role, on: on.rmsDb };
-    // Linked: leaving the Synth disarms; in the Studio a key arms it, PLAY plays the document,
-    // and STOP stops the timeline while the keys stay armed: the transport bar's indicator and
-    // the Synth's own state both say armed, and a key still sounds.
+    // Linked: leaving the Synth keeps it armed (U133, the owner's Q114 'Sound survives'); in
+    // the Studio a key plays it and the transport bar shows armed, PLAY plays the document, and
+    // STOP stops the timeline while the keys stay armed: the transport bar's indicator and the
+    // Synth's own state both say armed, and a key still sounds.
     await page.locator('[data-osc="nav.studio"]').click();
-    await until(async () => (await counts(page)).runtimeNodes === 0 && !(await dbg(page)).armed,
-      { ms: 10000, what: 'leaving the Synth disarms: runtime census 0' });
+    await until(async () => (await counts(page)).runtimeNodes > 0 && (await dbg(page)).armed,
+      { ms: 10000, what: 'leaving the Synth keeps it armed: the runtime runs' });
     const badge = page.locator('[data-osc="studio.armed"]');
     await page.evaluate(() => {
       if (document.activeElement && document.activeElement !== document.body) {
@@ -1752,9 +1768,13 @@ function defineChecks() {
     const after = await sound(page, (q) => q.rmsDb > -40, 'a key after STOP still sounds');
     await page.keyboard.up('KeyA');
     await page.locator('[data-osc="nav.synth"]').click();
+    await until(async () => (await counts(page)).runtimeNodes > 0 && (await dbg(page)).armed
+      && (await sw.getAttribute('aria-checked')) === 'true',
+    { ms: 10000, what: 'leaving the Studio keeps it armed: the switch checked (U133)' });
+    await sw.click();
     await until(async () => (await counts(page)).runtimeNodes === 0 && !(await dbg(page)).armed
       && (await sw.getAttribute('aria-checked')) === 'false',
-    { ms: 10000, what: 'leaving the Studio disarms it: census 0, the switch unchecked' });
+    { ms: 10000, what: 'the switch disarms it: census 0, the switch unchecked' });
     return { ok: role === 'switch', role, on: on.rmsDb, after: after.rmsDb };
   });
 
@@ -2119,9 +2139,11 @@ function defineChecks() {
     await page.keyboard.press('Escape');
     const q = await silent(page, 'Escape releases it');
     await page.keyboard.up('KeyA');
+    // Escape is stop-all: it disarmed the Synth, so the Studio finds nothing running (leaving
+    // itself no longer disarms, U133, the owner's Q114 'Sound survives').
     await page.locator('[data-osc="nav.studio"]').click();
     await until(async () => (await counts(page)).runtimeNodes === 0,
-      { ms: 10000, what: 'leaving the Synth disarms: runtime census 0' });
+      { ms: 10000, what: 'after Escape nothing runs in the Studio: runtime census 0' });
     return { ok: !(await dbg(page)).armed, off: q.rmsDb, counts: await counts(page) };
   });
 
