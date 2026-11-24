@@ -1,0 +1,24 @@
+id: U144
+milestone: M124
+serves:
+  - "one-instrument#accessible-places"
+title: "A place change announces only a change, once"
+slug: "leave-announcement-only-on-change"
+priority: p3
+profile: implementation
+objective: "After U133 an armed Synth announces \"Syntezátor zůstává připravený…\" on every place change (screen-reader noise, docs/reconstruction/05 problem 14), and an announcement identical to the previous one is not re-announced because announceText does not change. The leave sentence is spoken when what sounds changed or when the user first leaves with something sounding, and a repeated announcement is re-armed so it is spoken."
+why: "Coordinator reviews of PRs #651 (U133) and #647 (U126), 2026-11-24."
+scope:
+  - "src/js/core/output-bus.js"
+  - "src/js/ui/"
+  - "tests/"
+depends_on: []
+acceptance_criteria:
+  - "A unit test of the leave announcement: two switches in a row with the same armed Synth announce once; an identical later announcement after a different one is spoken again."
+  - "axe and a live-region count in tests/browser/navigation.cjs: at most one polite announcement per switch."
+validation:
+  - "npm run verify"
+  - "node tests/browser/navigation.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-11-24

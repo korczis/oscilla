@@ -1,0 +1,22 @@
+id: U143
+milestone: M124
+serves:
+  - "one-instrument#keys-mean-one-thing"
+title: "The keyboard help names the octave that sounds"
+slug: "keyboard-help-names-sounding-octave"
+priority: p2
+profile: implementation
+objective: "Journeys J1 and U133/U126 measured key A sounding about 130.8 Hz (C3; the default Synth patch plays an octave down, 16') while the keyboard readout says \"A až ' hrají C4 až F5\" and the canvas labels A as C4. The readout and the key labels name the pitch that sounds for the instrument the keys play, derived from that instrument (never a constant)."
+why: "Coordinator reviews of PRs #651 (U133) and #647 (U126), 2026-11-24."
+scope:
+  - "src/js/midi/"
+  - "src/index.html"
+  - "tests/"
+depends_on: []
+acceptance_criteria:
+  - "A browser check: with the default Synth, the analyser peak of key A and the note the readout and the canvas name for A agree within one semitone; with a patch at 8' both move together."
+validation:
+  - "node tests/browser/midi.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-11-24

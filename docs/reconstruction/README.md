@@ -8,7 +8,7 @@ experience reconstruction".
 
 **Base.** `main` at `c3b15610`.
 
-**Plan.** Intent `one-instrument`, milestone M124, issues U123 to U140, owner decision Q114 and
+**Plan.** Intent `one-instrument`, milestone M124, issues U123 to U144, owner decision Q114 and
 ADR 0089.
 
 These are developer documents, so they are written in English (rule `project.czech-prose`).
@@ -63,3 +63,7 @@ Measure with `majordomus plan status`; this table is not the record.
 | Reload restores work | U138 | Q114 |
 | Keys over a running sequence | U139 | — |
 | No silent document rewrite by a key | U140 | — |
+| Synth leave code without callers | U141 | guarded verdict |
+| XY pad note survives a place change | U142 | — |
+| Keyboard help names the sounding octave | U143 | — |
+| A place change announces only a change | U144 | — |

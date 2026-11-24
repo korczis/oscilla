@@ -1,0 +1,24 @@
+id: U141
+milestone: M124
+serves:
+  - "one-instrument#nothing-obsolete"
+title: "The Synth's leave code that U133 left without callers goes"
+slug: "synth-leave-code-without-callers"
+priority: p3
+profile: implementation
+objective: "U133 (PR #651, owner decision Q114) made the leave policy keep the Synth armed across places, so synthLeave() in src/js/synth/ui.js and leave() in src/js/synth/studio-sink.js have no caller and the comment at src/js/synth/ui.js (~792) \"Leaving the Synth disarms it\" is stale. src/js/synth is a guarded path: a reviewer verdict is needed."
+why: "Coordinator reviews of PRs #651 (U133) and #647 (U126), 2026-11-24."
+scope:
+  - "src/js/synth/ui.js"
+  - "src/js/synth/studio-sink.js"
+  - "tests/"
+depends_on: []
+acceptance_criteria:
+  - "grep finds no definition of synthLeave or of the sink leave() in src/js/synth, and no comment saying leaving the Synth disarms it."
+  - "npm run verify and tests/browser/synth.cjs pass in three engines; a reviewer verdict (.ai/repo/reviews/<pr>.yaml) judges the guarded change."
+validation:
+  - "npm run verify"
+  - "node tests/browser/synth.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-11-24
