@@ -9,7 +9,7 @@
 // and every view that reflects them.
 //
 //   node tests/browser/journeys.cjs [--dist dist/index.html] [--browsers chromium,firefox,webkit]
-//                                   [--only journey-1-start:instrument,...]
+//                                   [--only journey-1-start:instrument,...] [--shots <dir>]
 //
 // Journeys (the owner's brief, items 1-6):
 //   journey-1-start:*     set parameters through the UI and start: instrument, sequencer,
@@ -19,6 +19,24 @@
 //                         sequencer filter; each control reached in the workspace that shows it
 //   journey-3-views:*     the status bar, the readouts, the Signal Path, the Spectrum and the
 //                         controls agree with the engine
+//   journey-3-views:sonda-*@desktop|phone   Sonda, the observed lens (src/js/ui/lens.js), at
+//                         1536x1024 and at 390x844 with touch: `synth` the status bar's Sonda
+//                         opens the sheet (aria-expanded, focus on Close); idle it says Nic
+//                         nehraje, offers no view and renders no chart host; QWERTY A held in
+//                         the Synth: it names the Synth (lensSubject of the source), the
+//                         Spectrum view is the analysis panel's one chart moved into the sheet
+//                         and drawn, the analyser peaks at the note's fundamental (130.8 or
+//                         261.6 Hz) and no requested marker is claimed; Escape from inside the
+//                         sheet closes it, focus returns to Sonda and the note sounds on, and
+//                         the next Escape stops the output; `studio` a PLAYed Studio run is named
+//                         Studio and plays on after the sheet's Escape, Close closes it and the
+//                         view is back in the panel; `layout` with a note held, a 420 px right
+//                         side sheet between the navbar and the status bar beside a workspace
+//                         that still takes a click, on the phone a bottom sheet of at most 60 %
+//                         of the height, every control 44 px or more, no text under 12 px;
+//                         `axe` axe-core on the open sheet (idle and sounding) and on the Sonda
+//                         button: no critical or serious violation. --shots <dir> saves the
+//                         sheet over the Synth and the Studio per browser and size
 //   journey-4-restart:*   ten stop/restart cycles of the instrument, the sequencer and the
 //                         Studio with a node census each time (the engine's own counts and an
 //                         independent census of every started source of the page's realtime
@@ -39,6 +57,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 const suite = require('./lib/suite.cjs');
 const { until, bounded } = require('./lib/wait.cjs');
 const op = require('./lib/oscilla-page.cjs');
@@ -649,6 +668,167 @@ function defineChecks() {
     } finally { await page.click('[data-osc="studio.stop"]'); }
   });
 
+
+  // ============================================================== 3b. Sonda, the observed lens
+  // Each check at 1536 x 1024 and at 390 x 844 with touch, on its own fresh page.
+  const lensDef = (id, hash, body) => {
+    for (const size of Object.keys(LENS_SIZES)) {
+      def(`journey-3-views:sonda-${id}@${size}`, async ({ browser }) => {
+        const ctx = await lensOpen(browser, size, hash);
+        try {
+          const v = await body({ page: ctx.page, size,
+            leg: `${browser.browserType().name()}-${size}` });
+          must(v.ok, `Sonda ${id} at ${size}`, v);
+          must(!ctx.errors.length, 'no page error', ctx.errors);
+          return v;
+        } finally { await ctx.context.close(); }
+      }, { own: true });
+    }
+  };
+  lensDef('synth', '#m=synth', async ({ page, size, leg }) => {
+    const { LENS_IDLE, lensSubject } = await lensModule();
+    await until(() => page.evaluate(() => !!document.querySelector('[data-osc="synth.bay.svg"]')),
+      { ms: LENS_LOAD_MS, what: 'the Synth panel is rendered' });
+    await (size === 'phone' ? page.tap('#osc-lens-toggle') : page.click('#osc-lens-toggle'));
+    const idle = await lensUntil(page, (s) => s.open && s.sheetShown && s.focus === 'osc-lens-close',
+      'Sonda opens with focus on its Close');
+    const idleOk = idle.expanded === 'true' && idle.subject === LENS_IDLE && idle.idleShown
+      && idle.views.length === 0 && !idle.hostShown && !idle.waveShown && !idle.spgShown;
+    // A note through the real keyboard path (the docked keys' QWERTY layer).
+    await page.locator('[data-osc="page.title"]').click();
+    await page.keyboard.down('KeyA');
+    const want = lensSubject({ owner: 'studio', synthArmed: true }).text;
+    await lensUntil(page, (s) => s.subject === want && s.views.length === 3,
+      `the sheet names ${want} and offers the observed views`);
+    await page.click('[data-osc="lens.view"][data-value="spectrum"]');
+    const drawn = await lensUntil(page, (s) => s.hostShown && s.inked > 200,
+      'the Spectrum is drawn inside the sheet');
+    const fundamentals = [C4 / 2, C4];
+    const p = await lensSound(page, (q) => q.rmsDb > -40 && q.peakHz
+      && fundamentals.some((hz) => Math.abs(q.peakHz - hz) <= 1.5 * q.binHz),
+    'the analyser peaks at the note\'s fundamental (130.8 or 261.6 Hz)');
+    const shot = await lensShot(page, `lens-synth-${leg}`);
+    // Escape from inside the sheet: it closes, and the held note sounds on.
+    await page.focus('[data-osc="lens.view"][data-value="spectrum"]');
+    await page.keyboard.press('Escape');
+    const closed = await lensUntil(page, (s) => !s.open && !s.sheetShown
+      && s.focus === 'osc-lens-toggle', 'Escape closes the sheet and focus returns to Sonda');
+    const on = await lensSound(page, (q) => q.rmsDb > -40, 'the held note sounds on');
+    // Closed: Escape is the page's stop again.
+    await page.keyboard.press('Escape');
+    const stopped = await until(() => page.evaluate(() => window.OSCILLA.bus.owner() === null),
+      { ms: LENS_UI_MS, what: 'with the sheet closed Escape stops the output' });
+    await page.keyboard.up('KeyA');
+    return { ok: idleOk && drawn.spectrumHosts === 1 && drawn.hostInSheet
+      && drawn.requested === null && closed.owner === 'studio' && on.rmsDb > -40 && stopped,
+    idle, drawn: { hosts: drawn.spectrumHosts, inSheet: drawn.hostInSheet, inked: drawn.inked,
+      requested: drawn.requested }, peakHz: p.peakHz, rmsDb: p.rmsDb, afterEscape: on.rmsDb,
+    shot };
+  });
+
+  lensDef('studio', '#m=studio', async ({ page, size, leg }) => {
+    const { lensSubject } = await lensModule();
+    await page.locator('[data-osc="page.title"]').click();
+    await (size === 'phone' ? page.tap('[data-osc="studio.play"]') : page.click('[data-osc="studio.play"]'));
+    await until(() => page.evaluate(() => window.OSCILLA.studio.transport.playing),
+      { ms: LENS_SOUND_MS, what: 'the Studio transport plays' });
+    await (size === 'phone' ? page.tap('#osc-lens-toggle') : page.click('#osc-lens-toggle'));
+    const want = lensSubject({ owner: 'studio' }).text;
+    const open = await lensUntil(page, (s) => s.open && s.subject === want
+      && s.focus === 'osc-lens-close', `the sheet names ${want}, focus on Close`);
+    await lensSound(page, (q) => q.rmsDb > -60, 'the Studio run is heard on the analyser');
+    const shot = await lensShot(page, `lens-studio-${leg}`);
+    await page.keyboard.press('Escape');
+    const closed = await lensUntil(page, (s) => !s.open && s.focus === 'osc-lens-toggle',
+      'Escape closes the sheet');
+    const playing = await page.evaluate(() => window.OSCILLA.studio.transport.playing);
+    const heard = await lensSound(page, (q) => q.rmsDb > -60, 'the Studio run sounds on');
+    // The Close button closes too, and the view returns to the analysis panel.
+    await (size === 'phone' ? page.tap('#osc-lens-toggle') : page.click('#osc-lens-toggle'));
+    await lensUntil(page, (s) => s.open, 'Sonda opens again');
+    await (size === 'phone' ? page.tap('#osc-lens-close') : page.click('#osc-lens-close'));
+    const home = await lensUntil(page, (s) => !s.open && s.focus === 'osc-lens-toggle',
+      'Close closes the sheet');
+    const inPanel = await page.evaluate(() => {
+      const view = document.querySelector('#osc-panel-analysis [role="tabpanel"]');
+      return !!view && view.querySelector('#osc-chart-spectrum') !== null;
+    });
+    await page.evaluate(() => window.OSCILLA.app.studioStop());
+    return { ok: open.expanded === 'true' && closed.owner === 'studio' && playing
+      && heard.rmsDb > -60 && home.expanded === 'false' && inPanel,
+    subject: open.subject, rmsDb: heard.rmsDb, inPanel, shot };
+  });
+
+  lensDef('layout', '#m=synth', async ({ page, size }) => {
+    await (size === 'phone' ? page.tap('#osc-lens-toggle') : page.click('#osc-lens-toggle'));
+    await lensUntil(page, (s) => s.open && s.sheetShown, 'the sheet opens');
+    // Sounding, so the sheet holds its views, the view buttons and the charts at full height.
+    await page.locator('[data-osc="page.title"]').click();
+    await page.keyboard.down('KeyA');
+    await lensUntil(page, (s) => s.views.length === 3 && s.waveShown, 'the views are shown');
+    const m = await page.evaluate(() => {
+      const r = (el) => el.getBoundingClientRect();
+      const sheet = document.getElementById('osc-lens');
+      const bar = document.querySelector('[data-osc="header"]');
+      const status = document.querySelector('footer[aria-label="Stavový řádek"]');
+      const controls = [...sheet.querySelectorAll('button')]
+        .filter((b) => b.getClientRects().length > 0)
+        .concat(document.getElementById('osc-lens-toggle'))
+        .map((b) => ({ id: b.id || b.dataset.value || b.textContent.trim(),
+          w: r(b).width, h: r(b).height }));
+      const texts = [...sheet.querySelectorAll('h2, p, button, span')]
+        .filter((el) => el.getClientRects().length > 0 && el.textContent.trim())
+        .map((el) => parseFloat(getComputedStyle(el).fontSize));
+      const s = r(sheet);
+      const title = document.querySelector('[data-osc="page.title"]');
+      const t = r(title);
+      const hit = document.elementFromPoint(t.left + t.width / 2, t.top + t.height / 2);
+      return { sheet: { left: s.left, right: s.right, top: s.top, bottom: s.bottom,
+        width: s.width, height: s.height }, vw: innerWidth, vh: innerHeight,
+      barBottom: r(bar).bottom, statusTop: r(status).top, controls,
+      minText: Math.min(...texts), scrollX: document.documentElement.scrollWidth > innerWidth,
+      titleTakesClick: !!hit && (hit === title || title.contains(hit)) };
+    });
+    await page.keyboard.up('KeyA');
+    let ok;
+    if (size === 'desktop') {
+      ok = Math.abs(m.sheet.width - 420) <= 1 && Math.abs(m.sheet.right - m.vw) <= 1
+        && Math.abs(m.sheet.top - m.barBottom) <= 1 && Math.abs(m.sheet.bottom - m.statusTop) <= 1
+        && m.titleTakesClick;
+    } else {
+      ok = m.sheet.height <= 0.6 * m.vh + 0.5 && Math.abs(m.sheet.bottom - m.vh) <= 1
+        && m.controls.every((c) => c.w >= 44 && c.h >= 44) && m.minText >= 12 && !m.scrollX;
+    }
+    return { ok, ...m };
+  });
+
+  lensDef('axe', '#m=synth', async ({ page, size }) => {
+    const source = fs.readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
+    await page.addScriptTag({ content: source });
+    await (size === 'phone' ? page.tap('#osc-lens-toggle') : page.click('#osc-lens-toggle'));
+    await lensUntil(page, (s) => s.open && s.sheetShown, 'the sheet opens');
+    const audit = () => page.evaluate(async () => {
+      const r = await window.axe.run(document.getElementById('osc-lens'),
+        { resultTypes: ['violations'] });
+      return r.violations.filter((v) => v.impact === 'critical' || v.impact === 'serious')
+        .map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`);
+    });
+    const idle = await audit();
+    await page.locator('[data-osc="page.title"]').click();
+    await page.keyboard.down('KeyA');
+    await lensUntil(page, (s) => s.views.length === 3, 'the sheet offers the views');
+    const sounding = await audit();
+    const toggle = await page.evaluate(async () => {
+      const r = await window.axe.run(document.getElementById('osc-lens-toggle'),
+        { resultTypes: ['violations'] });
+      return r.violations.filter((v) => v.impact === 'critical' || v.impact === 'serious')
+        .map((v) => v.id);
+    });
+    await page.keyboard.up('KeyA');
+    return { ok: idle.length === 0 && sounding.length === 0 && toggle.length === 0, idle,
+      sounding, toggle };
+  });
+
   // ============================================================== 4. stop and restart
   def('journey-4-restart:instrument', async ({ page }) => {
     await act.click(page, '#osc-wave-sine');
@@ -1157,6 +1337,124 @@ function defineChecks() {
   });
 
   return checks;
+}
+
+// ------------------------------------------------------------------------------ Sonda probes
+// Sonda, the observed lens (src/js/ui/lens.js): journey-3-views:sonda-*. Every sound is judged
+// on the engine's analyser after the ceiling (window.OSCILLA.engine), never on the DOM alone.
+const LENS_SIZES = { desktop: { width: 1536, height: 1024 }, phone: { width: 390, height: 844 } };
+const LENS_LOAD_MS = 60000;
+const LENS_SOUND_MS = 8000; // a note's attack, the transport's start and the analyser's smoothing
+const LENS_UI_MS = 5000; // a click reaching Alpine's next render
+const LENS_SHOTS = arg('shots', '');
+const C4 = 261.6256;
+/** The source's own decisions and labels (never copied): imported from src/js/ui/lens.js. */
+const lensModule = () => import(pathToFileURL(path.join(ROOT, 'src', 'js', 'ui', 'lens.js')).href);
+
+/** The analyser after the ceiling: RMS (dB rel full scale) and the loudest bin 40 Hz-5 kHz. */
+function lensProbe() {
+  const e = window.OSCILLA.engine;
+  const a = e.analyser;
+  if (!a) return { rmsDb: -240, peakHz: null };
+  const t = new Float32Array(a.fftSize);
+  a.getFloatTimeDomainData(t);
+  let s = 0;
+  for (const x of t) s += x * x;
+  const f = new Float32Array(a.frequencyBinCount);
+  a.getFloatFrequencyData(f);
+  const sr = e.ctx.sampleRate;
+  const binHz = sr / a.fftSize;
+  let best = -1;
+  const [loHz, hiHz] = [40, 5000]; // the band searched for the note's peak, in analyser bins
+  const hi = Math.min(f.length - 1, Math.floor(hiHz / binHz));
+  for (let i = Math.ceil(loHz / binHz); i <= hi; i++) {
+    if (best < 0 || f[i] > f[best]) best = i;
+  }
+  return { rmsDb: 10 * Math.log10(s / t.length + 1e-24), peakHz: best * binHz, binHz,
+    peakDb: f[best] };
+}
+const lensRead = (page) => page.evaluate(lensProbe);
+
+/** What the sheet shows now, read from the page. */
+function lensSheet() {
+  const q = (s) => document.querySelector(s);
+  const sheet = q('[data-osc="lens"]');
+  const shown = (el) => !!el && el.getClientRects().length > 0
+    && getComputedStyle(el).visibility !== 'hidden';
+  const host = q('#osc-chart-spectrum');
+  const canvas = host && host.querySelector('canvas');
+  let inked = 0;
+  if (canvas && canvas.width && canvas.height) {
+    // Pixels of the drawn plot (axes, grid and trace) on the canvas's 2D context.
+    const ctx = canvas.getContext('2d');
+    const d = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    for (let i = 3; i < d.length; i += 16) if (d[i] > 0) inked += 1;
+  }
+  const app = window.OSCILLA.app;
+  const chart = window.OSCILLA.labs.analysis && window.OSCILLA.labs.analysis.chart;
+  return {
+    open: app.lensOpen,
+    expanded: q('[data-osc="status.lens"]').getAttribute('aria-expanded'),
+    sheetShown: shown(sheet),
+    subject: (q('[data-osc="lens.subject"]').textContent || '').trim(),
+    idleShown: shown(q('#osc-lens-idle')),
+    views: [...document.querySelectorAll('[data-osc="lens.view"]')].filter(shown)
+      .map((b) => b.dataset.value),
+    focus: document.activeElement ? document.activeElement.id : null,
+    spectrumHosts: document.querySelectorAll('#osc-chart-spectrum').length,
+    hostInSheet: !!host && sheet.contains(host),
+    hostShown: shown(host),
+    waveShown: shown(q('#osc-chart-waveform')),
+    spgShown: shown(q('#osc-chart-analysis-spg')),
+    inked,
+    requested: chart ? chart.options.requested : 'no chart',
+    owner: window.OSCILLA.bus.owner(),
+  };
+}
+const lensState = (page) => page.evaluate(lensSheet);
+/** Poll the sheet until `pred(state)` holds; returns the state that held. */
+async function lensUntil(page, pred, what, ms = LENS_UI_MS) {
+  let last = null;
+  try {
+    await until(async () => {
+      last = await lensState(page);
+      return pred(last);
+    }, { ms, what });
+  } catch (e) {
+    e.message = `${e.message}; last: ${JSON.stringify(last)}`;
+    throw e;
+  }
+  return last;
+}
+async function lensSound(page, pred, what) {
+  let last = null;
+  await until(async () => {
+    last = await lensRead(page);
+    return pred(last);
+  }, { ms: LENS_SOUND_MS, what });
+  return last;
+}
+
+async function lensShot(page, name) {
+  if (!LENS_SHOTS) return null;
+  fs.mkdirSync(LENS_SHOTS, { recursive: true });
+  const file = path.join(LENS_SHOTS, `${name}.png`);
+  await page.screenshot({ path: file });
+  return file;
+}
+
+
+/** A fresh page at `hash` at a Sonda size (the phone with touch), ready, audio unlocked. */
+async function lensOpen(browser, size, hash) {
+  const context = await browser.newContext({ viewport: LENS_SIZES[size],
+    hasTouch: size === 'phone' });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  await page.goto(`${pathToFileURL(DIST).href}${hash}`);
+  await until(() => page.evaluate(() => document.documentElement.dataset.ready === 'true'
+    && !!(window.OSCILLA && window.OSCILLA.app)), { ms: LENS_LOAD_MS, what: `${hash} is ready` });
+  return { context, page, errors };
 }
 
 // ------------------------------------------------------------------------------ runner
