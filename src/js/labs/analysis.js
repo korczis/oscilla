@@ -24,6 +24,8 @@ export function nyquistOptionLabel(sampleRate) {
 /**
  * mount(rootEl, adapter, opts) → { update(state), dispose(), chart }
  * opts.createChart replaces createSpectrumChart (the unit tests inject a chart double).
+ * opts.requestedShown() → false hides the requested-frequency marker (the Sonda sheet, while
+ * the sounding owner has no known requested frequency: ui/lens.js lensMarkerShown).
  */
 export function mount(rootEl, adapter, opts = {}) {
   const host = rootEl.querySelector('#osc-chart-spectrum');
@@ -36,7 +38,8 @@ export function mount(rootEl, adapter, opts = {}) {
     scale: activeValue(rootEl, '[data-osc="analysis.freqScale"]') === 'linear' ? 'linear' : 'log',
     maxHz: maxFrequencyFor(maxSel ? maxSel.value : 20000, rate()) || 20000,
     getAnalyser: () => adapter.getAnalyser(),
-    getRequested: () => adapter.requestedFrequency(),
+    getRequested: () => (opts.requestedShown && !opts.requestedShown() ? null
+      : adapter.requestedFrequency()),
     getA4: () => (adapter.getA4 ? adapter.getA4() : 440),
   });
   let lastRate = rate();

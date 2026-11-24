@@ -7,7 +7,9 @@
 // the keys then play it) and Replace graph. Every action is one dispatch, one undo entry; a
 // refusal shows the store's sentence and changes nothing. Text is set through textContent.
 //
-//   mountPatchBrowser(host, svc) -> { open({ instrument, from }), refresh() }
+//   mountPatchBrowser(host, svc) -> { open({ instrument, from, query }), refresh() }
+//     query: the search's text to open with (the command palette's riff, U130); left as it was
+//     when not given
 //     svc: { store, userPatches() -> Promise<[{ id, patch }]>, target() -> node id | null,
 //            announce(text, { assertive }), show() -> Promise (opens the dialog holding host),
 //            savePatch(patch) -> Promise (the library's save, no silent overwrite),
@@ -210,9 +212,14 @@ export function mountPatchBrowser(host, svc) {
   }
 
   return {
-    async open({ instrument = '', from: who = 'studio' } = {}) {
+    async open({ instrument = '', from: who = 'studio', query = null } = {}) {
       from = who;
       f.instrument = instrument;
+      if (typeof query === 'string') {
+        f.query = query;
+        search.value = query;
+        active = null;
+      }
       status.textContent = '';
       render();
       await svc.show();

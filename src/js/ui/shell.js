@@ -301,20 +301,29 @@ export function groupCrumbOf(id) {
   return label && label !== WORKSPACE_LABELS[id] ? label : '';
 }
 
-const fold =(s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
-  .trim();
+/** Lower case without diacritics ("Měření" -> "mereni"): what the search compares. */
+export const fold = (s) => String(s || '').toLowerCase().normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '').trim();
+
+/** The words of a text as the search reads them: folded, split at anything but a-z and 0-9. */
+export function searchWords(text) {
+  return fold(text).split(/[^a-z0-9]+/).filter(Boolean);
+}
+
+/** Does every word of `query` start one of `words` (searchWords)? An empty query matches. */
+export function queryMatches(words, query) {
+  return searchWords(query).every((part) => words.some((word) => word.startsWith(part)));
+}
 
 /** Does workspace `id` match the search `query`? Every word must start a word of it. */
 export function navMatches(id, query) {
-  const q = fold(query);
-  if (!q) return true;
+  if (!searchWords(query).length) return true;
   const w = byId(id);
   if (!w) return false;
   const group = w.group ? GROUP_REGISTRY[w.group].label : '';
   // The group's id too: the English group name ("analyze") still finds its workspaces (U106).
-  const words = fold(`${w.label} ${group} ${w.group || ''} ${w.id} ${w.words || ''}`)
-    .split(/[^a-z0-9]+/);
-  return q.split(/\s+/).every((part) => words.some((word) => word.startsWith(part)));
+  return queryMatches(searchWords(`${w.label} ${group} ${w.group || ''} ${w.id} ${w.words || ''}`),
+    query);
 }
 
 /** The workspace ids a query finds, in navigation order. */
@@ -568,13 +577,21 @@ export function createShell({ get = storageGet, set = storageSet } = {}) {
     navSearchResults() {
       return navSearch(this.navQuery);
     },
-    /** Enter in the search opens the first workspace it finds. */
+    /**
+     * Enter in the search opens the command palette (ui/palette.js, U130) with its text: the
+     * workspaces it finds come first, then every template, preset, riff, action, Learn topic
+     * and component that matches; Enter there opens the active one.
+     */
     navSearchGo() {
-      const [first] = navSearch(this.navQuery);
-      if (!first) return;
+      const query = this.navQuery;
       this.navQuery = '';
       if (this.drawerOpen) this.closeDrawer();
-      this.setWorkspace(first, { focusHeading: true });
+      this.paletteShow({ query });
+    },
+    /** The search's announcement: how many workspaces match, and what Enter does. */
+    navSearchStatus() {
+      return this.navQuery.trim() ? `Nalezené pracovní plochy: ${navSearch(this.navQuery).length}`
+        + '; Enter otevře paletu se vším, co hledání najde' : '';
     },
   };
 }

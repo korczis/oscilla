@@ -10,12 +10,15 @@
 //                         released it stops, a programmed pattern triggers once
 //     'keys.dock'         Alt+K, where the docked keyboard yields to a pad that owns the notes
 //                         (K171, midi/dock-yield.js): unfold or fold the keys, as its handle does
+//     'palette.open'      Ctrl+K and Cmd+K (Meta+K), every workspace and focus: open the command
+//                         palette (ui/palette.js, U130), or close it when it is open; not over
+//                         another open modal dialog, where the key passes on
 //     'notes.record'      R, while a Record switch is shown (K223, ui/kinds/record-switch.js: the
 //                         Drums tab, a notes clip's step grid in the Studio): it presses it
 //   pageKeyContext(cmp) -> { workspace, view }   what the dispatcher scopes keys by; the
 //     Synth's view is its tab ('panel', 'engines', 'xy')
-//   Escape, Space and R are declared once in ui/shortcuts.js PAGE_KEYS: each binding here
-//   spreads its declaration, which is also the row the Keyboard shortcuts dialog lists (D05).
+//   Escape, Space, R and Ctrl/Cmd+K are declared once in ui/shortcuts.js PAGE_KEYS: each binding
+//   here spreads its declaration, which is also the row the Keyboard shortcuts dialog lists (D05).
 import { PAGE_KEYS, instrumentTakesSpace } from '../shortcuts.js';
 import { DOCK_KEY } from '../../midi/dock-yield.js';
 
@@ -26,6 +29,10 @@ export const pageKeyContext = (cmp) => ({ workspace: cmp.workspace,
 const shownRecordSwitch = () => (typeof document === 'undefined' ? null
   : [...document.querySelectorAll('[data-notes-record]')]
     .find((b) => b.getClientRects().length > 0) || null);
+
+/** A modal dialog other than the command palette is open (the palette then leaves Ctrl+K). */
+const otherModalOpen = () => typeof document !== 'undefined'
+  && !!document.querySelector('dialog[open][aria-modal="true"]:not(#osc-dlg-palette)');
 
 export function bindPageKeys({ keys, cmp, stopSequencer, stopAll = null }) {
   const offs = [
@@ -46,6 +53,8 @@ export function bindPageKeys({ keys, cmp, stopSequencer, stopAll = null }) {
       when: () => !!cmp.kbdDockYields, group: 'Keyboard',
       label: 'Rozložit nebo složit klávesnici tam, kde noty hraje pad (její úchyt)',
       run: () => cmp.kbdDockToggle() }),
+    keys.bind({ ...PAGE_KEYS.palette, when: () => !!cmp.paletteOpen || !otherModalOpen(),
+      run: () => cmp.paletteToggle() }),
     keys.bind({ ...PAGE_KEYS.record, when: () => !!shownRecordSwitch(),
       run: () => shownRecordSwitch().click() }),
   ];

@@ -49,6 +49,11 @@
         "text": "Stop immediately; close menus and dialogs"
       },
       {
+        "id": "palette",
+        "keys": "Ctrl/⌘ K",
+        "text": "Paleta příkazů: hledání míst, akcí, šablon, předvoleb a výuky"
+      },
+      {
         "id": "roving",
         "keys": "← →",
         "where": "on tabs and segments",
@@ -98,6 +103,11 @@
     "note": null,
     "global": [
       {
+        "id": "palette",
+        "keys": "Ctrl/⌘ K",
+        "text": "Paleta příkazů: hledání míst, akcí, šablon, předvoleb a výuky"
+      },
+      {
         "id": "roving",
         "keys": "← →",
         "where": "on tabs and segments",
@@ -145,6 +155,11 @@
         "id": "escape",
         "keys": "Esc",
         "text": "Stop immediately; close menus and dialogs"
+      },
+      {
+        "id": "palette",
+        "keys": "Ctrl/⌘ K",
+        "text": "Paleta příkazů: hledání míst, akcí, šablon, předvoleb a výuky"
       },
       {
         "id": "roving",
@@ -209,6 +224,11 @@
         "text": "Stop immediately; close menus and dialogs"
       },
       {
+        "id": "palette",
+        "keys": "Ctrl/⌘ K",
+        "text": "Paleta příkazů: hledání míst, akcí, šablon, předvoleb a výuky"
+      },
+      {
         "id": "roving",
         "keys": "← →",
         "where": "on tabs and segments",
@@ -269,6 +289,11 @@
         "id": "escape",
         "keys": "Esc",
         "text": "Stop immediately; close menus and dialogs"
+      },
+      {
+        "id": "palette",
+        "keys": "Ctrl/⌘ K",
+        "text": "Paleta příkazů: hledání míst, akcí, šablon, předvoleb a výuky"
       },
       {
         "id": "roving",
@@ -333,6 +358,11 @@
         "text": "Stop immediately; close menus and dialogs"
       },
       {
+        "id": "palette",
+        "keys": "Ctrl/⌘ K",
+        "text": "Paleta příkazů: hledání míst, akcí, šablon, předvoleb a výuky"
+      },
+      {
         "id": "roving",
         "keys": "← →",
         "where": "on tabs and segments",
@@ -393,6 +423,11 @@
         "id": "escape",
         "keys": "Esc",
         "text": "Stop immediately; close menus and dialogs"
+      },
+      {
+        "id": "palette",
+        "keys": "Ctrl/⌘ K",
+        "text": "Paleta příkazů: hledání míst, akcí, šablon, předvoleb a výuky"
       },
       {
         "id": "roving",
@@ -481,6 +516,11 @@
         "text": "Stop immediately; close menus and dialogs"
       },
       {
+        "id": "palette",
+        "keys": "Ctrl/⌘ K",
+        "text": "Paleta příkazů: hledání míst, akcí, šablon, předvoleb a výuky"
+      },
+      {
         "id": "roving",
         "keys": "← →",
         "where": "on tabs and segments",
@@ -543,6 +583,11 @@
         "text": "Stop immediately; close menus and dialogs"
       },
       {
+        "id": "palette",
+        "keys": "Ctrl/⌘ K",
+        "text": "Paleta příkazů: hledání míst, akcí, šablon, předvoleb a výuky"
+      },
+      {
         "id": "roving",
         "keys": "← →",
         "where": "on tabs and segments",
@@ -590,6 +635,11 @@
         "id": "escape",
         "keys": "Esc",
         "text": "Stop immediately; close menus and dialogs"
+      },
+      {
+        "id": "palette",
+        "keys": "Ctrl/⌘ K",
+        "text": "Paleta příkazů: hledání míst, akcí, šablon, předvoleb a výuky"
       },
       {
         "id": "roving",
@@ -800,6 +850,11 @@
     "note": "They apply while Studio has focus and no text field is being edited. Every drag has a keyboard path: arrows move nodes, C lists the inputs a node can connect to, and the Inspector edits positions and clip times. A focused timeline item is activated by Enter; Space plays or stops there too.",
     "global": [
       {
+        "id": "palette",
+        "keys": "Ctrl/⌘ K",
+        "text": "Paleta příkazů: hledání míst, akcí, šablon, předvoleb a výuky"
+      },
+      {
         "id": "roving",
         "keys": "← →",
         "where": "on tabs and segments",
@@ -904,6 +959,11 @@
         "text": "Stop immediately; close menus and dialogs"
       },
       {
+        "id": "palette",
+        "keys": "Ctrl/⌘ K",
+        "text": "Paleta příkazů: hledání míst, akcí, šablon, předvoleb a výuky"
+      },
+      {
         "id": "roving",
         "keys": "← →",
         "where": "on tabs and segments",
@@ -951,6 +1011,11 @@
         "id": "escape",
         "keys": "Esc",
         "text": "Stop immediately; close menus and dialogs"
+      },
+      {
+        "id": "palette",
+        "keys": "Ctrl/⌘ K",
+        "text": "Paleta příkazů: hledání míst, akcí, šablon, předvoleb a výuky"
       },
       {
         "id": "roving",

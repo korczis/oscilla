@@ -18,6 +18,7 @@ import {
 } from './shell.js';
 import { pageRelatedOf, relatedLang, relatedText } from './cross-links.js';
 import { emptyPredicateHolds } from './empty-states.js';
+import { createPalettePart } from './palette.js';
 
 const THEME_KEY = 'oscilla.v2.theme';
 const ANALYSIS_TAB_KEY = 'oscilla.v2.analysisTab';
@@ -299,14 +300,8 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
         }
       });
       this.shellInit();
-      document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && Object.values(this.menus).some(Boolean)) {
-          const open = Object.keys(this.menus).find((k) => this.menus[k]);
-          this.closeMenus();
-          const btn = this.$root.querySelector(`[data-osc-menu-button="${open}"]`);
-          if (btn) btn.focus();
-        }
-      });
+      this.paletteInit();
+      document.addEventListener('keydown', (e) => this.menuEscape(e));
     },
 
     emit(kind, key, value) {
@@ -602,6 +597,23 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
     closeMenus() {
       Object.keys(this.menus).forEach((k) => { this.menus[k] = false; });
     },
+    /**
+     * Escape with a header menu open closes it, gives focus back to its button and consumes the
+     * key (as ui/keys/roving.js does): the page's Escape (stopAll, ui/keys/clients.js) on the
+     * window never sees it, so the sound plays on. With no menu open the key passes untouched.
+     * Returns true when the key was consumed.
+     */
+    menuEscape(e) {
+      if (e.key !== 'Escape') return false;
+      const open = Object.keys(this.menus).find((k) => this.menus[k]);
+      if (!open) return false;
+      e.preventDefault();
+      e.stopPropagation();
+      this.closeMenus();
+      const btn = this.$root.querySelector(`[data-osc-menu-button="${open}"]`);
+      if (btn) btn.focus();
+      return true;
+    },
     menuButton(name) {
       return {
         'data-osc-menu-button': name,
@@ -677,6 +689,8 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
   // The shell part (sidebar, drawer, groups, search); merged by descriptor so its getter stays
   // a getter (main.js composes the same way).
   Object.defineProperties(ui, Object.getOwnPropertyDescriptors(createShell()));
+  // The command palette (U130): its open state, query and active row, the same way.
+  Object.defineProperties(ui, Object.getOwnPropertyDescriptors(createPalettePart()));
   return ui;
 }
 

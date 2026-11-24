@@ -14,8 +14,6 @@
 //   armed     whether the computer keyboard is armed when the workspace first opens: armed
 //             everywhere, so the keys play at once in every workspace as in the Synth (the
 //             owner's decision of 2026-11-05 on K178); Arm switches them off and on
-//   leave     the sink method run when the workspace is left (the Studio disarms an armed-only
-//             run, K176), or null
 //   editors   a selector of the workspace's editing surfaces whose letters are shortcuts (the
 //             Studio graph's C connect, the timeline's keys): an armed key pressed while the
 //             focus is inside one is the editor's, not a note (K178, census
@@ -55,14 +53,14 @@ export const STUDIO_EDITOR_MIN_PX = 360;
 export const SYNTH_CONTENT_MIN_PX = 60 + 3 * 44;
 
 /** Every workspace that is not listed: the one instrument, armed, the dock folded (K247). */
-export const DEFAULT_ROUTE = Object.freeze({ plays: 'keysInstrument', armed: true, leave: 'leave',
-  editors: null, yieldsTo: null, folded: true });
+export const DEFAULT_ROUTE = Object.freeze({ plays: 'keysInstrument', armed: true, editors: null,
+  yieldsTo: null, folded: true });
 
 export const KEY_ROUTES = Object.freeze({
   // The Playground keeps the keys under its panels (not docked): they play the one instrument.
-  playground: Object.freeze({ plays: 'keysInstrument', armed: true, leave: 'leave', editors: null,
+  playground: Object.freeze({ plays: 'keysInstrument', armed: true, editors: null,
     yieldsTo: null }),
-  synth: Object.freeze({ plays: 'synthSink', armed: true, leave: null, editors: null,
+  synth: Object.freeze({ plays: 'synthSink', armed: true, editors: null,
     yieldsTo: 'xy-pad',
     // U100: on a short phone the docked keys (256 px) took the whole main area (235 px at
     // 320 x 568). The Synth keeps, below the page header, its sticky section chips (60 px) and
@@ -72,7 +70,7 @@ export const KEY_ROUTES = Object.freeze({
     keepsRoom: Object.freeze({ toolbar: '[data-osc="page.header"]',
       editorMin: SYNTH_CONTENT_MIN_PX, stackedBelow: 0,
       keptBy: '[data-osc="synth.panel"][data-keeps-dock]' }) }),
-  studio: Object.freeze({ plays: 'keysInstrument', armed: true, leave: 'leave',
+  studio: Object.freeze({ plays: 'keysInstrument', armed: true,
     editors: '[data-osc="studio.graph.viewport"], [data-osc="studio.timeline"]',
     yieldsTo: null,
     // The Studio's toolbar and its editor: the graph's header and two rows of node cards over

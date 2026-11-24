@@ -30,7 +30,8 @@
 //                 390 px with the drawer closed
 //   shell-search  Find a workspace (navbar, and the drawer's on a phone) filters the sidebar
 //                 by name or by what a workspace does, says when nothing matches, and Enter
-//                 opens the first match
+//                 opens the command palette with its text (U130), whose Enter opens the first
+//                 match
 //   shell-a11y    in both themes at 1536 and 390 px: text of the navbar, the sidebar entries
 //                 (the active one too), the page header and the search field has a contrast of
 //                 at least 4.5:1 against what it sits on; a sidebar entry reached by keyboard
@@ -555,6 +556,10 @@ function defineChecks() {
     want(none, 'a query that finds nothing says so');
     await page.fill('[data-osc="header.search"]', 'seq');
     await page.press('[data-osc="header.search"]', 'Enter');
+    // U130: Enter opens the command palette with the text, the Sequencer its first row; its
+    // Enter opens it.
+    await page.waitForSelector('#osc-dlg-palette[open]', { timeout: 5000 });
+    await page.keyboard.press('Enter');
     const went = await until(() => H.state(page)
       .then((x) => (x.workspace === 'sequencer' ? x : null)),
       { ms: 5000, what: 'Enter opens the first match' }).catch(() => H.state(page));
@@ -574,6 +579,8 @@ function defineChecks() {
       await p.waitForSelector('[data-osc="sidebar.search"]', { state: 'visible', timeout: 5000 });
       await p.fill('#osc-nav-search-drawer', 'graph');
       await p.press('[data-osc="sidebar.search"]', 'Enter');
+      await p.waitForSelector('#osc-dlg-palette[open]', { timeout: 5000 });
+      await p.keyboard.press('Enter');
       const st = await until(() => H.state(p).then((x) => (x.workspace === 'studio' ? x : null)),
         { ms: 5000, what: 'the drawer search opens Studio' }).catch(() => H.state(p));
       const g = await p.evaluate(shellGeometry);

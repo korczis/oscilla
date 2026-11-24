@@ -74,10 +74,11 @@ export const FAMILIES = Object.freeze([
     'kbdBase', 'kbdVelocity', 'kbdMore', 'kbdDockExpanded', 'synthTab', 'synthPadShown',
     'synthDock',
     'aboutLaterOpen', 'summaryOpen', 'summaryFull', 'midiResponse',
-    'midiClockOut'],
-  'The theme (oscilla.theme), the sidebar collapse (oscilla.v2.sidebar) and the expanded '
-    + 'navigation groups (oscilla.v2.navGroups) in local storage and the workspace in the URL '
-    + 'key m; every other key lasts for the page only.',
+    'midiClockOut', 'lensOpen', 'analysisTab', 'paletteOpen', 'paletteQuery', 'paletteActive'],
+  'The theme (oscilla.theme), the sidebar collapse (oscilla.v2.sidebar), the expanded '
+    + 'navigation groups (oscilla.v2.navGroups) and the analysis tab (oscilla.v2.analysisTab) '
+    + 'in local storage and the workspace in the URL key m; every other key lasts for the page '
+    + 'only.',
   'ui/app.js, ui/shell.js, ui/navigation.js, ui/workbench.js and the view that owns the key'),
   // ui/patch-browser.js mountPatchBrowser: the filters (query, instrument, tag), the active
   // patch of the list and the name typed for a preset to save.
