@@ -277,17 +277,6 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
     },
 
     /**
-     * Leaving workspace `old` runs its key route's leave on its sink (KEY_ROUTES: the Studio
-     * releases its keys and disarms an armed-only run, studio-sink.js, K176). Called by the
-     * playback bus's leave policy (C053, LEAVE_POLICY 'studio'), never by a watcher of its own.
-     */
-    midiRouteLeave(old) {
-      const { plays, leave } = routeOf(old);
-      const s = leave && typeof this[plays] === 'function' && this[plays]();
-      if (s && typeof s[leave] === 'function') s[leave]();
-    },
-
-    /**
      * A Control Change from an input (V506): while the Synth is shown, the panel's knob of its
      * slot moves (synth/midi-cc.js) and the Synth's status line says what changed, without an
      * announcement per message; elsewhere no surface reads a CC and it changes nothing.
