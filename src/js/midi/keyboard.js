@@ -15,7 +15,7 @@
 // release (blur, hide, Escape) lets go of every note.
 
 /** Physical key -> semitones above the octave's C (the A key). */
-import { WORKSPACE_IDS } from '../ui/shell.js';
+import { LETTER_PLACES } from './routes.js';
 
 export const NOTE_KEYS = Object.freeze({
   KeyA: 0, KeyW: 1, KeyS: 2, KeyE: 3, KeyD: 4, KeyF: 5, KeyT: 6, KeyG: 7, KeyY: 8, KeyH: 9,
@@ -33,10 +33,11 @@ export const KEY_LABELS = Object.freeze(Object.fromEntries(
     code.startsWith('Key') ? code.slice(3) : { Semicolon: ';', Quote: '\'' }[code]]),
 ));
 
-/** The views the keyboard plays in, each with its own Arm switch: every workspace (K247, the
- *  owner's order of 2026-11-15: one keyboard, the same everywhere, playing the one instrument). */
-export const KEYBOARD_VIEWS = WORKSPACE_IDS;
-/** The link key that arms (1) or disarms (0) the keyboard of the view a link opens. */
+/** The views the computer's letter keys play in (U134, the owner's Q114: the instrument places
+ *  only, under one global switch), from the one route table (routes.js letters). The docked
+ *  keys still show in every workspace and play by pointer there (K247). */
+export const KEYBOARD_VIEWS = LETTER_PLACES;
+/** The link key that switches the letter keys on (1) or off (0) for the page a link opens. */
 export const KEYBOARD_LINK_KEY = 'kbd';
 
 export const DEFAULT_BASE = 60;      // the A key plays C4 (MIDI 60)

@@ -147,13 +147,17 @@ Every workspace has the same keyboard (plan issues K026, K178, K247): it plays t
 instrument a MIDI input plays, with the same limits and refusals; a refusal says "Noty z
 klávesnice nehrají, dokud …" instead of "MIDI noty".
 
-- **Armed everywhere.** The keys are armed when a workspace first opens (Q105); **Odpojit
-  klávesy** switches them off in that workspace only, and a link with `kbd=1` or `kbd=0` arms
-  or disarms the workspace it opens. The key leaves the address with the next workspace change.
+- **Letter keys in the instrument places, one switch.** The computer's letter keys play only
+  in the Synth, the Studio and the Playground (Generátor), the rows of `src/js/midi/routes.js`
+  with `letters` (U134, the owner's Q114, replacing Q105's "armed everywhere"; WCAG 2.1.4).
+  Every other workspace stays silent to them. One switch, **Klávesnice hraje** in the status
+  bar (`role=switch`), turns them off and on everywhere and is kept per browser
+  (`oscilla.v2.letterKeys`); a link with `kbd=1` or `kbd=0` sets it for the page without
+  storing it. The key leaves the address with the next workspace change.
 - **One dock.** The keyboard docks over the bottom edge of every workspace but the Playground,
   whose keys stay under its panels. On a page that is not an instrument (Measure, the labs,
-  About and the others) it starts folded to its handle, **Keyboard**, and the computer keys
-  still play; the handle unfolds the same keys.
+  About and the others) it starts folded to its handle, **Keyboard**; the handle unfolds the
+  same keys, which play there by pointer (the letter keys do not).
 - **The run ends with the page.** The first key arms the instrument; leaving the workspace ends
   that armed run (a run started with PLAY sounds on).
 - **The keys**, by physical position (`KeyboardEvent.code`), so QWERTZ and AZERTY keyboards play

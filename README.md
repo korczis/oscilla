@@ -1328,6 +1328,7 @@ Browser storage holds only these keys and one database, `oscilla-experiments` (v
 | localStorage | `oscilla.presets` | Your saved presets (the instrument and the Filter, Envelope, Additive and Phase & Stereo settings; not the sequence) |
 | localStorage | `oscilla.v2.theme` | Light or dark theme |
 | localStorage | `oscilla.v2.analysisTab` | The last analysis tab |
+| localStorage | `oscilla.v2.letterKeys` | Whether the computer's letter keys play notes (the Klávesnice hraje switch in the status bar) |
 | sessionStorage | `oscilla.history` | Recently played configurations with the lab settings they were played with (this tab only) |
 | sessionStorage | `oscilla.safetyNoticeCollapsed` | Whether the safety notice was collapsed |
 | IndexedDB | `oscilla-experiments`, object store `experiments` | Your saved experiments, in the exported file form |

@@ -151,7 +151,7 @@ test('keysShown is the dock rule: keys drawn wherever the dock is docked, never 
     const c = Object.defineProperties({}, Object.getOwnPropertyDescriptors(ui));
     c.workspace = workspace;
     c.synth = { tab };
-    c.kbdArmed = { ...c.kbdArmed, [workspace]: armed };
+    c.kbdLetters = armed; // the one switch (U134)
     c.kbdNoteOwner = owner;
     c.kbdDockExpanded = expanded;
     c.kbdDockDecided = decided;

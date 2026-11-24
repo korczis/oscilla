@@ -164,11 +164,12 @@ const STEP_GRID_DECLARATIONS = [
     { scope: { workspace: 'synth' }, group: 'Kroková mřížka' }),
   PAGE_KEYS.record,
 ];
-// The keyboard (K026, src/js/midi/keyboard.js) in the views it is armed in, by physical key
-// (the same places on QWERTZ and AZERTY). It never takes Space, nor a key with Ctrl, Meta or
-// Alt. Armed in Studio, these letters play instead of Studio's A, C, F and T. The one keyboard
-// plays in every workspace (K247): its rows are in every view.
-const KEYBOARD_WHERE = 'with the keyboard armed (Připravit klávesy, or a link with kbd=1)';
+// The keyboard (K026, src/js/midi/keyboard.js) in the views its letter keys play in, by physical
+// key (the same places on QWERTZ and AZERTY). It never takes Space, nor a key with Ctrl, Meta or
+// Alt. Armed in Studio, these letters play instead of Studio's A, C, F and T. The letter keys
+// play only in the instrument places (U134, Q114: KEYBOARD_VIEWS, from midi/routes.js): its
+// rows are in those views only.
+const KEYBOARD_WHERE = 'se zapnutým přepínačem Klávesnice hraje (nebo s odkazem kbd=1)';
 const keyboard = (id, shown, label) => help(id, shown, label, KEYBOARD_WHERE,
   { shownIn: KEYBOARD_VIEWS, group: 'Klávesnice' });
 const KEYBOARD_DECLARATIONS = [

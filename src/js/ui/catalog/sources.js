@@ -61,8 +61,8 @@ export const FAMILIES = Object.freeze([
     'ui/measure/run.js, ui/measure/session.js and measurement/engine.js'),
   // ui/app.js (workspace, theme, menus), ui/shell.js (navExpanded, navQuery, drawerOpen,
   // sidebarCollapsed), ui/workbench.js (labFlags, seqPlaying), labs/mic-analyzer.js
-  // (micCompare), ui/studio/timeline-editor.js (timelineSnap), midi/keyboard-ui.js (kbdArmed,
-  // kbdBase, kbdVelocity, kbdMore, kbdDockExpanded: the dock unfolded by its handle, K171),
+  // (micCompare), ui/studio/timeline-editor.js (timelineSnap), midi/keyboard-ui.js (kbdLetters,
+  // the letter keys' switch, U134; kbdBase, kbdVelocity, kbdMore, kbdDockExpanded: the dock unfolded by its handle, K171),
   // synth/ui.js (synthTab), synth/view/pads.js (synthPadShown: the pad a phone shows, K220),
   // synth/dock.js (synthDock: the
   // picker's open menu and the dock's oscillator), ui/about.js (aboutLaterOpen),
@@ -70,15 +70,15 @@ export const FAMILIES = Object.freeze([
   // midi/ui.js (midiResponse: call and response on, V503; midiClockOut: the output
   // that follows the transport, V510).
   family('ui', ['workspace', 'theme', 'menus', 'navExpanded', 'navQuery', 'drawerOpen',
-    'sidebarCollapsed', 'labFlags', 'seqPlaying', 'micCompare', 'timelineSnap', 'kbdArmed',
+    'sidebarCollapsed', 'labFlags', 'seqPlaying', 'micCompare', 'timelineSnap', 'kbdLetters',
     'kbdBase', 'kbdVelocity', 'kbdMore', 'kbdDockExpanded', 'synthTab', 'synthPadShown',
     'synthDock',
     'aboutLaterOpen', 'summaryOpen', 'summaryFull', 'midiResponse',
     'midiClockOut', 'lensOpen', 'analysisTab'],
-  'The theme (oscilla.theme), the sidebar collapse (oscilla.v2.sidebar), the expanded '
-    + 'navigation groups (oscilla.v2.navGroups) and the analysis tab (oscilla.v2.analysisTab) '
-    + 'in local storage and the workspace in the URL key m; every other key lasts for the page '
-    + 'only.',
+  'Motiv (oscilla.theme), sbalení postranního panelu (oscilla.v2.sidebar), rozbalené skupiny '
+    + 'navigace (oscilla.v2.navGroups), karta analýzy (oscilla.v2.analysisTab) a přepínač '
+    + 'písmenových kláves (oscilla.v2.letterKeys, U134) v místním úložišti, pracovní plocha '
+    + 'v klíči URL m; každý další klíč platí jen pro stránku.',
   'ui/app.js, ui/shell.js, ui/navigation.js, ui/workbench.js and the view that owns the key'),
   // ui/patch-browser.js mountPatchBrowser: the filters (query, instrument, tag), the active
   // patch of the list and the name typed for a preset to save.

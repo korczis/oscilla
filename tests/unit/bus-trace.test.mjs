@@ -161,10 +161,10 @@ test('C050 trace: a refused claim is a step with who refused it', () => {
 test('C050 trace: the arms run through the bus (a mutation that bypasses it fails)', () => {
   const src = (f) => readFileSync(new URL(`../../${f}`, import.meta.url), 'utf8');
   const SYNTH_ARM = /synthArm\(\) \{[\s\S]*?this\.busArmed\('studio', true\)[\s\S]*?t\.arm\(\)/;
-  const KEYS_ARM = /kbdToggle\(\) \{[\s\S]*?bus\.armed\(OWNER\.notes, this\.kbdArmed\[v\]\)/;
+  const KEYS_ARM = /kbdToggle\(\) \{[\s\S]*?bus\.armed\(OWNER\.notes, this\.kbdLetters\)/;
   const arms = [
     ['src/js/synth/ui.js', SYNTH_ARM, `this.busArmed('studio', true);`],
-    ['src/js/midi/keyboard-ui.js', KEYS_ARM, 'bus.armed(OWNER.notes, this.kbdArmed[v]);'],
+    ['src/js/midi/keyboard-ui.js', KEYS_ARM, 'bus.armed(OWNER.notes, this.kbdLetters);'],
   ];
   for (const [f, re, call] of arms) {
     assert.match(src(f), re, `${f} arms through the bus`);

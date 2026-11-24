@@ -8,7 +8,8 @@
 // - A key releases the note it started, whatever the octave meanwhile; repeats are ignored;
 //   a pointer glides; every source lights the keys and releaseAll lets go of everything.
 // - The on-screen keys: 2 or 3 octaves that follow the octave, the black keys hit first.
-// - kbd=1 arms the view a link opens and leaves the address with the first workspace change;
+// - kbd=1 switches the letter keys on for the page (U134) and leaves the address with the first
+//   workspace change;
 //   the Keyboard shortcuts dialog lists the keys in the Playground and the Studio only.
 //
 //   node --test tests/unit/midi/keyboard.test.mjs
@@ -147,7 +148,9 @@ test('the on-screen keys: 2 or 3 octaves that follow the octave, black keys hit 
 
 test('the link key arms the view a link opens and leaves with the first workspace change', () => {
   assert.equal(KEYBOARD_LINK_KEY, 'kbd');
-  assert.deepEqual([...KEYBOARD_VIEWS], [...WORKSPACE_IDS], 'every workspace (K247)');
+  // U134 (Q114): the letter keys' views are the instrument places of the route table.
+  assert.deepEqual([...KEYBOARD_VIEWS].sort(), ['playground', 'studio', 'synth']);
+  assert.ok(KEYBOARD_VIEWS.every((ws) => WORKSPACE_IDS.includes(ws)));
   assert.ok(HASH_DOMAINS.includes('keyboard'), 'one dispatcher reads it (ADR 0045)');
   assert.equal(new URLSearchParams(hashForWorkspace('m=playground&kbd=1', 'playground'))
     .get('kbd'), '1', 'kept while the workspace stays');
@@ -157,7 +160,7 @@ test('the link key arms the view a link opens and leaves with the first workspac
     .get('kbd'), null);
 });
 
-test('the shortcuts dialog lists the keyboard in every keyboard view', () => {
+test('the shortcuts dialog lists the letter keys in the views they play in (U134)', () => {
   for (const ws of WORKSPACES) {
     const ids = shortcutHelp(ws).rows.map((r) => r.id).filter((id) => id.startsWith('keyboard-'));
     const want = KEYBOARD_VIEWS.includes(ws)

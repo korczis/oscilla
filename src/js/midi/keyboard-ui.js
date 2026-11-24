@@ -3,9 +3,12 @@
 // the note layer (src/js/midi/notes.js), the same path as a MIDI input. Composed by
 // src/js/midi/ui.js, which calls kbdInit() from midiInit().
 //
-// - Armed per view: the Playground and the Studio each have their own arm switch (kbdArmed),
-//   and the link key `kbd` (#m=playground&kbd=1, #m=studio&kbd=1) arms the view it opens.
-//   Elsewhere the computer keyboard plays nothing.
+// - The letter keys play only in the instrument places (U134, the owner's Q114 'Instrument
+//   places + switch'; routes.js letters): the Synth, the Studio and the Playground. One global
+//   switch (kbdLetters, 'Klávesnice hraje' in the status bar, role=switch) turns them off and
+//   on everywhere, kept per browser (LETTERS_KEY); the link key `kbd` (kbd=1, kbd=0) sets it for
+//   the page without storing it. Elsewhere the computer keyboard plays nothing; the docked keys
+//   play by pointer wherever they show.
 // - Armed, the keys of keyboard.js play; Space never (ADR 0050). A key held in a text field, a
 //   select or an open dialog is left alone, and so is any key with Ctrl, Meta or Alt.
 // - Held notes sound past the safety limit while held and are released on window blur, page
@@ -26,14 +29,53 @@ import {
 } from './keyboard.js';
 import { drawKeys, keyColours, keyLayout, noteAt } from './keyboard-view.js';
 import { routeOfHash } from '../ui/navigation.js';
-import { armedDefaults, keysShown, routeOf } from './routes.js';
+import { WORKSPACE_IDS, WORKSPACE_LABELS } from '../ui/shell.js';
+import { keysShown, lettersPlay, routeOf } from './routes.js';
 import { mountDockYield } from './dock-yield.js';
 import { OWNER, notesRefusedSentences } from '../core/output-bus.js';
+import { localStore } from '../core/storage.js';
 
 /** What a refused keyboard note says, per owner: the one output-owner table's (C036). */
 export const KEYBOARD_REFUSED = notesRefusedSentences('keyboard');
 
 const KEYS_HEIGHT = 132; // CSS px of the on-screen keys
+
+/** Where the global switch of the letter keys is kept (U134): 'off', or absent for on. */
+export const LETTERS_KEY = 'oscilla.v2.letterKeys';
+
+/** The switch as this browser keeps it: on unless it was switched off (no storage: on; the
+ *  never-throwing wrapper of core/storage.js). */
+export function readLetters() {
+  return localStore.get(LETTERS_KEY) !== 'off';
+}
+
+/** Keep the switch for this browser; true when it was stored. */
+export function writeLetters(on) {
+  return localStore.set(LETTERS_KEY, on ? 'on' : 'off');
+}
+
+/** The instrument places by their shell labels, in the shell's order: 'Playground, Studio a
+ *  Synth' (derived from routes.js letters, never typed). */
+export const LETTER_PLACE_NAMES = (() => {
+  const names = KEYBOARD_VIEWS.map((id) => WORKSPACE_LABELS[id] || id);
+  return names.length > 1 ? `${names.slice(0, -1).join(', ')} a ${names.at(-1)}` : names.join('');
+})();
+
+/** The status bar's Pro toggle (Flowbite toggle on a role=switch button, U134): one class list
+ *  for the button and one for its track, bound as kbdSwitch, so the markup carries them once. */
+export const KBD_SWITCH = Object.freeze({
+  button: 'group inline-flex min-h-11 items-center gap-2 rounded-lg border-0 bg-transparent px-1 '
+    + 'text-sm font-medium text-gray-900 focus:outline-none focus-visible:ring-2 '
+    + 'focus-visible:ring-primary-300 dark:text-white md:min-h-9',
+  // One literal per knob class, so scripts/czech-prose.mjs reads no sentence in the list of the
+  // Flowbite toggle knob, and Tailwind still finds every class whole.
+  track: ['relative h-6 w-11 shrink-0 rounded-full bg-gray-200 dark:bg-gray-700',
+    'after:absolute', 'after:start-[2px]', 'after:top-[2px]', 'after:h-5', 'after:w-5',
+    'after:rounded-full', 'after:border', 'after:border-gray-300', 'after:bg-white',
+    'after:transition', "after:content-['']", 'dark:after:border-gray-600',
+    'group-aria-checked:bg-primary-600', 'group-aria-checked:after:translate-x-full',
+    'group-aria-checked:after:border-white'].join(' '),
+});
 
 // The docked keys' frame (kbdDockClass), a Pro bottom bar above the status bar.
 const KBD_DOCK = 'fixed inset-x-0 bottom-[var(--osc-statusbar-h)] z-30 max-h-[45vh] '
@@ -116,7 +158,10 @@ export function createKeyboardUi({ win = window, bus = null } = {}) {
   };
 
   return {
-    kbdArmed: armedDefaults(), // per workspace, from the one route table (midi/routes.js)
+    // The one global switch of the letter keys (U134, Q114), kept per browser; where they play
+    // is the route table's (routes.js letters), never this flag's.
+    kbdLetters: readLetters(),
+    kbdSwitch: KBD_SWITCH,
     kbdBase: 60,
     kbdVelocity: 100,
     kbdHeld: '',
@@ -134,9 +179,9 @@ export function createKeyboardUi({ win = window, bus = null } = {}) {
     // draws the keys docked over a room the dock then folds (read where the route keepsRoom).
     kbdDockDecided: false,
 
-    /** The view the keyboard belongs to now: every workspace (K247), else null. */
+    /** The view the docked keys belong to now: every workspace (K247), else null. */
     get kbdView() {
-      return KEYBOARD_VIEWS.includes(this.workspace) ? this.workspace : null;
+      return WORKSPACE_IDS.includes(this.workspace) ? this.workspace : null;
     },
     /** The keys dock over the page's bottom edge, the same component in every workspace (the
      *  owner's reports of 2026-11-03 and 2026-11-15, K247); the Playground keeps them under its
@@ -162,20 +207,31 @@ export function createKeyboardUi({ win = window, bus = null } = {}) {
         && keysShown({ route, owner: this.kbdNoteOwner, userExpanded: this.kbdDockExpanded })
         && (this.kbdView !== 'studio' || this.kbdArmedHere);
     },
+    /** Whether a letter key plays a note here: the one arm decision (routes.js lettersPlay). */
     get kbdArmedHere() {
-      const v = this.kbdView;
-      return !!v && !!this.kbdArmed[v];
+      return lettersPlay(this.kbdView, this.kbdLetters);
     },
-    /** What the readout says: armed or not, the keys' range, the velocity. */
+    /** The switch's title: what it does and where the letter keys play (U134). */
+    get kbdSwitchTitle() {
+      return `Klávesnice počítače hraje noty jen v nástrojových místech (${LETTER_PLACE_NAMES}); `
+        + `teď ${this.kbdLetters ? 'zapnuto' : 'vypnuto'}.`;
+    },
+    /** What the readout says: whether the letter keys play here, the keys' range, the velocity. */
     get kbdReadout() {
       const range = this.kbdRange;
+      const touch = `Klávesy na obrazovce hrají ${range}. Síla úhozu ${this.kbdVelocity}.`;
       // One instrument everywhere (K247): the readout names no page, only what the keys do.
-      return this.kbdArmedHere
-        ? `Klávesy jsou připravené: A až ' hrají ${range} na nástroji Studia. `
+      if (this.kbdArmedHere) {
+        return `Klávesy jsou připravené: A až ' hrají ${range} na nástroji Studia. `
           + `Síla úhozu ${this.kbdVelocity}. Z / X oktáva, C / V síla úhozu; `
-          + 'Esc uvolní všechny noty.'
-        : `Klávesy nejsou na této stránce připravené: připravte je a hrajte ${range} `
-          + `z klávesnice počítače. Síla úhozu ${this.kbdVelocity}.`;
+          + 'Esc uvolní všechny noty.';
+      }
+      if (!routeOf(this.kbdView).letters) {
+        return 'Klávesnice počítače tu nehraje, jen v nástrojových místech '
+          + `(${LETTER_PLACE_NAMES}). ${touch}`;
+      }
+      return 'Klávesnice počítače je vypnutá přepínačem Klávesnice hraje ve stavovém řádku. '
+        + touch;
     },
     /** The on-screen keys, for assistive technology (the canvas is an image of them). */
     get kbdLabel() {
@@ -237,21 +293,25 @@ export function createKeyboardUi({ win = window, bus = null } = {}) {
         cmp.$watch('workspace', () => { if (view) view.resize(); });
       }
 
-      // The link key: `kbd=1` arms the view the link opens, `kbd=0` disarms it.
+      // The link key sets the global switch for the page (U134): `kbd=1` on, `kbd=0` off; it is
+      // not stored, so the switch the user set comes back with the next load.
       if (typeof cmp.navRegister === 'function') {
         cmp.navRegister('keyboard', (hash) => {
           const q = new URLSearchParams(String(hash || '').replace(/^#/, ''));
           if (!q.has(KEYBOARD_LINK_KEY)) return null;
           const r = routeOfHash(hash);
           const v = r ? r.workspace : 'playground';
-          if (!KEYBOARD_VIEWS.includes(v)) return null;
-          const armed = q.get(KEYBOARD_LINK_KEY) !== '0';
-          cmp.kbdArmed[v] = armed;
+          const on = q.get(KEYBOARD_LINK_KEY) !== '0';
+          cmp.kbdLetters = on;
           // The domain answers, as every link does (surface-census routes).
           if (typeof cmp.notify === 'function') {
-            cmp.notify('info', armed ? 'Klávesy připravené z odkazu' : 'Klávesy odpojené z odkazu',
-              armed ? 'Klávesy počítače hrají nástroj Studia; nic nezazní, dokud nestisknete '
-                + 'klávesu.' : 'Klávesy počítače na této stránce nehrají.');
+            const said = !on
+              ? 'Klávesnice počítače nehraje noty, dokud ji nezapnete ve stavovém řádku.'
+              : (lettersPlay(v, true) ? 'Klávesnice počítače hraje nástroj Studia; nic nezazní, '
+                + 'dokud nestisknete klávesu.' : 'Klávesnice počítače hraje jen v nástrojových '
+                + `místech (${LETTER_PLACE_NAMES}), tady ne.`);
+            cmp.notify('info', on ? 'Klávesnice zapnutá z odkazu' : 'Klávesnice vypnutá z odkazu',
+              said);
           }
           return true;
         });
@@ -295,13 +355,13 @@ export function createKeyboardUi({ win = window, bus = null } = {}) {
       return notes ? notes.silenceEngine() : 0;
     },
 
-    /** Arm or disarm the computer keyboard in the view in sight. */
+    /** The global switch of the letter keys (U134): off silences them in every workspace, on
+     *  lets them play in the instrument places; kept for this browser. */
     kbdToggle() {
-      const v = this.kbdView;
-      if (!v) return;
-      this.kbdArmed[v] = !this.kbdArmed[v];
-      if (bus) bus.armed(OWNER.notes, this.kbdArmed[v]); // a step of the bus's trace (C050)
-      if (!this.kbdArmed[v]) kbdReleaseKeys(); // the keys' notes, never a pad's
+      this.kbdLetters = !this.kbdLetters;
+      writeLetters(this.kbdLetters);
+      if (bus) bus.armed(OWNER.notes, this.kbdLetters); // a step of the bus's trace (C050)
+      if (!this.kbdLetters) kbdReleaseKeys(); // the keys' notes, never a pad's
     },
 
     /** An on-screen control: 'octave-down' | 'octave-up' | 'velocity-down' | 'velocity-up'. */

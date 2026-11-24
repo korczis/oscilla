@@ -2812,8 +2812,9 @@ function defineChecks() {
             h: vp ? vp.clientHeight : 0, seen: rec.sizes[rec.sizes.length - 1],
             dock: getComputedStyle(document.documentElement).getPropertyValue('--osc-dock-h')
               .trim(),
+            // U134: the status bar's one switch of the letter keys (aria-checked).
             armed: document.querySelector('[data-osc="keyboard.arm"]')
-              .getAttribute('aria-pressed') === 'true',
+              .getAttribute('aria-checked') === 'true',
             frames: rec.frames, bad: rec.bad.slice() };
         });
         const agree = (v) => v.z !== null && v.z === v.model;
@@ -2836,7 +2837,7 @@ function defineChecks() {
         const r = {};
         const load = await settled('model zoom == applied zoom after load', (v) => v.z !== 1);
         r.load = load;
-        // The state the Studio opens in decides which toggle docks the keys (Q105: armed).
+        // The state the Studio opens in decides which toggle docks the keys (Q114: on there).
         const startDocked = load.armed;
         // A template opened while the keys are docked: fitted, the two zooms agree throughout.
         const dockedLoad = async () => {

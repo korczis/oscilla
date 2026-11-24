@@ -855,13 +855,13 @@ claims:
     note: 'Issue V507; the decisions are ADR 0058''s V507 note. The profiles (src/data/midi-devices.json) are written by scripts/midi/derive-devices.mjs; the monitor is src/js/midi/monitor.js; tests/browser/midi.cjs (midi-seam-monitor) drives the dialog through stub inputs named after a KeyLab mkII 61''s ports. The owner''s KeyLab mkII 61 and BeatStep Pro were listed live with their roles on 2026-11-15; their SysEx identity replies match the profiles.'
 
   - id: one-keyboard-everywhere
-    claim: 'In every workspace the computer keys, the on-screen keys and MIDI play the one instrument (the Studio document''s note target, else the Synth panel in the same document), armed at once with one Arm switch per page, from the same docked keyboard (folded to its handle on a page that is not an instrument); leaving a workspace ends the keys'' armed-only run.'
+    claim: 'In every workspace the on-screen keys and MIDI play the one instrument (the Studio document''s note target, else the Synth panel in the same document) from the same docked keyboard (folded to its handle on a page that is not an instrument); the computer''s letter keys play it only in the instrument places, the Synth, the Studio and the Playground, under one global switch in the status bar (U134, the owner''s Q114).'
     source: .ai/repo/adrs/0058-midi-is-an-optional-local-input-layer-over-the-audio-engine.md
     implementation: src/js/midi/routes.js
     test: tests/unit/keys-routes.test.mjs
     status: guaranteed
     responsibility: product
-    note: 'Issue K247 (the owner''s order of 2026-11-15); the decisions are ADR 0058''s K247 note. midi/ui.js centralSink resolves the instrument; tests/browser/midi.cjs (midi-seam-notes, keyboard-qwerty, keyboard-everywhere, midi-seam-sink) drive it in the page. Measured before: 4 behaviours in 13 workspaces, 10 of them playing nothing.'
+    note: 'Issue K247 (the owner''s order of 2026-11-15); the decisions are ADR 0058''s K247 note. midi/ui.js centralSink resolves the instrument; tests/browser/midi.cjs (midi-seam-notes, keyboard-qwerty, keyboard-everywhere, midi-seam-sink) drive it in the page, and keys-instrument-places and letter-keys-switch the letter keys'' places and switch (U134; tests/unit/letter-keys-places.test.mjs). Measured before: 4 behaviours in 13 workspaces, 10 of them playing nothing.'
 
   - id: midi-transport-clock
     claim: 'A controller''s transport plays the workspace in view: MIDI Start, Continue and Stop and a DAW port''s Play, Stop, Rewind and Cycle drive the Sequencer''s own transport in the Sequencer and the Studio''s elsewhere, and an incoming MIDI clock''s tempo is measured and shown without the transport following it.'

@@ -81,14 +81,14 @@
 //                     config…" opens the file picker
 //   experiment-row-keyboard  (H004 B14) a saved experiment's row body is a focusable button:
 //                     Enter opens the record in the detail, Space opens it too
-//   keyboard-link     (K026) the link key `kbd` arms the keyboard of the view a link opens:
-//                     `#m=playground&kbd=1` arms the Playground (Arm keys pressed, the keys
-//                     shown) and the key leaves the address with the first workspace change;
-//                     `#m=studio&kbd=1` arms the Studio, and a link set in the page arms the
-//                     Playground beside it; `#m=measure&kbd=1` arms Measure, whose keyboard is
-//                     shown (K247: the one keyboard in every workspace);
-//                     every other workspace keeps the state it opens with (read from a plain
-//                     page: armed everywhere since Q105), so a link changes only its own
+//   keyboard-link     (K026, U134) the link key `kbd` sets the letter keys' one switch for the
+//                     page and never stores it: `#m=playground&kbd=1` plays in the Playground
+//                     (the status bar's switch checked, the keys shown) and the key leaves the
+//                     address with the first workspace change; `#m=studio&kbd=1` plays in the
+//                     Studio, and a link set in the page, `kbd=0`, switches them off; Measure,
+//                     plain or with `kbd=1`, shows its docked keys (K247) but its letter keys
+//                     play nothing (the owner's Q114, replacing Q105 'armed everywhere'); a
+//                     plain Synth page after the links plays (nothing was stored)
 //   escape-menu-keeps-sound  Escape with More open closes it and gives focus back to its
 //                     button while a latched tone sounds on (the page's Escape, stopAll, never
 //                     sees the press); a second Escape, no menu open, stops the tone
@@ -1757,17 +1757,17 @@ function defineChecks() {
     const read = (page) => page.evaluate(() => {
       const a = window.OSCILLA.app;
       const el = document.querySelector('[data-osc="keyboard"]');
-      const arm = document.querySelector('[data-osc="keyboard.arm"]');
-      return { workspace: a.workspace, armed: { ...a.kbdArmed }, here: a.kbdArmedHere,
+      const sw = document.querySelector('[data-osc="keyboard.arm"]');
+      return { workspace: a.workspace, letters: a.kbdLetters, here: a.kbdArmedHere,
         shown: !!el && el.getClientRects().length > 0,
-        pressed: arm ? arm.getAttribute('aria-pressed') : null, hash: window.location.hash };
+        checked: sw ? sw.getAttribute('aria-checked') : null, hash: window.location.hash };
     });
-    // The arm state each workspace opens with (Q105: armed everywhere, read from the page, not
-    // assumed): a kbd=1 link arms the workspace it names and leaves every other one as it was.
+    // U134 (the owner's Q114, replacing Q105 'armed everywhere'): the letter keys play only in
+    // the instrument places under one global switch; the link key sets that switch for the page
+    // (kbd=1 on, kbd=0 off) and never stores it. Measure, no instrument place, never plays.
     const plain = await H.open(ctx, `${ctx.baseUrl}#m=measure`);
-    const def = (await read(plain)).armed;
+    const m0 = await read(plain);
     await plain.close();
-    const same = (armed, ws) => armed[ws] === def[ws];
     const play = await H.open(ctx, `${ctx.baseUrl}#m=playground&kbd=1`);
     const p1 = await read(play);
     await H.navTo(play, 'measure');
@@ -1775,23 +1775,29 @@ function defineChecks() {
     await play.close();
     const studio = await H.open(ctx, `${ctx.baseUrl}#m=studio&kbd=1`);
     const s1 = await read(studio);
-    await studio.evaluate(() => { window.location.hash = 'm=playground&kbd=1'; });
+    await studio.evaluate(() => { window.location.hash = 'm=playground&kbd=0'; });
     const s2 = await H.until(() => read(studio), (s) => s.workspace === 'playground');
     await studio.close();
     const none = await H.open(ctx, `${ctx.baseUrl}#m=measure&kbd=1`);
     const m1 = await read(none);
     await none.close();
+    const after = await H.open(ctx, `${ctx.baseUrl}#m=synth`);
+    const y1 = await read(after);
+    await after.close();
     return { ...H.verdict({
+      measureSilent: m0.workspace === 'measure' && !m0.here && m0.letters
+        && m0.checked === 'true' && m0.shown,
       playgroundArmed: p1.workspace === 'playground' && p1.here && p1.shown
-        && p1.pressed === 'true' && same(p1.armed, 'studio'),
-      // K247: Measure has the same keyboard (docked, folded to its handle), armed by default.
-      leavesTheAddress: away.workspace === 'measure' && !/kbd=/.test(away.hash) && away.shown,
-      studioArmed: s1.workspace === 'studio' && s1.here && s1.armed.studio
-        && same(s1.armed, 'playground') && s1.shown,
-      linkInPage: s2.workspace === 'playground' && s2.armed.playground && s2.armed.studio,
-      measureArmed: m1.workspace === 'measure' && m1.here && m1.armed.measure
-        && same(m1.armed, 'playground') && same(m1.armed, 'studio') && m1.shown,
-    }), def, p1, away, s1, s2, m1 };
+        && p1.checked === 'true',
+      // The docked keys stay in Measure (K247), but its letter keys play nothing (U134).
+      leavesTheAddress: away.workspace === 'measure' && !/kbd=/.test(away.hash) && away.shown
+        && !away.here,
+      studioArmed: s1.workspace === 'studio' && s1.here && s1.shown,
+      linkOffInPage: s2.workspace === 'playground' && !s2.letters && !s2.here
+        && s2.checked === 'false',
+      measureNeverPlays: m1.workspace === 'measure' && m1.letters && !m1.here && m1.shown,
+      linkNotStored: y1.workspace === 'synth' && y1.letters && y1.here && y1.checked === 'true',
+    }), m0, p1, away, s1, s2, m1, y1 };
   });
 
   def('no-console-errors', async (ctx) => ({ ok: ctx.errors.length === 0,

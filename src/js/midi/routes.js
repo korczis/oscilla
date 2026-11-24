@@ -9,11 +9,14 @@
 //             document where it is there or may be inserted by itself; the Synth plays its panel
 //             (synthSink). Only a document of the user's that plays no notes and that the panel
 //             may not rewire by itself leaves the keys to the engine's own voice
-//   folded    the dock starts folded to its handle (the keys still armed and playing): a page
-//             that is not an instrument keeps its content; the user unfolds it
-//   armed     whether the computer keyboard is armed when the workspace first opens: armed
-//             everywhere, so the keys play at once in every workspace as in the Synth (the
-//             owner's decision of 2026-11-05 on K178); Arm switches them off and on
+//   folded    the dock starts folded to its handle (its keys play by pointer once unfolded): a
+//             page that is not an instrument keeps its content; the user unfolds it
+//   letters   whether the computer's letter keys play notes there (U134, the owner's Q114
+//             'Instrument places + switch', WCAG 2.1.4): only in the instrument places, the
+//             Synth, the Studio and the Playground (Generátor); every other workspace stays
+//             silent to them (its docked keys still play by pointer). One global switch
+//             (keyboard-ui.js kbdLetters, 'Klávesnice hraje' in the status bar) turns them off
+//             everywhere; it replaced the per-workspace Arm of Q105 'armed everywhere'
 //   editors   a selector of the workspace's editing surfaces whose letters are shortcuts (the
 //             Studio graph's C connect, the timeline's keys): an armed key pressed while the
 //             focus is inside one is the editor's, not a note (K178, census
@@ -28,10 +31,14 @@
 //             the keys never cover, and the height its editor keeps below that toolbar where
 //             the editor fills the viewport (a desktop grid; a stacked phone page scrolls, so
 //             there only the toolbar is kept; stackedBelow is that width). Where the docked keys would take it, the dock
-//             starts folded to its handle: the computer keys stay armed and play (Q105 is
-//             about the keys being armed, not about the on-screen keys showing). null: no rule
+//             starts folded to its handle: the letter keys still play where the row has
+//             letters (the switch is about the computer keys, not the on-screen keys).
+//             null: no rule
 //
 //   routeOf(workspace) -> its row (DEFAULT_ROUTE for a workspace not listed)
+//   LETTER_PLACES       the workspaces whose row has letters, in the shell's order
+//   lettersPlay(workspace, on) -> whether a letter key plays a note there with the global
+//             switch `on`: the one arm decision, read by keyboard-ui.js kbdArmedHere
 //   dockState({ route, owner, userExpanded, room }) -> 'docked' | 'collapsed'
 //             the one rule of the dock (K171), applied by midi/dock-yield.js alone
 //   roomFolds({ route, room }) -> whether the docked keys would take the room keepsRoom keeps
@@ -52,15 +59,16 @@ export const STUDIO_EDITOR_MIN_PX = 360;
  *  (60 px) and three 44 px rows of its tab's content. */
 export const SYNTH_CONTENT_MIN_PX = 60 + 3 * 44;
 
-/** Every workspace that is not listed: the one instrument, armed, the dock folded (K247). */
-export const DEFAULT_ROUTE = Object.freeze({ plays: 'keysInstrument', armed: true, editors: null,
-  yieldsTo: null, folded: true });
+/** Every workspace that is not listed: the one instrument by pointer, no letter keys (U134),
+ *  the dock folded (K247). */
+export const DEFAULT_ROUTE = Object.freeze({ plays: 'keysInstrument', letters: false,
+  editors: null, yieldsTo: null, folded: true });
 
 export const KEY_ROUTES = Object.freeze({
   // The Playground keeps the keys under its panels (not docked): they play the one instrument.
-  playground: Object.freeze({ plays: 'keysInstrument', armed: true, editors: null,
+  playground: Object.freeze({ plays: 'keysInstrument', letters: true, editors: null,
     yieldsTo: null }),
-  synth: Object.freeze({ plays: 'synthSink', armed: true, editors: null,
+  synth: Object.freeze({ plays: 'synthSink', letters: true, editors: null,
     yieldsTo: 'xy-pad',
     // U100: on a short phone the docked keys (256 px) took the whole main area (235 px at
     // 320 x 568). The Synth keeps, below the page header, its sticky section chips (60 px) and
@@ -70,7 +78,7 @@ export const KEY_ROUTES = Object.freeze({
     keepsRoom: Object.freeze({ toolbar: '[data-osc="page.header"]',
       editorMin: SYNTH_CONTENT_MIN_PX, stackedBelow: 0,
       keptBy: '[data-osc="synth.panel"][data-keeps-dock]' }) }),
-  studio: Object.freeze({ plays: 'keysInstrument', armed: true,
+  studio: Object.freeze({ plays: 'keysInstrument', letters: true,
     editors: '[data-osc="studio.graph.viewport"], [data-osc="studio.timeline"]',
     yieldsTo: null,
     // The Studio's toolbar and its editor: the graph's header and two rows of node cards over
@@ -83,9 +91,14 @@ export const KEY_ROUTES = Object.freeze({
 
 export const routeOf = (workspace) => KEY_ROUTES[workspace] || DEFAULT_ROUTE;
 
-/** The keyboard's arm state when each workspace first opens: every workspace (K247). */
-export const armedDefaults = () => Object.fromEntries(WORKSPACE_IDS
-  .map((ws) => [ws, routeOf(ws).armed]));
+/** The workspaces where the letter keys play (U134, Q114): derived from the rows, never listed. */
+export const LETTER_PLACES = Object.freeze(WORKSPACE_IDS
+  .filter((ws) => routeOf(ws).letters === true));
+
+/** The arm decision (U134): a letter key plays a note in `workspace` only where its row has
+ *  letters and while the global switch is `on`. */
+export const lettersPlay = (workspace, on) => on === true
+  && WORKSPACE_IDS.includes(workspace) && routeOf(workspace).letters === true;
 
 /**
  * Whether the dock yields: the workspace's route names a surface that yields the dock and that

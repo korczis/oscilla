@@ -9,7 +9,7 @@
 //   by noteOff with the node census at zero; a note without `held` keeps HOLD's limit.
 // - The component: a MIDI note and a computer-keyboard note sound past the 2 s limit, and blur,
 //   visibilitychange to hidden, pagehide and Escape each release every one of them (census 0).
-// - The keyboard is armed per view and never takes Space.
+// - The letter keys play only in the instrument places under one switch (U134), never Space.
 //
 //   node --test tests/unit/keyboard-held-notes.test.mjs
 import test from 'node:test';
@@ -211,13 +211,13 @@ test('component: Disarm releases the keys\' notes and keeps the pad\'s; the pani
     assert.equal(pad.noteOn(63, 100, 'kbd-xy').ok, true, 'the pad\'s note sounds');
     key('keydown', 'KeyA');
     assert.equal(r.engine.noteCount, 2, 'the pad\'s note beside a computer key\'s');
-    cmp.kbdToggle(); // Disarm
+    cmp.kbdToggle(); // the switch off (U134)
     r.fake.advance(1);
     assert.equal(cmp.kbdArmedHere, false);
     assert.equal(r.engine.noteCount, 1, 'Disarm let go of the key; the pad\'s note sounds on');
     assert.deepEqual(closed, [], 'the pad\'s gate stays open');
     key('keyup', 'KeyA');
-    cmp.kbdToggle(); // armed again
+    cmp.kbdToggle(); // on again
     key('keydown', 'KeyD');
     assert.equal(cmp.kbdReleaseKeys(), 1, 'the keys-only release: the one held key');
     r.fake.advance(1);
@@ -230,41 +230,52 @@ test('component: Disarm releases the keys\' notes and keeps the pad\'s; the pani
     pad.off();
   });
 
-// K178 (the owner's decision of 2026-11-05): the keys are armed at once in every workspace that
-// plays them; Arm switches a workspace's keys off and on, each on its own.
-test('component: armed per view, never Space, never while typing', async () => {
-  const { r, cmp, key } = await componentRig();
-  cmp.kbdToggle(); // switched off in the Playground
-  let e = key('keydown', 'KeyA');
-  assert.equal(e.defaultPrevented, false, 'switched off: the key is not taken');
-  assert.equal(r.engine.noteCount, 0);
-  cmp.kbdToggle(); // and on again
-  e = key('keydown', 'Space');
-  assert.equal(e.defaultPrevented, false, 'Space is never the keyboard\'s (ADR 0050)');
-  assert.equal(r.engine.noteCount, 0);
-  e = key('keydown', 'KeyA', { target: { tagName: 'INPUT', type: 'text' } });
-  assert.equal(e.defaultPrevented, false, 'a text field keeps its keys');
-  e = key('keydown', 'KeyA', { ctrlKey: true });
-  assert.equal(e.defaultPrevented, false, 'Ctrl+A is a shortcut, not a note');
-  assert.equal(r.engine.noteCount, 0);
-  cmp.workspace = 'studio';
-  cmp.kbdToggle(); // switched off in the Studio only
-  e = key('keydown', 'KeyA');
-  assert.equal(e.defaultPrevented, false, 'switched off in the Studio, the Playground unchanged');
-  cmp.kbdToggle();
-  e = key('keydown', 'KeyA');
-  assert.equal(e.stopped, true, 'armed in the Studio: before Studio\'s own A');
-  assert.equal(r.engine.noteCount, 1);
-  cmp.workspace = 'measure';
-  assert.equal(cmp.kbdArmedHere, true, 'Measure plays the same keys (K247)');
-  e = key('keydown', 'KeyS');
-  assert.equal(e.stopped, true, 'armed in Measure: the key is the keyboard\'s');
-  cmp.kbdToggle(); // switched off in Measure only
-  e = key('keydown', 'KeyD');
-  assert.equal(e.defaultPrevented, false, 'switched off in Measure, the others unchanged');
-  cmp.workspace = 'studio';
-  assert.equal(cmp.kbdArmedHere, true, 'the Studio is still armed');
-  cmp.kbdReleaseAll();
-  r.fake.advance(1);
-  assert.deepEqual(census(r), ZERO);
-});
+// U134 (the owner's Q114 'Instrument places + switch', 2026-11-24; it replaced K178's per-view
+// Arm and Q105's 'armed everywhere'): A plays in the Synth, the Studio and the Playground and in
+// no other workspace of the shell registry; the one global switch off silences every workspace;
+// never Space, never while typing in a text, number or search field.
+test('component: letter keys play only in the instrument places, one switch, never typing',
+  async () => {
+    const { r, cmp, key } = await componentRig();
+    const { WORKSPACE_IDS } = await import('../../src/js/ui/shell.js');
+    const PLACES = ['playground', 'studio', 'synth']; // Q114: Synth, Studio, Generátor
+    const plays = (ws) => {
+      cmp.workspace = ws;
+      const before = r.engine.noteCount;
+      const e = key('keydown', 'KeyA');
+      const sounded = r.engine.noteCount > before;
+      key('keyup', 'KeyA');
+      r.fake.advance(1);
+      return { taken: e.stopped === true && e.defaultPrevented === true, sounded };
+    };
+    for (const ws of WORKSPACE_IDS) {
+      const want = PLACES.includes(ws);
+      assert.deepEqual(plays(ws), { taken: want, sounded: want }, `switch on: ${ws}`);
+    }
+    cmp.workspace = 'synth';
+    cmp.kbdToggle(); // the global switch off
+    assert.equal(cmp.kbdLetters, false);
+    for (const ws of WORKSPACE_IDS) {
+      assert.deepEqual(plays(ws), { taken: false, sounded: false }, `switch off: ${ws}`);
+    }
+    cmp.kbdToggle(); // and on again
+    assert.deepEqual(plays('synth'), { taken: true, sounded: true }, 'on again: the Synth plays');
+    cmp.workspace = 'playground';
+    let e = key('keydown', 'Space');
+    assert.equal(e.defaultPrevented, false, 'Space is never the keyboard\'s (ADR 0050)');
+    for (const target of [{ tagName: 'INPUT', type: 'text' }, { tagName: 'INPUT', type: 'number' },
+      { tagName: 'INPUT', type: 'search' }, { tagName: 'TEXTAREA' },
+      { tagName: 'DIV', getAttribute: (n) => (n === 'role' ? 'searchbox' : null) }]) {
+      e = key('keydown', 'KeyA', { target });
+      assert.equal(e.defaultPrevented, false, `${target.tagName} ${target.type || ''}: typed`);
+    }
+    e = key('keydown', 'KeyA', { ctrlKey: true });
+    assert.equal(e.defaultPrevented, false, 'Ctrl+A is a shortcut, not a note');
+    assert.equal(r.engine.noteCount, 0);
+    cmp.workspace = 'studio';
+    e = key('keydown', 'KeyA');
+    assert.equal(e.stopped, true, 'in the Studio: before Studio\'s own A');
+    cmp.kbdReleaseAll();
+    r.fake.advance(1);
+    assert.deepEqual(census(r), ZERO);
+  });

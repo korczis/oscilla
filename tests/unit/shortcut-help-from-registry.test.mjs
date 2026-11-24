@@ -4,7 +4,8 @@
 // same declarations, so a binding and its help row are one object. The rows the dialog shows
 // are the ones it showed before the tables became declarations
 // (tests/unit/fixtures/shortcut-help-rows.json, captured from origin/main 8e087873 before the
-// change): nothing was lost, added or reworded.
+// change): nothing was lost, added or reworded. U134 (the owner's Q114) changed them on purpose:
+// the letter keys' rows only in the instrument places, their where naming the one switch.
 //
 //   node --test tests/unit/shortcut-help-from-registry.test.mjs
 import test from 'node:test';
