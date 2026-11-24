@@ -8,7 +8,7 @@ experience reconstruction".
 
 **Base.** `main` at `c3b15610` (v3.42.1).
 
-**Plan.** Intent `one-instrument`, milestone M124, issues U123 to U137, owner decision Q114 and
+**Plan.** Intent `one-instrument`, milestone M124, issues U123 to U140, owner decision Q114 and
 ADR 0089.
 
 These are developer documents, so they are written in English (rule `project.czech-prose`).
@@ -18,7 +18,7 @@ The owner-facing summary is a Czech page published separately.
 |---|---|
 | [01 Architecture inventory](01-architecture-inventory.md) | architecture inventory, current IA, duplication report, state ownership map |
 | [02 Feature matrix](02-feature-matrix.md) | feature-to-UI traceability |
-| [03 UX/HCI audit](03-ux-audit.md) | per-workspace audit, screenshots, user journeys |
+| [03 UX/HCI audit](03-ux-audit.md), [03b Journeys](03b-journeys.md) | per-workspace audit, metrics, the ten user journeys |
 | [04 Interaction audit](04-interaction-audit.md) | interaction audit, the interaction specification per control family |
 | [05 Accessibility audit](05-accessibility-audit.md) | axe and keyboard audit, the accessibility model |
 | [07 Target architecture](07-target-architecture.md) | competing architectures, target architecture, visual system, desktop and phone composition, migration strategy |
@@ -60,3 +60,6 @@ Measure with `majordomus plan status`; this table is not the record.
 | Phone keys as a sheet | U135 | U131 |
 | Accessibility model | U136 | U132 |
 | Retire superseded paths | U137 | U132, U069-U074 |
+| Reload restores work | U138 | Q114 |
+| Keys over a running sequence | U139 | — |
+| No silent document rewrite by a key | U140 | — |
