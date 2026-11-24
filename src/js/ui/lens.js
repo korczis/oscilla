@@ -97,6 +97,8 @@ const VIEW_SELECTOR = '#osc-panel-analysis [role="tabpanel"]';
 const SLOT_ID = 'osc-lens-slot';
 const TOGGLE_ID = 'osc-lens-toggle';
 const CLOSE_ID = 'osc-lens-close';
+/** The status bar's Akce button: on a phone the Sonda button waits in its menu. */
+const MENU_ID = 'osc-sb-actions-toggle';
 let moved = null; // { view, home }: the view in the slot and the comment holding its place
 
 /**
@@ -152,6 +154,7 @@ export function createLensPart({ relayout = () => {} } = {}) {
       // A computed tab (Harmonics, the Signal Path) is not shown here: the observed default.
       if (this.tabs && this.tabs.analysis !== this.lensView) this.setTab('analysis', this.lensView);
       reparentView(document, true);
+      if (typeof this.closeMenus === 'function') this.closeMenus(); // the phone's Akce menu
       this.lensOpen = true;
       this.$nextTick(() => {
         relayout();
@@ -162,15 +165,22 @@ export function createLensPart({ relayout = () => {} } = {}) {
     lensSelect(view) {
       if (LENS_VIEWS.includes(view)) this.setTab('analysis', view);
     },
-    /** Close; focus returns to the status bar's Sonda button unless `focus` is false. */
+    /**
+     * Close; focus returns to the status bar's Sonda button (on a phone, where it waits in the
+     * closed Akce menu, to the Akce button) unless `focus` is false.
+     */
     lensClose({ focus = true } = {}) {
       if (!this.lensOpen) return;
       this.lensOpen = false;
       reparentView(document, false);
       this.$nextTick(() => {
         relayout();
-        const toggle = focus ? document.getElementById(TOGGLE_ID) : null;
-        if (toggle) toggle.focus();
+        if (!focus) return;
+        // The Sonda button, or the Akce button whose closed menu holds it on a phone.
+        const toggle = document.getElementById(TOGGLE_ID);
+        const shown = toggle && (!toggle.getClientRects || toggle.getClientRects().length > 0);
+        const target = shown ? toggle : document.getElementById(MENU_ID);
+        if (target) target.focus();
       });
     },
     /**

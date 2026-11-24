@@ -3253,16 +3253,7 @@
       </span>
     </div>
 
-    <div class="osc-sb-actions-wrap flex items-center gap-2 lg:gap-6">
-      <!-- Sonda (src/js/ui/lens.js): the observed output from any workspace, in a side sheet
-           (a bottom sheet on a phone); its open state is UI-only and travels in no link. -->
-      <button type="button" id="osc-lens-toggle" data-osc="status.lens" aria-controls="osc-lens"
-        aria-expanded="false" :aria-expanded="String(lensOpen)" @click="lensToggle()"
-        title="Sonda: co právě zní na výstupu, z kterékoli pracovní plochy"
-        class="inline-flex items-center flex-none h-11 gap-2 px-3 text-sm font-medium text-gray-900 bg-white border border-solid border-gray-300 rounded-lg hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 dark:bg-gray-800 dark:text-white dark:border-gray-600 dark:hover:bg-gray-700 lg:h-9"
-        :class="lensOpen && '!bg-primary-700 !text-white !border-primary-700'">
-        <svg class="w-4 h-4" aria-hidden="true"><use href="#i-lens"/></svg><span>Sonda</span>
-      </button>
+    <div class="osc-sb-actions-wrap">
       <button type="button" class="osc-icon-btn osc-sb-menu-btn" id="osc-sb-actions-toggle"
         data-osc="status.actionsMenu" aria-label="Akce" aria-haspopup="true"
         aria-expanded="false" aria-controls="osc-sb-actions" x-bind="menuButton('actions')">
@@ -3270,6 +3261,17 @@
       </button>
       <div class="osc-sb-actions" id="osc-sb-actions" role="group" aria-label="Akce"
         :class="{ 'is-open': menus.actions }">
+        <!-- Sonda (src/js/ui/lens.js): the observed output from any workspace, in a side sheet
+             (a bottom sheet on a phone); its open state is UI-only and travels in no link. The
+             first of the bar's actions, so on a phone it waits in the Akce menu and costs the
+             status line no width. -->
+        <button type="button" id="osc-lens-toggle" data-osc="status.lens" aria-controls="osc-lens"
+          aria-expanded="false" :aria-expanded="String(lensOpen)" @click="lensToggle()"
+          title="Sonda: co právě zní na výstupu, z kterékoli pracovní plochy"
+          class="inline-flex items-center flex-none h-11 gap-2 px-3 text-sm font-medium max-md:w-full text-gray-900 bg-white border border-solid border-gray-300 rounded-lg hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 dark:bg-gray-800 dark:text-white dark:border-gray-600 dark:hover:bg-gray-700 md:h-9"
+          :class="lensOpen && '!bg-primary-700 !text-white !border-primary-700'">
+          <svg class="w-4 h-4" aria-hidden="true"><use href="#i-lens"/></svg><span>Sonda</span>
+        </button>
         <button type="button" class="osc-sb-action" id="osc-act-url" data-osc="action.copyUrl" data-osc-link="jump" @click="copyConfigUrl()"
           aria-label="Kopírovat odkaz na nastavení">
           <svg aria-hidden="true"><use href="#i-link"/></svg><span>Odkaz</span>

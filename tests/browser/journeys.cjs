@@ -21,13 +21,15 @@
 //                         controls agree with the engine
 //   journey-3-views:sonda-*@desktop|phone   Sonda, the observed lens (src/js/ui/lens.js), at
 //                         1536x1024 and at 390x844 with touch: `synth` the status bar's Sonda
-//                         opens the sheet (aria-expanded, focus on Close); idle it says Nic
+//                         (on the phone the first item of its Akce menu, so the status line
+//                         keeps its width) opens the sheet (aria-expanded, focus on Close); idle it says Nic
 //                         nehraje, offers no view and renders no chart host; QWERTY A held in
 //                         the Synth: it names the Synth (lensSubject of the source), the
 //                         Spectrum view is the analysis panel's one chart moved into the sheet
 //                         and drawn, the analyser peaks at the note's fundamental (130.8 or
 //                         261.6 Hz) and no requested marker is claimed; Escape from inside the
-//                         sheet closes it, focus returns to Sonda and the note sounds on, and
+//                         sheet closes it, focus returns to Sonda (the Akce button on the
+//                         phone) and the note sounds on, and
 //                         the next Escape stops the output; `studio` a PLAYed Studio run is named
 //                         Studio and plays on after the sheet's Escape, Close closes it and the
 //                         view is back in the panel; `layout` with a note held, a 420 px right
@@ -689,6 +691,7 @@ function defineChecks() {
     const { LENS_IDLE, lensSubject } = await lensModule();
     await until(() => page.evaluate(() => !!document.querySelector('[data-osc="synth.bay.svg"]')),
       { ms: LENS_LOAD_MS, what: 'the Synth panel is rendered' });
+    await lensReveal(page, size);
     await (size === 'phone' ? page.tap('#osc-lens-toggle') : page.click('#osc-lens-toggle'));
     const idle = await lensUntil(page, (s) => s.open && s.sheetShown && s.focus === 'osc-lens-close',
       'Sonda opens with focus on its Close');
@@ -712,7 +715,7 @@ function defineChecks() {
     await page.focus('[data-osc="lens.view"][data-value="spectrum"]');
     await page.keyboard.press('Escape');
     const closed = await lensUntil(page, (s) => !s.open && !s.sheetShown
-      && s.focus === 'osc-lens-toggle', 'Escape closes the sheet and focus returns to Sonda');
+      && s.focus === lensBack(size), 'Escape closes the sheet and focus returns to Sonda');
     const on = await lensSound(page, (q) => q.rmsDb > -40, 'the held note sounds on');
     // Closed: Escape is the page's stop again.
     await page.keyboard.press('Escape');
@@ -732,6 +735,7 @@ function defineChecks() {
     await (size === 'phone' ? page.tap('[data-osc="studio.play"]') : page.click('[data-osc="studio.play"]'));
     await until(() => page.evaluate(() => window.OSCILLA.studio.transport.playing),
       { ms: LENS_SOUND_MS, what: 'the Studio transport plays' });
+    await lensReveal(page, size);
     await (size === 'phone' ? page.tap('#osc-lens-toggle') : page.click('#osc-lens-toggle'));
     const want = lensSubject({ owner: 'studio' }).text;
     const open = await lensUntil(page, (s) => s.open && s.subject === want
@@ -739,15 +743,16 @@ function defineChecks() {
     await lensSound(page, (q) => q.rmsDb > -60, 'the Studio run is heard on the analyser');
     const shot = await lensShot(page, `lens-studio-${leg}`);
     await page.keyboard.press('Escape');
-    const closed = await lensUntil(page, (s) => !s.open && s.focus === 'osc-lens-toggle',
+    const closed = await lensUntil(page, (s) => !s.open && s.focus === lensBack(size),
       'Escape closes the sheet');
     const playing = await page.evaluate(() => window.OSCILLA.studio.transport.playing);
     const heard = await lensSound(page, (q) => q.rmsDb > -60, 'the Studio run sounds on');
     // The Close button closes too, and the view returns to the analysis panel.
+    await lensReveal(page, size);
     await (size === 'phone' ? page.tap('#osc-lens-toggle') : page.click('#osc-lens-toggle'));
     await lensUntil(page, (s) => s.open, 'Sonda opens again');
     await (size === 'phone' ? page.tap('#osc-lens-close') : page.click('#osc-lens-close'));
-    const home = await lensUntil(page, (s) => !s.open && s.focus === 'osc-lens-toggle',
+    const home = await lensUntil(page, (s) => !s.open && s.focus === lensBack(size),
       'Close closes the sheet');
     const inPanel = await page.evaluate(() => {
       const view = document.querySelector('#osc-panel-analysis [role="tabpanel"]');
@@ -760,6 +765,7 @@ function defineChecks() {
   });
 
   lensDef('layout', '#m=synth', async ({ page, size }) => {
+    const toggleBox = await lensReveal(page, size);
     await (size === 'phone' ? page.tap('#osc-lens-toggle') : page.click('#osc-lens-toggle'));
     await lensUntil(page, (s) => s.open && s.sheetShown, 'the sheet opens');
     // Sounding, so the sheet holds its views, the view buttons and the charts at full height.
@@ -773,7 +779,6 @@ function defineChecks() {
       const status = document.querySelector('footer[aria-label="Stavový řádek"]');
       const controls = [...sheet.querySelectorAll('button')]
         .filter((b) => b.getClientRects().length > 0)
-        .concat(document.getElementById('osc-lens-toggle'))
         .map((b) => ({ id: b.id || b.dataset.value || b.textContent.trim(),
           w: r(b).width, h: r(b).height }));
       const texts = [...sheet.querySelectorAll('h2, p, button, span')]
@@ -799,12 +804,16 @@ function defineChecks() {
       ok = m.sheet.height <= 0.6 * m.vh + 0.5 && Math.abs(m.sheet.bottom - m.vh) <= 1
         && m.controls.every((c) => c.w >= 44 && c.h >= 44) && m.minText >= 12 && !m.scrollX;
     }
-    return { ok, ...m };
+    const toggle = toggleBox ? { w: toggleBox.width, h: toggleBox.height } : null;
+    if (size === 'phone') ok = ok && !!toggle && toggle.w >= 44 && toggle.h >= 44;
+    else ok = ok && !!toggle;
+    return { ok, toggle, ...m };
   });
 
   lensDef('axe', '#m=synth', async ({ page, size }) => {
     const source = fs.readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
     await page.addScriptTag({ content: source });
+    await lensReveal(page, size);
     await (size === 'phone' ? page.tap('#osc-lens-toggle') : page.click('#osc-lens-toggle'));
     await lensUntil(page, (s) => s.open && s.sheetShown, 'the sheet opens');
     const audit = () => page.evaluate(async () => {
@@ -1443,6 +1452,22 @@ async function lensShot(page, name) {
   return file;
 }
 
+
+/** Where focus returns when the sheet closes: the Sonda button, or on a phone the Akce button
+ *  whose menu holds it. */
+const lensBack = (size) => (size === 'phone' ? 'osc-sb-actions-toggle' : 'osc-lens-toggle');
+/** On a phone the Sonda button waits in the status bar's Akce menu: open it first. Returns the
+ *  Sonda button's box as pressed. */
+async function lensReveal(page, size) {
+  const shown = () => page.evaluate(() => document.getElementById('osc-lens-toggle')
+    .getClientRects().length > 0);
+  if (!(await shown())) {
+    await (size === 'phone' ? page.tap('#osc-sb-actions-toggle')
+      : page.click('#osc-sb-actions-toggle'));
+    await until(shown, { ms: LENS_UI_MS, what: 'the Akce menu shows the Sonda button' });
+  }
+  return page.locator('#osc-lens-toggle').boundingBox();
+}
 
 /** A fresh page at `hash` at a Sonda size (the phone with touch), ready, audio unlocked. */
 async function lensOpen(browser, size, hash) {

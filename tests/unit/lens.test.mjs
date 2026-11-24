@@ -136,7 +136,8 @@ function fakeDoc() {
   const panel = node('osc-panel-analysis');
   const view = panel.appendChild(node(null));
   const slot = node('osc-lens-slot');
-  return { doc, panel, view, slot, toggle: node('osc-lens-toggle'), close: node('osc-lens-close') };
+  return { doc, panel, view, slot, toggle: node('osc-lens-toggle'), close: node('osc-lens-close'),
+    menu: node('osc-sb-actions-toggle') };
 }
 
 test('reparentView moves the one view into the slot and back to its place', () => {
@@ -258,4 +259,21 @@ test('lensEscape: consumed like menuEscape while open (closed, refocused), passe
     assert.equal(cmp.lensOpen, false);
     assert.equal(toggle.focused, 1, 'focus back on the Sonda button');
     assert.equal(cmp.lensEscape(null), false);
+  });
+
+test('on a phone the Sonda button waits in the closed Akce menu: focus goes to the Akce button',
+  () => {
+    const menusClosed = [];
+    const { cmp, toggle, menu } = component({ tabs: { analysis: 'spectrum' },
+      closeMenus: () => menusClosed.push(1) });
+    toggle.getClientRects = () => [];
+    cmp.lensShow();
+    assert.equal(menusClosed.length, 1, 'opening Sonda closes the Akce menu');
+    cmp.lensClose();
+    assert.equal(toggle.focused, 0);
+    assert.equal(menu.focused, 1, 'focus on the Akce button, never on <body>');
+    toggle.getClientRects = () => [{}];
+    cmp.lensShow();
+    cmp.lensClose();
+    assert.equal(toggle.focused, 1, 'a shown Sonda button takes the focus back');
   });
