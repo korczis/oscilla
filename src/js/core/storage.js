@@ -227,7 +227,9 @@ export function checkSessionDraft(d) {
   }
   const seq = d.domains.sequence;
   if (seq && typeof seq === 'object' && !Array.isArray(seq)) domains.sequence = seq;
-  return { v: d.v, at: d.at, hash: d.hash, domains };
+  // saved: the domains that were saved work when the draft was written (the sequence exported)
+  const saved = Array.isArray(d.saved) ? d.saved.filter((k) => k in domains) : [];
+  return { v: d.v, at: d.at, hash: d.hash, domains, saved };
 }
 
 /** The stored draft, checked; null when there is none or it is unreadable. */
@@ -236,14 +238,15 @@ export function loadSessionDraft(store = sessionStore) {
 }
 
 /**
- * Store a draft ({ at, hash, domains }); a draft with no domain removes the stored one. A draft
- * over SESSION_DRAFT_MAX drops its largest domains until it fits. Returns { ok, kept, dropped }:
- * the domains stored and the ones left out for size.
+ * Store a draft ({ at, hash, domains, saved }); a draft with no domain removes the stored one.
+ * A draft over SESSION_DRAFT_MAX drops its largest domains until it fits. Returns { ok, kept,
+ * dropped }: the domains stored and the ones left out for size.
  */
-export function persistSessionDraft(store, { at, hash, domains }) {
+export function persistSessionDraft(store, { at, hash, domains, saved = [] }) {
   const kept = { ...domains };
   const dropped = [];
-  const text = () => JSON.stringify({ v: SESSION_DRAFT_VERSION, at, hash, domains: kept });
+  const text = () => JSON.stringify({ v: SESSION_DRAFT_VERSION, at, hash, domains: kept,
+    saved: saved.filter((k) => k in kept) });
   const size = (k) => JSON.stringify(kept[k]).length;
   while (Object.keys(kept).length && text().length > SESSION_DRAFT_MAX) {
     const k = Object.keys(kept).sort((a, b) => size(b) - size(a))[0];

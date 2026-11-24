@@ -21,6 +21,8 @@
 //   - The draft is written debounced after an edit and at once when the page is hidden, only
 //     with the domains that differ from what the page opened with, so an untouched page keeps
 //     no draft. Storage: core/storage.js persistSessionDraft (sessionStorage, size-bounded).
+//   - A restored sequence keeps its unsaved-work state (ADR 0045): unsaved stays unsaved and
+//     arms the guard, one already exported (saved) comes back saved.
 //
 //   createSessionDraftUi({ sequencer, store, win }) -> the Alpine part: draft (state),
 //     draftBoot() after the labs mount, draftSave(), draftReset() ('Začít znovu'), draftClose()
@@ -207,6 +209,8 @@ export function createSessionDraftUi({ sequencer = () => null, store = sessionSt
       const plan = planRestore({ draft: stored, navType: nav, hash, current: baseline });
       if (!RESTORING_NAVIGATIONS.includes(nav)) clearSessionDraft(store);
       const done = plan.filter((k) => APPLY[k](this, stored.domains[k]));
+      if (done.includes('sequence') && stored.saved.includes('sequence')
+        && typeof this.markSequenceSaved === 'function') this.markSequenceSaved();
       if (done.length) {
         const presets = (this.synth && this.synth.presets) || [];
         this.draft.restored = done;
@@ -236,7 +240,8 @@ export function createSessionDraftUi({ sequencer = () => null, store = sessionSt
       if (timer) win.clearTimeout(timer);
       timer = null;
       const r = persistSessionDraft(store, { at: Date.now(), hash: win.location.hash,
-        domains: draftDomains(read(this), baseline) });
+        domains: draftDomains(read(this), baseline),
+        saved: this.seqUnsaved === false ? ['sequence'] : [] });
       this.draft.savedAt = Date.now();
       this.draft.kept = r.kept;
       return r;
@@ -247,6 +252,10 @@ export function createSessionDraftUi({ sequencer = () => null, store = sessionSt
       for (const k of this.draft.restored) {
         const v = k === 'synth' ? baseline.synth || PRISTINE_SYNTH : baseline[k];
         if (v != null) APPLY[k](this, v);
+        // the sequence the page opened with was its saved one (main.js markSequenceSaved)
+        if (k === 'sequence' && typeof this.markSequenceSaved === 'function') {
+          this.markSequenceSaved();
+        }
       }
       clearSessionDraft(store);
       this.draftClose();

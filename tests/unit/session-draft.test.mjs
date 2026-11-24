@@ -86,6 +86,8 @@ function fakePage() {
       this.synthQuiet = quiet;
       return true;
     },
+    seqUnsaved: true, // the sequence guard (ADR 0045): an edited sequence is unsaved work
+    markSequenceSaved() { this.seqUnsaved = false; },
     ensureAudio() { sound.push('ensureAudio'); },
     play() { sound.push('play'); },
   };
@@ -132,7 +134,10 @@ test('the draft round-trips through sessionStorage and is checked on the way in'
   const domains = { instrument: 'v=1&f=220', labs: 'abc', sequence: { blocks: [] } };
   const r = persistSessionDraft(store, { at: 5, hash: '#m=filter', domains });
   assert.deepEqual(r.kept.sort(), Object.keys(domains).sort());
-  assert.deepEqual(loadSessionDraft(store), { v: 1, at: 5, hash: '#m=filter', domains });
+  assert.deepEqual(loadSessionDraft(store), { v: 1, at: 5, hash: '#m=filter', domains,
+    saved: [] });
+  persistSessionDraft(store, { at: 6, hash: '', domains, saved: ['sequence', 'synth'] });
+  assert.deepEqual(loadSessionDraft(store).saved, ['sequence'], 'saved names kept domains only');
   store.set(SESSION_DRAFT_KEY, '{not json');
   assert.equal(loadSessionDraft(store), null, 'unreadable JSON is no draft');
   assert.equal(checkSessionDraft({ v: 2, at: 1, hash: '', domains: {} }), null, 'newer version');
@@ -294,6 +299,7 @@ test('Začít znovu puts the restored domains back and clears the draft for good
   assert.deepEqual(b.page.filter, DEFAULT_FILTER);
   assert.equal(b.page.synthLink, PRISTINE_SYNTH);
   assert.equal(b.seq.editor.model.blocks.length, createSequence({}).blocks.length);
+  assert.equal(b.page.seqUnsaved, false, 'the sequence the page opened with is saved again');
   assert.equal(b.page.draft.shown, false);
   assert.equal(store.get(SESSION_DRAFT_KEY), null);
   // the reset click's debounced save finds nothing to keep
@@ -316,3 +322,19 @@ test('edits are saved debounced and at once on pagehide', () => {
   assert.match(JSON.parse(store.get(SESSION_DRAFT_KEY)).domains.instrument, /f=330/);
   assert.ok(a.seq.editor.changes.length, 'a sequence edit schedules a save too');
 });
+
+test('a restored sequence keeps its saved state: unsaved stays so, exported comes back saved',
+  () => {
+    const unsaved = editThenReload();
+    assert.equal(unsaved.b.page.seqUnsaved, true, 'an unsaved sequence still arms the guard');
+    const store = memoryStore();
+    const a = fakePage();
+    boot({ win: fakeWin({ type: 'navigate' }), store, ...a });
+    edit(a);
+    a.page.markSequenceSaved(); // Export config: the file holds the sequence
+    a.page.draftSave();
+    const b = fakePage();
+    const r = boot({ win: fakeWin({ type: 'reload' }), store, ...b });
+    assert.ok(r.restored.includes('sequence'));
+    assert.equal(b.page.seqUnsaved, false, 'an exported sequence comes back saved');
+  });
