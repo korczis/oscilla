@@ -173,6 +173,19 @@ export function createLensPart({ relayout = () => {} } = {}) {
         if (toggle) toggle.focus();
       });
     },
+    /**
+     * Escape with the sheet open closes it, gives focus back to the Sonda button and consumes
+     * the key, as the header menus' menuEscape does (ui/app.js): the page's Escape (stopAll)
+     * never runs with it, so the sound plays on. Closed, the key passes untouched. Returns
+     * true when the key was consumed.
+     */
+    lensEscape(e) {
+      if (!this.lensOpen || !e || e.key !== 'Escape') return false;
+      if (typeof e.preventDefault === 'function') e.preventDefault();
+      if (typeof e.stopPropagation === 'function') e.stopPropagation();
+      this.lensClose();
+      return true;
+    },
     /** The panel chose a computed tab while the view was here: the panel takes it back. */
     lensFollowTab(tab) {
       if (this.lensOpen && !LENS_VIEWS.includes(tab)) this.lensClose({ focus: false });
@@ -189,6 +202,6 @@ export function bindLensKeys({ keys, cmp }) {
   const offs = ['none', 'text', 'piano'].map((focus) => keys.bind({
     id: `lens.escape.${focus}`, keys: ['Escape'], scope: { workspace: '*', focus },
     group: 'Page', label: 'Zavřít Sondu (zvuk hraje dál)',
-    when: () => !!cmp.lensOpen, run: () => cmp.lensClose() }));
+    when: () => !!cmp.lensOpen, run: (e) => cmp.lensEscape(e) }));
   return () => offs.forEach((off) => off());
 }

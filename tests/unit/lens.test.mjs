@@ -217,12 +217,13 @@ test('Escape: the sheet\'s binding outranks the page stop while open, and only t
   const keys = createKeyRegistry();
   const stops = [];
   const closes = [];
-  const cmp = { lensOpen: false, lensClose: () => { closes.push(1); cmp.lensOpen = false; } };
+  const cmp = { lensOpen: false, lensClose: () => { closes.push(1); cmp.lensOpen = false; },
+    lensEscape(e) { return createLensPart().lensEscape.call(this, e); } };
   bindPageKeys({ keys, cmp, stopSequencer() {}, stopAll: (why) => stops.push(why) });
   const off = bindLensKeys({ keys, cmp });
   const press = (focus) => {
     const b = keys.resolve('Escape', { workspace: 'synth', focus });
-    b.run({});
+    b.run({ key: 'Escape', code: 'Escape' });
     return b.id;
   };
   assert.equal(press('none'), 'page.escape', 'closed: the page Escape keeps its meaning');
@@ -239,3 +240,22 @@ test('Escape: the sheet\'s binding outranks the page stop while open, and only t
   cmp.lensOpen = true;
   assert.equal(keys.resolve('Escape', { workspace: 'studio', focus: 'none' }).id, 'page.escape');
 });
+
+test('lensEscape: consumed like menuEscape while open (closed, refocused), passed while closed',
+  () => {
+    const { cmp, toggle } = component({ tabs: { analysis: 'spectrum' } });
+    const ev = () => ({ key: 'Escape', prevented: 0, stopped: 0,
+      preventDefault() { this.prevented += 1; }, stopPropagation() { this.stopped += 1; } });
+    const closed = ev();
+    assert.equal(cmp.lensEscape(closed), false, 'closed: the key passes');
+    assert.deepEqual([closed.prevented, closed.stopped], [0, 0]);
+    cmp.lensShow();
+    assert.equal(cmp.lensEscape({ key: 'Enter' }), false, 'another key passes');
+    assert.equal(cmp.lensOpen, true);
+    const open = ev();
+    assert.equal(cmp.lensEscape(open), true, 'open: consumed');
+    assert.deepEqual([open.prevented, open.stopped], [1, 1]);
+    assert.equal(cmp.lensOpen, false);
+    assert.equal(toggle.focused, 1, 'focus back on the Sonda button');
+    assert.equal(cmp.lensEscape(null), false);
+  });
