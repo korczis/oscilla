@@ -209,3 +209,26 @@ the `engine.play` wrapper and the sequencer's `claimOutput()` share.
   the reason is shown on the Play button and in the sequencer's message line.
 - Confirmation: `tests/unit/sequencer-editor.test.mjs` (the C002 cases) and
   `one-output-owner` and `seq-refused-during-measure` in `tests/browser/app.cjs`.
+
+## Amendment 2026-11-24: one per-place play-target table (U127)
+
+Plan issue U127 (C032, `docs/reconstruction/07-target-architecture.md` §4.3, problem 12 of
+`05-accessibility-audit.md`) found `SPACE_OWNER` and `STATUS_PLAY_WORKSPACES` to be two lists
+of one decision, and Space in the Sequencer playing the instrument's tone, not the sequence, in
+all three engines.
+
+- **One table.** `src/js/core/play-target.js` `PLAY_TARGET` names, per place, what Play acts on
+  (the instrument, the sequence, the Studio transport, the Synth's Arm, Měření's primary action,
+  or nothing), whether Space acts on it too, and whether the place lays out a Play of its own.
+  `SPACE_OWNER`, `STATUS_PLAY_WORKSPACES`, the status bar's Play (`src/js/ui/status-play.js`)
+  and the dialog's Space row are reads of it.
+- **Space in the Sequencer plays or stops the sequence**, with the timeline focused (K003) or
+  not. This supersedes the C002 amendment's "Space never starts or toggles the sequencer"; Hold
+  to Play and Trigger keep the instrument there by pointer and Enter.
+- **Space still starts nothing in the Synth and in Měření.** The Synth plays from its keys; a
+  measurement's stimulus starts only from an explicit button.
+- **The status bar's Play** starts the place's target (Experiments, Learn and About hide it) and
+  is a Stop for whatever sounds in every place, the Studio transport and an armed Synth included
+  (U133, owner decision Q114).
+- Confirmation: `tests/unit/play-target-table.test.mjs` and `play-target` in
+  `tests/browser/navigation.cjs`.

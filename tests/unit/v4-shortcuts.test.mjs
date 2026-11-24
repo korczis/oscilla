@@ -15,18 +15,18 @@ import { WORKSPACES } from '../../src/js/ui/app.js';
 import { STUDIO_SHORTCUTS } from '../../src/js/ui/studio/graph-keys.js';
 import { KEY_HELP } from '../../src/js/ui/studio/transport-view.js';
 import {
-  GLOBAL_SHORTCUTS, SPACE_MEANING, SPACE_OWNER, WORKSPACE_LABELS, instrumentTakesSpace, isSpace,
-  shortcutHelp, spaceOwner,
+  GLOBAL_SHORTCUTS, SOURCE_PANEL_WORKSPACES, SPACE_MEANING, SPACE_OWNER, WORKSPACE_LABELS,
+  instrumentTakesSpace, isSpace, sequenceTakesSpace, shortcutHelp, spaceOwner,
 } from '../../src/js/ui/shortcuts.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (rel) => readFileSync(path.join(ROOT, rel), 'utf8');
 
 // Presets is the instrument's: Load readies it and says "Press Space to play it here" (review of
-// #159), and the workspace does not change.
-const INSTRUMENT = ['playground', 'analyzer', 'filter', 'compare', 'synthesis', 'sequencer',
-  'presets'];
-const NONE = ['measure', 'experiments', 'learn', 'about'];
+// #159), and the workspace does not change. U127: in the Sequencer Space plays the sequence
+// (core/play-target.js PLAY_TARGET), no longer the instrument's tone.
+const INSTRUMENT = ['playground', 'analyzer', 'filter', 'compare', 'synthesis', 'presets'];
+const NONE = ['measure', 'experiments', 'learn', 'synth', 'about'];
 const shown = (r) => (r.where ? `${r.keys} ${r.where}` : r.keys);
 
 test('every workspace has exactly one Space owner, and every owner is known', () => {
@@ -34,6 +34,7 @@ test('every workspace has exactly one Space owner, and every owner is known', ()
   assert.deepEqual(Object.keys(WORKSPACE_LABELS).sort(), [...WORKSPACES].sort());
   for (const ws of INSTRUMENT) assert.equal(spaceOwner(ws), 'instrument', ws);
   assert.equal(spaceOwner('studio'), 'studio');
+  assert.equal(spaceOwner('sequencer'), 'sequencer');
   for (const ws of NONE) assert.equal(spaceOwner(ws), null, ws);
   assert.equal(spaceOwner('bogus'), null);
   assert.equal(spaceOwner('__proto__'), null);
@@ -42,6 +43,7 @@ test('every workspace has exactly one Space owner, and every owner is known', ()
 test('the instrument hears Space only in its own workspaces', () => {
   for (const ws of WORKSPACES) {
     assert.equal(instrumentTakesSpace(ws), INSTRUMENT.includes(ws), ws);
+    assert.equal(sequenceTakesSpace(ws), ws === 'sequencer', ws);
   }
 });
 
@@ -94,20 +96,22 @@ test('a workspace lists only its own shortcuts, plus the global ones', () => {
       assert.ok(!ids.some((id) => studioIds.has(id)), `${ws} lists Studio editing keys`);
       assert.equal(h.timeline, null, ws);
     }
-    if (spaceOwner(ws) !== 'instrument') {
-      assert.ok(!ids.includes('trigger') && !ids.includes('octave'), `${ws} lists instrument keys`);
-    }
+    // The instrument's keys where Space is its Hold to Play or its Hold and Trigger are laid
+    // out (the Sequencer's Source & Pattern panel, U127), nowhere else.
+    const instrumentKeys = spaceOwner(ws) === 'instrument' || SOURCE_PANEL_WORKSPACES.includes(ws);
+    assert.equal(ids.includes('trigger') && ids.includes('octave'), instrumentKeys, ws);
   }
   assert.ok(shortcutHelp('sequencer').rows.some((r) => r.id === 'sequencer-timeline'));
-  // K003: the focused Sequencer timeline (a listbox, which keeps Space from the instrument)
-  // plays and stops the sequence, undoes and redoes, copies and pastes blocks.
+  // K003: the focused Sequencer timeline undoes and redoes, copies and pastes blocks. U127: Space
+  // plays and stops the sequence there with the timeline focused (K003) or not, so it is the
+  // Sequencer's Space meaning and no timeline row repeats it.
   const seq = Object.fromEntries(shortcutHelp('sequencer').rows.map((r) => [r.id, r]));
-  assert.deepEqual(seq['sequencer-space'], { id: 'sequencer-space', keys: 'Space',
-    where: 'na časové ose Sekvenceru', text: 'Přehrání / zastavení sekvence' });
+  assert.equal(seq['sequencer-space'], undefined);
   assert.equal(seq['sequencer-history'].keys, 'Ctrl/⌘ Z, Shift + Ctrl/⌘ Z');
   assert.equal(seq['sequencer-clipboard'].keys, 'Ctrl/⌘ C, Ctrl/⌘ V');
-  assert.equal(shortcutHelp('sequencer').space, SPACE_MEANING.instrument,
-    'with nothing focused Space is still the instrument\'s (ADR 0050)');
+  assert.deepEqual(shortcutHelp('sequencer').space, { id: 'space', keys: 'Space',
+    text: 'Přehrání / zastavení sekvence' }, 'with nothing focused Space plays the sequence');
+  assert.equal(shortcutHelp('sequencer').space, SPACE_MEANING.sequencer);
   for (const ws of WORKSPACES.filter((w) => w !== 'sequencer')) {
     assert.ok(!shortcutHelp(ws).rows.some((r) => r.id.startsWith('sequencer-')), ws);
   }

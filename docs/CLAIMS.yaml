@@ -602,7 +602,7 @@ claims:
     note: 'tests/browser/navigation.cjs checks guard-studio, guard-measure, guard-saved-metadata and guard-memory-store in Chromium, Firefox and WebKit, from file:// and from a /oscilla/ sub-path: the browser''s own beforeunload dialog, dismissed, keeps the page and its work; Save disarms the guard. The dialog''s words are the browser''s. Ledger W2, closed by #130. ADR 0045.'
 
   - id: space-one-owner
-    claim: 'Space has one owner in each workspace, the same at every width: Hold to Play in the seven workspaces that play, load or analyse the instrument''s signal (Playground, Analyzer, Filter Lab, Compare, Synthesis, Sequencer, Presets), the Studio transport in Studio, and nothing in Measure, Experiments, Learn and About; one shortcut dialog, opened by Help, the overflow menu and Studio''s keyboard button, lists the Space meaning and the keys of the workspace in view and the global keys, each key once'
+    claim: 'Space has one owner in each workspace, the same at every width: Hold to Play in the six workspaces that play, load or analyse the instrument''s signal (Playground, Analyzer, Filter Lab, Compare, Synthesis, Presets), the sequence in the Sequencer (U127), the Studio transport in Studio, and nothing in Measure, Experiments, Learn, the Synth and About, each read from the one per-place play-target table (src/js/core/play-target.js PLAY_TARGET); one shortcut dialog, opened by Help, the overflow menu and Studio''s keyboard button, lists the Space meaning and the keys of the workspace in view and the global keys, each key once'
     source: .ai/repo/adrs/0050-space-is-the-play-key-of-the-workspace-in-view-one-shortcut-.md
     implementation: src/js/ui/shortcuts.js
     test: tests/unit/v4-shortcuts.test.mjs

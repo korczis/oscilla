@@ -4,7 +4,9 @@
 // same declarations, so a binding and its help row are one object. The rows the dialog shows
 // are the ones it showed before the tables became declarations
 // (tests/unit/fixtures/shortcut-help-rows.json, captured from origin/main 8e087873 before the
-// change): nothing was lost, added or reworded.
+// change): nothing was lost, added or reworded. U127 changed the Sequencer's entry on purpose:
+// Space plays or stops the sequence there (core/play-target.js PLAY_TARGET), its Space meaning,
+// and the timeline row that said so only on the focused timeline is gone.
 //
 //   node --test tests/unit/shortcut-help-from-registry.test.mjs
 import test from 'node:test';

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// suite-pace: shared (navigation, history and focus; no audio judged)
+// suite-pace: shared (navigation, history and focus; audio read only as a held level, no clock)
 // OSCILLA unsaved-work guard and workspace navigation history (ledger W2, W4; ADR 0045) on the
 // built dist/index.html in chromium, firefox and webkit, from file:// and from a
 // GitHub-Pages-like sub-path (http://127.0.0.1:<port>/oscilla/), every check on both.
@@ -57,16 +57,24 @@
 //   anchor            the skip link moves focus to the main region with no history entry and the
 //                     address unchanged
 //   space-one-meaning  (ledger W5, ADR 0050) Space with nothing focused does what the workspace
-//                     in view owns, and nothing else: the instrument's Hold to Play in the seven
-//                     workspaces that play, load or analyse its signal, the Studio transport in
-//                     Studio, nothing at all in Measure, Experiments, Learn and About (the key is
-//                     not claimed: read from the keydown, not from a window of time); a focused
-//                     link in Studio keeps Space (nothing starts)
+//                     in view owns, and nothing else: the instrument's Hold to Play in the six
+//                     workspaces that play, load or analyse its signal, the sequence in the
+//                     Sequencer (U127), the Studio transport in Studio, nothing at all in
+//                     Measure, Experiments, Learn, the Synth and About (the key is not claimed:
+//                     read from the keydown, not from a window of time); a focused link in
+//                     Studio keeps Space (nothing starts)
+//   play-target       (U127, C032) read from core/play-target.js PLAY_TARGET in every place, at
+//                     390x844: Space with nothing focused starts what the row gives Space, and a
+//                     real click on the status Play starts the row's target (the instrument, the
+//                     sequence with the tone silent, the Studio transport, the Synth's Arm,
+//                     Měření's primary action in TEST CONTEXT), then reads Stop and a second
+//                     click silences everything; where the row has no target it is hidden
 //   space-after-preset-load  (review of #159) Load in Presets stays in Presets and says "Press
 //                     TRIGGER (or Space)"; with focus off a control, Space plays the preset
 //   space-compact-studio-panel  (review of #159) in the Playground and the Sequencer the compact
 //                     Studio panel takes focus only on its buttons; after a click on its title,
-//                     Space is the instrument's, never the Studio transport's
+//                     Space is the workspace's (the instrument's, the sequence's in the
+//                     Sequencer), never the Studio transport's
 //   one-shortcut-dialog  (W5) one dialog lists shortcuts: Help, the overflow menu and Studio's
 //                     keyboard button open the same dialog, which names the Space meaning of the
 //                     workspace in view and lists that workspace's keys (Studio: its table, the
@@ -89,6 +97,9 @@
 //                     shown (K247: the one keyboard in every workspace);
 //                     every other workspace keeps the state it opens with (read from a plain
 //                     page: armed everywhere since Q105), so a link changes only its own
+//   escape-menu-keeps-sound  Escape with More open closes it and gives focus back to its
+//                     button while a latched tone sounds on (the page's Escape, stopAll, never
+//                     sees the press); a second Escape, no menu open, stops the tone
 //   no-console-errors
 'use strict';
 const { serveDist } = require('./lib/serve.cjs');
@@ -130,6 +141,12 @@ const LAUNCH = {
 const SHORT = { duration: 1, repeats: 1, noiseCheckS: 0.5, preRollS: 0.25, postRollS: 0.5,
   gapS: 0.2 };
 const RUN_MS = 45000;
+// U133 leave-policy: a TEST CONTEXT run long enough to be left while it runs (two repeats of 4 s).
+const LONG_RUN = { ...SHORT, duration: 4, repeats: 2 };
+// A held note reads above SOUNDING_DB (dBFS) at the output analyser's strongest bin; a stopped
+// one below SILENT_DB.
+const SOUNDING_DB = -70;
+const SILENT_DB = -80;
 // A valid recipe link (url-state-measure.js wire keys): 50 Hz-12 kHz.
 const RECIPE = Buffer.from(JSON.stringify({ v: 1, f1: 50, f2: 12000 })).toString('base64url');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -294,29 +311,61 @@ function defineChecks() {
   const checks = [];
   const def = (name, fn) => checks.push({ name, fn });
 
-  // C053: leaving a workspace applies the playback bus's leave policy (core/output-bus.js
-  // LEAVE_POLICY): the instrument and the sequence sound on, held keys are released, the Synth's
-  // Arm goes off, and the status bar's live region says each row's sentence; every wait is a
-  // condition poll with a named deadline (lib/wait.cjs until()).
+  // C053, revised by U133 under the owner's Q114 of 2026-11-24 (answer 'Sound survives
+  // (Recommended)': "Whatever plays keeps playing across places; the strip always shows it and
+  // stops it. Measurement still stops when leaving Měření, to protect run integrity."): leaving a
+  // workspace applies the playback bus's leave policy (core/output-bus.js LEAVE_POLICY). The
+  // instrument and the sequence sound on, a held key sounds on, an armed Synth with a key held on
+  // the real keyboard path sounds on in the Analyzer (the engine's analyser still reads the peak
+  // it read in the Synth, at the key's pitch class), the Synth's leave sentence says it stays on,
+  // the status bar names the held note and its Stop stops it; a running TEST CONTEXT
+  // measurement still stops when Měření is left. The status bar's live region says each row's
+  // sentence; every wait is a condition poll with a named deadline (lib/wait.cjs until()).
   def('leave-policy', async (ctx) => {
     const { LEAVE_POLICY } = await import(pathToFileURL(path.join(ROOT, 'src', 'js', 'core',
       'output-bus.js')).href);
+    const { OUTPUT_OWNER_NAMES } = await import(pathToFileURL(path.join(ROOT, 'src', 'js',
+      'visualization', 'output-owner.js')).href);
+    const NOTES_NAME = OUTPUT_OWNER_NAMES.notes;
     const sentence = (owner) => LEAVE_POLICY.find((r) => r.owner === owner).sentence;
     const page = await H.open(ctx, ctx.baseUrl);
     const ev = (fn, arg) => page.evaluate(fn, arg);
     const read = () => ev(() => {
       const O = window.OSCILLA;
       const a = O.app;
+      const e = O.engine;
+      // The output analyser's strongest bin, interpolated (a parabola through it and its
+      // neighbours): the frequency the engine reads now and its level in dBFS.
+      let peak = { db: -Infinity, hz: 0, bin: 0 };
+      if (e.analyser && e.ctx) {
+        const an = e.analyser;
+        const d = new Float32Array(an.frequencyBinCount);
+        an.getFloatFrequencyData(d);
+        let k = 1;
+        for (let i = 2; i < d.length - 1; i++) if (d[i] > d[k]) k = i;
+        const [l, c, r] = [d[k - 1], d[k], d[k + 1]];
+        const den = l - 2 * c + r;
+        const p = Number.isFinite(den) && den !== 0 ? 0.5 * (l - r) / den : 0;
+        const bin = e.ctx.sampleRate / an.fftSize;
+        peak = { db: Number.isFinite(c) ? c : -Infinity, hz: (k + p) * bin, bin };
+      }
+      const t = O.studio && O.studio.transport;
+      const sb = document.getElementById('osc-sb-play');
       return { ws: a.workspace, playing: !!a.playing, seq: !!O.labs.sequencer.editor.playing,
-        armed: !!(a.synth && a.synth.armed), notes: O.engine.noteCount,
-        studioHeld: O.studio && O.studio.transport ? O.studio.transport.heldNotes().length : 0,
-        said: (window.__said || []).join(' | '), nodes: O.engine.activeNodeCount,
-        kbd: !!a.notesSounding, status: a.status };
+        armed: !!(a.synth && a.synth.armed), notes: e.noteCount,
+        studioHeld: t ? t.heldNotes().length : 0, tArmed: !!(t && t.armed),
+        said: (window.__said || []).join(' | '), nodes: e.activeNodeCount,
+        kbd: !!a.notesSounding, status: a.status, peak, a4: a.a4 > 0 ? a.a4 : 440,
+        base: a.kbdBase, measure: O.measure.state,
+        pattern: document.querySelector('[data-osc="status.pattern"]').textContent.trim(),
+        frequency: document.querySelector('[data-osc="status.frequency"]').textContent.trim(),
+        label: document.querySelector('[data-osc="status.label"]').textContent.trim(),
+        stopName: sb.getAttribute('aria-label'), stopShown: sb.getClientRects().length > 0 };
     });
-    const settle = async (pred, what) => {
+    const settle = async (pred, what, ms = 6000) => {
       try {
         return await until(async () => { const s = await read(); return pred(s) ? s : null; },
-          { ms: 6000, what: `leave-policy: ${what}` });
+          { ms, what: `leave-policy: ${what}` });
       } catch (e) {
         if (e.name !== 'WaitTimeout') throw e;
         return { timedOut: true, ...(await read()) };
@@ -327,12 +376,19 @@ function defineChecks() {
       await until(() => ev((w) => window.OSCILLA.app.workspace === w, ws),
         { ms: 8000, what: `leave-policy: the ${ws} workspace opens` });
     };
+    // Through the navigation, as the user moves (lib/shell.cjs: the sidebar, a drawer or group).
+    const nav = async (ws) => {
+      await shell.navTo(page, ws);
+      await until(() => ev((w) => window.OSCILLA.app.workspace === w, ws),
+        { ms: 8000, what: `leave-policy: the navigation opens ${ws}` });
+    };
     // stopAll, then wait until the stop's fade has ended and its own announcement was made, so
     // it cannot land over the next leave's sentence
     const quiet = async (what) => {
       await ev(() => window.dispatchEvent(new Event('pagehide')));
       await settle((s) => !s.playing && !s.seq && !s.armed && s.notes === 0 && s.nodes === 0
-        && s.status !== 'PLAYING' && s.status !== 'RELEASING', `quiet after ${what}`);
+        && s.studioHeld === 0 && s.status !== 'PLAYING' && s.status !== 'RELEASING',
+      `quiet after ${what}`);
     };
     // Every sentence the status bar's live region says, in order: a later status announcement
     // (the stopped voice's "Playback STOPPED") may follow the leave sentence at once.
@@ -340,7 +396,11 @@ function defineChecks() {
       window.__said = [];
       window.OSCILLA.app.$watch('announceText', (v) => { if (v) window.__said.push(v); });
     });
-    const forget = () => ev(() => { window.__said.length = 0; });
+    // The live region is cleared too, so a leave that says the same sentence again is heard.
+    const forget = () => ev(() => {
+      window.__said.length = 0;
+      window.OSCILLA.app.announceText = '';
+    });
     const res = {};
     await go('playground');
     await ev(() => { window.OSCILLA.app.setContinuous(true); window.OSCILLA.app.toggleLatch(); });
@@ -354,32 +414,137 @@ function defineChecks() {
     await page.click('#osc-seq-play');
     await settle((s) => s.seq, 'the sequence plays');
     await forget();
-    await go('playground');
+    await go('studio');
     res.sequenceKeeps = await settle((s) => s.seq && s.said.includes(sentence('sequencer')),
-      'leaving the Sequencer, the sequence sounds on and the status bar says so');
+      'leaving the Sequencer for the Studio, the sequence sounds on and the status bar says so');
     await quiet('the sequence');
+    await go('playground');
     await page.locator('[data-osc="keyboard.readout"]').click(); // a gesture, on no control
     await page.keyboard.down('KeyA');
     // K247: the key plays the one instrument (the Studio transport), lit on the keys; the
     // engine's own note count stays 0.
     res.keyHeld = await settle((s) => s.kbd && s.studioHeld > 0, 'a held key sounds and is lit');
     await forget();
-    await go('studio'); // the keys' dock folds there too: the bus's leave reads them first
-    res.keysReleased = await settle((s) => s.studioHeld === 0 && s.said.includes(sentence('notes')),
-      'leaving with a key held releases it and the status bar says so');
+    await go('studio'); // the keys' dock folds there: the fold releases nothing (U133)
+    res.keysKeep = await settle((s) => s.kbd && s.studioHeld > 0
+      && s.said.includes(sentence('notes')),
+    'leaving the Playground with a key held, it sounds on and the status bar says so');
     await page.keyboard.up('KeyA');
+    res.keyUpEnds = await settle((s) => !s.kbd && s.studioHeld === 0,
+      'the key\'s own keyup ends it in the Studio');
     await quiet('the keys');
-    await go('synth');
-    await ev(() => window.OSCILLA.app.synthArm());
+    // The Synth, armed by its own Arm switch, a key held on the computer keyboard, then the
+    // Analyzer through the navigation.
+    await nav('synth');
+    await page.click('[data-osc="synth.arm"]');
     await settle((s) => s.armed, 'the Synth is armed');
+    await page.locator('[data-osc="page.header"]').click(); // a gesture, on no control
+    await page.keyboard.down('KeyA');
+    const inSynth = await settle((s) => s.kbd && s.studioHeld > 0 && s.peak.db > SOUNDING_DB,
+      'the key held on the armed Synth sounds through the output analyser');
+    res.synthSounds = inSynth;
+    // The pitch class of the key the keyboard plays (its base note, kbdBase): the analyser's peak
+    // is that note in some octave of the Synth's range, within one analyser bin.
+    const noteHz = inSynth.a4 * 2 ** ((inSynth.base - 69) / 12);
+    const octave = Math.round(Math.log2(inSynth.peak.hz / noteHz));
+    res.synthPitch = { ok: Math.abs(inSynth.peak.hz - noteHz * 2 ** octave) <= inSynth.peak.bin,
+      noteHz, peakHz: inSynth.peak.hz, bin: inSynth.peak.bin, octave };
     await forget();
-    await go('playground');
-    res.synthDisarmed = await settle((s) => !s.armed && s.said.includes(sentence('synth')),
-      'leaving the Synth turns Arm off and the status bar says so');
+    await nav('analyzer');
+    res.synthKeeps = await settle((s) => s.ws === 'analyzer' && s.armed && s.kbd
+      && s.studioHeld > 0 && s.peak.db > SOUNDING_DB
+      && Math.abs(s.peak.hz - inSynth.peak.hz) <= s.peak.bin
+      && s.said.includes(sentence('synth')) && s.said.includes(sentence('notes')),
+    'in the Analyzer the armed Synth\'s held note sounds on: the analyser reads its peak and the '
+      + 'status bar says why');
+    // The status bar names what sounds as the scope's description does (C024: the notes, the
+    // held note's name), says the Synth is still on (its leave sentence) and its key reads Stop.
+    res.barNamesIt = await settle((s) => s.pattern.toLowerCase() === NOTES_NAME.toLowerCase()
+      && s.frequency === 'C4' && s.label === 'HRAJE' && s.stopShown
+      && s.stopName === 'Zastavit přehrávání',
+    'the status bar names the held note and its key reads Stop');
+    await page.click('#osc-sb-play');
+    res.barStops = await settle((s) => !s.armed && !s.kbd && s.studioHeld === 0 && !s.tArmed
+      && s.peak.db < SILENT_DB && !s.playing,
+    'the status bar\'s Stop stops the Synth and its note, and starts nothing');
+    await page.keyboard.up('KeyA');
+    res.keyUpAfterStop = await settle((s) => !s.kbd && s.studioHeld === 0 && !s.playing
+      && s.peak.db < SILENT_DB, 'the late keyup leaves nothing sounding');
     await quiet('the Synth');
+    // A running measurement in MEASURE's TEST CONTEXT (the digital loopback, no microphone)
+    // stops when Měření is left, as before U133 (run integrity, ADR 0063).
+    await nav('measure');
+    await seam.loopback(page, { values: LONG_RUN });
+    await page.click('#osc-measure-primary'); // Check setup
+    await settle((s) => ['READY', 'INVALID', 'ERROR'].includes(s.measure),
+      'the TEST CONTEXT setup check ends', RUN_MS);
+    await page.click('#osc-measure-primary'); // Start measurement
+    res.measureRuns = await settle((s) => ['ARMED', 'MEASURING'].includes(s.measure),
+      'the measurement runs', RUN_MS);
+    await forget();
+    await nav('filter');
+    res.measureStops = await settle((s) => s.ws === 'filter' && s.measure === 'ABORTED'
+      && s.said.includes(sentence('measurement')),
+    'leaving Měření stops the running measurement and the status bar says so');
     await page.close();
     return { ...H.verdict(Object.fromEntries(Object.entries(res).map(([k, v]) => [k,
-      !v.timedOut]))), ...res };
+      k === 'synthPitch' ? v.ok : !v.timedOut]))), ...res };
+  });
+
+  // Escape with a header menu open is the menu's: it closes More and gives focus back to its
+  // button, and the latched tone sounds on (the page's Escape, the bus's stopAll, never sees the
+  // press); a second Escape, with no menu open, stops the tone. Real clicks and real keys; every
+  // wait is a condition poll with a named deadline (lib/wait.cjs until()).
+  def('escape-menu-keeps-sound', async (ctx) => {
+    const page = await H.open(ctx, `${ctx.baseUrl}#m=playground`);
+    const read = () => page.evaluate(() => {
+      const O = window.OSCILLA;
+      const a = O.app;
+      const panel = document.querySelector('[data-osc-menu-panel="overflow"]');
+      const btn = document.querySelector('[data-osc-menu-button="overflow"]');
+      return { playing: !!a.playing, sources: O.engine.activeSourceCount, status: a.status,
+        open: !!a.menus.overflow, shown: !!panel && panel.getClientRects().length > 0,
+        inMenu: !!panel && panel.contains(document.activeElement),
+        onButton: document.activeElement === btn };
+    });
+    const settle = async (pred, what) => {
+      try {
+        return await until(async () => { const s = await read(); return pred(s) ? s : null; },
+          { ms: 8000, what: `escape-menu-keeps-sound: ${what}` });
+      } catch (e) {
+        if (e.name !== 'WaitTimeout') throw e;
+        return { timedOut: true, ...(await read()) };
+      }
+    };
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.setContinuous(true);
+      if (!a.latched) a.toggleLatch();
+    });
+    const sounding = await settle((s) => s.playing && s.sources > 0, 'the latched tone plays');
+    await page.click('[data-osc="header.overflow"]');
+    // The click is also the gesture that resumes a context the browser held suspended: the
+    // status reads PLAYING before the key is pressed.
+    const opened = await settle((s) => s.open && s.shown && s.inMenu && s.status === 'PLAYING',
+      'More opens with focus on its first item while the tone plays');
+    await page.keyboard.press('Escape');
+    // The key's handlers ran in its own dispatch: what the page reads now is their outcome. A
+    // stop sets the status to RELEASING at once while the fade still sounds (and `playing` is
+    // still true), so the status is what tells a kept tone from a stopped one.
+    const closed = await settle((s) => !s.open && !s.shown && s.onButton,
+      'Escape closes More and focuses its button');
+    await page.keyboard.press('Escape');
+    const stopped = await settle((s) => !s.playing && s.sources === 0,
+      'a second Escape stops the tone');
+    await page.close();
+    return { ...H.verdict({
+      sounding: !sounding.timedOut,
+      opened: !opened.timedOut,
+      closedToButton: !closed.timedOut,
+      keepsSound: !closed.timedOut && closed.playing && closed.sources > 0
+        && closed.status === 'PLAYING',
+      secondStops: !stopped.timedOut,
+    }), sounding, opened, closed, stopped };
   });
 
   // C030: a visible Play on every workspace that should sound. At the desktop width (the suite's
@@ -1252,15 +1417,18 @@ function defineChecks() {
     after: { hash: after.hash, length: after.length, focus: after.focus } };
   });
 
-  // W5 / ADR 0050: what Space (nothing focused) starts in each workspace.
+  // W5 / ADR 0050: what Space (nothing focused) starts in each workspace. U127: in the Sequencer
+  // it is the sequence (core/play-target.js PLAY_TARGET), no longer the instrument's tone.
   const SPACE_EXPECTED = { playground: 'instrument', measure: 'none', experiments: 'none',
     analyzer: 'instrument', filter: 'instrument', compare: 'instrument', synthesis: 'instrument',
-    sequencer: 'instrument', presets: 'instrument', learn: 'none', studio: 'studio',
+    sequencer: 'sequencer', presets: 'instrument', learn: 'none', studio: 'studio',
     about: 'none' };
   const sounding = (page) => page.evaluate(() => ({ instrument: !!window.OSCILLA.app.playing,
+    sequencer: !!window.OSCILLA.labs.sequencer.editor.playing,
     studio: !!window.OSCILLA.app.studio.playing }));
-  const heardOf = (v) => (v.instrument && v.studio ? 'both'
-    : v.instrument ? 'instrument' : v.studio ? 'studio' : 'none');
+  // What sounds, by name ('instrument+studio' when two do), or 'none'.
+  const heardOf = (v) => ['instrument', 'sequencer', 'studio'].filter((k) => v[k]).join('+')
+    || 'none';
   /**
    * Press Space at `focus` ('body': nothing focused; null: wherever focus is; else a selector)
    * and report what started, then stop it. Both owners claim the key inside its keydown
@@ -1305,9 +1473,11 @@ function defineChecks() {
       const a = window.OSCILLA.app;
       a.stopNow();
       if (a.studio.playing) a.studioStop();
+      const seq = window.OSCILLA.labs.sequencer;
+      if (seq.editor.playing) seq.editor.stop();
     });
     await until(async () => heardOf(await sounding(page)) === 'none',
-      { ms: 8000, what: 'the instrument and Studio are silent after the Space check' });
+      { ms: 8000, what: 'the instrument, the sequence and Studio are silent after Space' });
     return { heard, claimed: key.claimed, focus: focusAt };
   };
 
@@ -1328,6 +1498,88 @@ function defineChecks() {
     const wrong = Object.keys(SPACE_EXPECTED).filter((ws) => got[ws] !== SPACE_EXPECTED[ws]);
     return { ...H.verdict({ everyWorkspace: wrong.length === 0,
       focusedLinkKeepsSpace: onLink.heard === 'none' && !onLink.claimed }), wrong, got, onLink };
+  });
+
+  // U127 (C032, docs/reconstruction/07 §4.3): one per-place play-target table. Read from the
+  // table itself (core/play-target.js), in every place: Space with nothing focused starts what
+  // its row gives Space (nothing where it gives none), and a real click on the status bar's Play
+  // (at 390x844, where it is every place's transport key) starts the row's target, the bar then
+  // reads Stop and a second click silences everything; where the row has no target the Play is
+  // hidden. In the Sequencer both start the sequence and the instrument's tone stays silent; in
+  // the Studio both play its transport. Measure's Play runs its primary action (the TEST CONTEXT
+  // setup check, no microphone). Every wait is a condition poll with a named deadline.
+  def('play-target', async (ctx) => {
+    const T = await import(pathToFileURL(path.join(ROOT, 'src', 'js', 'core',
+      'play-target.js')).href);
+    const page = await H.open(ctx, ctx.baseUrl);
+    await page.setViewportSize({ width: 390, height: 844 });
+    const ev = (fn, arg) => page.evaluate(fn, arg);
+    const read = () => ev(() => {
+      const O = window.OSCILLA;
+      const a = O.app;
+      const b = document.getElementById('osc-sb-play');
+      return { ws: a.workspace, instrument: !!a.playing,
+        sequencer: !!O.labs.sequencer.editor.playing, studio: !!a.studio.playing,
+        synth: !!(a.synth && a.synth.armed), measure: O.measure.state,
+        name: b.getAttribute('aria-label'), shown: b.getClientRects().length > 0
+          && getComputedStyle(b).display !== 'none' };
+    });
+    const settle = async (pred, what, ms = 8000) => {
+      try {
+        return await until(async () => { const v = await read(); return pred(v) ? v : null; },
+          { ms, what: `play-target: ${what}` });
+      } catch (e) {
+        if (e.name !== 'WaitTimeout') throw e;
+        return { timedOut: true, ...(await read()) };
+      }
+    };
+    const silent = (v) => !v.instrument && !v.sequencer && !v.studio && !v.synth;
+    // What a target's start reads as: the target on, the instrument's tone off unless it is it.
+    const started = {
+      instrument: (v) => v.instrument,
+      sequencer: (v) => v.sequencer && !v.instrument,
+      studio: (v) => v.studio && !v.instrument,
+      synth: (v) => v.synth && !v.instrument,
+      measure: (v) => ['READY', 'INVALID', 'ERROR'].includes(v.measure) && !v.instrument,
+    };
+    await ev(() => window.OSCILLA.app.setContinuous(true)); // a latch, not a timed trigger
+    const res = {};
+    for (const ws of Object.keys(T.PLAY_TARGET)) {
+      const row = T.PLAY_TARGET[ws];
+      await ev((w) => window.OSCILLA.app.setWorkspace(w), ws);
+      await until(() => ev((w) => window.OSCILLA.app.workspace === w, ws),
+        { ms: 8000, what: `play-target: the ${ws} workspace opens` });
+      if (row.target === T.MEASURE_TARGET) await seam.loopback(page, { values: SHORT });
+      const space = (await pressSpace(page, 'body')).heard;
+      const spaceWant = T.spaceTarget(ws) || 'none';
+      const r = { space, spaceOk: space === spaceWant };
+      const idle = await settle((v) => v.ws === ws && silent(v), `${ws}: silent before its Play`);
+      if (!row.target) {
+        r.playOk = !idle.timedOut && !idle.shown;
+        res[ws] = { ...r, hidden: !idle.shown };
+        continue;
+      }
+      await page.click('#osc-sb-play');
+      const on = await settle(started[row.target], `${ws}: the status Play starts ${row.target}`,
+        row.target === T.MEASURE_TARGET ? RUN_MS : 8000);
+      let off = on;
+      if (row.target !== T.MEASURE_TARGET) {
+        const stop = await settle((v) => v.name === 'Zastavit přehrávání',
+          `${ws}: the status Play reads Stop`);
+        if (!stop.timedOut) await page.click('#osc-sb-play');
+        off = await settle(silent, `${ws}: its Stop silences everything`);
+      }
+      r.playOk = !on.timedOut && !off.timedOut;
+      res[ws] = { ...r, on, off };
+    }
+    await ev(() => window.OSCILLA.app.setContinuous(false));
+    await page.close();
+    const wrong = Object.keys(res).filter((ws) => !res[ws].spaceOk || !res[ws].playOk);
+    return { ...H.verdict({
+      everyPlace: wrong.length === 0,
+      sequencerPlaysTheSequence: res.sequencer.space === 'sequencer' && res.sequencer.playOk,
+      studioPlaysItsTransport: res.studio.space === 'studio' && res.studio.playOk,
+    }), wrong, res };
   });
 
   // Review of #159: Presets says "Press Space to play it here" after Load (A1: and links to the
@@ -1362,7 +1614,8 @@ function defineChecks() {
 
   // Review of #159: the compact Studio panel (Playground, Sequencer) has no Space of its own.
   // Every focus target in it is a button, which keeps the key; a click on its title or counts
-  // focuses nothing in it, and Space is then the workspace's (the instrument), never Studio's.
+  // focuses nothing in it, and Space is then the workspace's (the instrument in the Playground,
+  // the sequence in the Sequencer since U127), never Studio's.
   def('space-compact-studio-panel', async (ctx) => {
     const page = await H.open(ctx, ctx.baseUrl);
     await page.evaluate(() => window.OSCILLA.app.setContinuous(true));
@@ -1384,7 +1637,8 @@ function defineChecks() {
     const each = (f) => Object.values(got).every(f);
     return { ...H.verdict({
       onlyButtonsTakeFocus: each((g) => g.focusables.length === 0),
-      spaceIsTheInstruments: each((g) => g.heard === 'instrument'),
+      spaceIsTheWorkspaces: got.playground.heard === 'instrument'
+        && got.sequencer.heard === SPACE_EXPECTED.sequencer,
     }), got };
   });
 

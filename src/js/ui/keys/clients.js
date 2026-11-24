@@ -8,6 +8,9 @@
 //     'instrument.space'  Space, Hold to Play in the workspaces whose Space owner is the
 //                         instrument (ui/shortcuts.js SPACE_OWNER, ADR 0050): held it plays,
 //                         released it stops, a programmed pattern triggers once
+//     'sequence.space'    Space where the sequence is the place's play target (the Sequencer,
+//                         core/play-target.js PLAY_TARGET, U127): play or stop it, as its Play
+//                         and Stop do (cmp.sequenceTogglePlay); an auto-repeat starts nothing
 //     'keys.dock'         Alt+K, where the docked keyboard yields to a pad that owns the notes
 //                         (K171, midi/dock-yield.js): unfold or fold the keys, as its handle does
 //     'notes.record'      R, while a Record switch is shown (K223, ui/kinds/record-switch.js: the
@@ -16,7 +19,7 @@
 //     Synth's view is its tab ('panel', 'engines', 'xy')
 //   Escape, Space and R are declared once in ui/shortcuts.js PAGE_KEYS: each binding here
 //   spreads its declaration, which is also the row the Keyboard shortcuts dialog lists (D05).
-import { PAGE_KEYS, instrumentTakesSpace } from '../shortcuts.js';
+import { PAGE_KEYS, instrumentTakesSpace, sequenceTakesSpace } from '../shortcuts.js';
 import { DOCK_KEY } from '../../midi/dock-yield.js';
 
 export const pageKeyContext = (cmp) => ({ workspace: cmp.workspace,
@@ -42,6 +45,8 @@ export function bindPageKeys({ keys, cmp, stopSequencer, stopAll = null }) {
       } }),
     keys.bind({ ...PAGE_KEYS.space, when: () => instrumentTakesSpace(cmp.workspace),
       run: (e) => cmp.onKeyDown(e), up: (e) => cmp.onKeyUp(e) }),
+    keys.bind({ ...PAGE_KEYS.sequence, when: () => sequenceTakesSpace(cmp.workspace),
+      run: () => cmp.sequenceTogglePlay() }),
     keys.bind({ id: 'keys.dock', keys: [DOCK_KEY], scope: { workspace: '*' },
       when: () => !!cmp.kbdDockYields, group: 'Keyboard',
       label: 'Rozložit nebo složit klávesnici tam, kde noty hraje pad (její úchyt)',

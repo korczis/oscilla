@@ -2095,8 +2095,9 @@ function defineChecks() {
       if (!m) throw new Error(`${what} not found in src/js/core/play-hints.js (its shape changed)`);
       return m[1];
     };
-    const playWs = JSON.parse(fromHints(/STATUS_PLAY_WORKSPACES = Object\.freeze\((\[[^\]]*\])\)/,
-      'STATUS_PLAY_WORKSPACES').replace(/'/g, '"'));
+    // U127: the list is derived from the one play-target table, so it is read from the module.
+    const playWs = [...(await import(pathToFileURL(path.join(__dirname, '..', '..', 'src', 'js',
+      'core', 'play-hints.js')).href)).STATUS_PLAY_WORKSPACES];
     const czechTitle = fromHints(/STATUS_PLAY_TITLES = Object\.freeze\(\{[^}]*?restored: '([^']+)'/,
       'STATUS_PLAY_TITLES.restored');
     const restoredTitle = (m) => (playWs.includes(m) ? czechTitle

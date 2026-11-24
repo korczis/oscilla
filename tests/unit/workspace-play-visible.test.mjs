@@ -17,6 +17,7 @@ import * as shortcuts from '../../src/js/ui/shortcuts.js';
 import { createWorkbench } from '../../src/js/ui/workbench.js';
 import { presetLoadedNotice } from '../../src/js/core/preset-notice.js';
 import * as hints from '../../src/js/core/play-hints.js';
+import { PLAY_TARGET } from '../../src/js/core/play-target.js';
 import { applyConfig } from '../../src/js/core/config.js';
 import { restoreFromHash, serializeHash } from '../../src/js/core/url-state.js';
 
@@ -89,23 +90,35 @@ function statusPlay() {
     && get.get.call({ workspace })) };
 }
 
-test('C030: every workspace whose Space has an owner shows one Play at desktop width', () => {
+/**
+ * The workspaces whose markup lays out the control `osc` (a data-osc value): the data-osc-modes
+ * of the last section opened before it.
+ */
+function laidOutIn(osc) {
+  const at = HTML.indexOf(`data-osc="${osc}"`);
+  if (at < 0) return [];
+  const before = [...HTML.slice(0, at).matchAll(/data-osc-modes="([^"]+)"/g)].at(-1);
+  return before ? before[1].split(/\s+/) : [];
+}
+
+// The Play of its own each play target has (core/play-target.js PLAY_TARGET ownPlay): what the
+// markup lays out for it.
+const OWN_PLAY = { sequencer: 'seq.play', studio: 'studio.play', synth: 'synth.arm',
+  measure: 'measure.primary' };
+
+test('C030, U127: every place with a play target shows one Play at desktop width', () => {
   const panel = sourcePanel();
   assert.ok(panel.hold && panel.trigger, 'the Source & Pattern panel carries Hold and Trigger');
   assert.deepEqual(desktopHides('osc-trigger'), [], 'nothing hides Trigger on a desktop');
   assert.deepEqual(desktopHides('osc-st-play'), [], 'nothing hides the Studio Play on a desktop');
   const sb = statusPlay();
   const missing = [];
-  for (const [ws, owner] of Object.entries(SPACE_OWNER)) {
-    if (!owner) continue;
-    if (owner === 'studio') {
-      const { at } = tagOf(/data-osc-modes="studio"/);
-      const play = HTML.indexOf('data-osc="studio.play"', at);
-      if (play < 0) missing.push(`${ws}: no Studio Play`);
-      continue;
-    }
-    const plays = [panel.modes.includes(ws) && 'Hold/Trigger', sb.shown(ws) && 'status Play']
-      .filter(Boolean);
+  for (const [ws, { target, ownPlay }] of Object.entries(PLAY_TARGET)) {
+    if (!target) continue;
+    const own = target === 'instrument' ? panel.modes.includes(ws)
+      : laidOutIn(OWN_PLAY[target]).includes(ws);
+    assert.equal(own, ownPlay, `${ws}: PLAY_TARGET ownPlay matches the markup`);
+    const plays = [own && 'its own Play', sb.shown(ws) && 'status Play'].filter(Boolean);
     if (plays.length !== 1) missing.push(`${ws}: ${plays.length ? plays.join(' + ') : 'none'}`);
   }
   assert.deepEqual(missing, [], 'one visible Play per workspace (C030)');
@@ -228,12 +241,13 @@ test('C030: the status Play is announced by the word the prompts name it by', ()
   const wb = createWorkbench({ engine: { analyser: { fftSize: 8192 } }, stopPlayback() {},
     sequencerPlaying: () => false });
   const get = Object.getOwnPropertyDescriptor(wb, 'statusPlayName').get;
-  const name = (o) => get.call({ isSounding: false, continuousAllowed: false,
-    isProgrammed: false, ...o });
+  // U127: the instrument's names, where the status Play plays the instrument
+  const name = (o) => get.call({ statusPlayStops: false, statusPlayTarget: 'instrument',
+    continuousAllowed: false, isProgrammed: false, ...o });
   assert.equal(name({}), 'Přehrát');
   assert.equal(name({ continuousAllowed: true }), 'Přehrát nepřetržitě');
   assert.equal(name({ continuousAllowed: true, isProgrammed: true }), 'Přehrát');
-  assert.equal(name({ isSounding: true }), 'Zastavit přehrávání');
+  assert.equal(name({ statusPlayStops: true }), 'Zastavit přehrávání');
   for (const kind of Object.keys(hints.STATUS_PLAY_HINTS)) {
     assert.match(hints.STATUS_PLAY_HINTS[kind], /Přehrát/, `${kind} names it as announced`);
   }

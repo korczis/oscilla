@@ -10,7 +10,7 @@ import { createWorkbench } from '../../src/js/ui/workbench.js';
 // stopPlayback does what main.js's does for these two sources: stop the sequence when its
 // editor plays (and clear the copy), stop the instrument when it plays.
 function rig({ editorPlaying = false, seqPlaying = false, playing = false,
-  continuousAllowed = false, isProgrammed = false } = {}) {
+  continuousAllowed = false, isProgrammed = false, workspace = 'playground' } = {}) {
   const calls = { stopPlayback: 0, editorStop: 0, stopNow: 0, trigger: 0, toggleLatch: 0 };
   const editor = {
     playing: editorPlaying,
@@ -32,7 +32,9 @@ function rig({ editorPlaying = false, seqPlaying = false, playing = false,
   wb = createWorkbench(svc);
   Object.assign(wb, {
     playback: { owner: seqPlaying ? 'sequencer' : null, since: 0 }, // the bus's state (C051)
-    playing, continuousAllowed, isProgrammed,
+    // U127: the status Play starts the place's play target (core/play-target.js); these cases
+    // are the instrument's (the Playground), tests/unit/play-target-table.test.mjs the others.
+    workspace, playing, continuousAllowed, isProgrammed,
     stopNow() { calls.stopNow += 1; this.playing = false; },
     trigger() { calls.trigger += 1; this.playing = true; },
     toggleLatch() { calls.toggleLatch += 1; this.playing = true; },

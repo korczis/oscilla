@@ -413,8 +413,7 @@
     "space": {
       "id": "space",
       "keys": "Space",
-      "where": "(hold)",
-      "text": "Hold to play: sounds while held, stops on release (a programmed pattern: trigger once)"
+      "text": "Přehrání / zastavení sekvence"
     },
     "rows": [
       {
@@ -428,12 +427,6 @@
         "keys": "PgUp / PgDn",
         "where": "na posuvníku frekvence, kde je",
         "text": "O oktávu výš / níž"
-      },
-      {
-        "id": "sequencer-space",
-        "keys": "Space",
-        "where": "na časové ose Sekvenceru",
-        "text": "Přehrání / zastavení sekvence"
       },
       {
         "id": "sequencer-timeline",

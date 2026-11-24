@@ -345,13 +345,15 @@ say.
 
 The compact Studio panel of the Playground and the Sequencer has no Space of its own. Its Play
 button starts the Studio transport; Space on that focused button presses it, and with focus
-anywhere else in those workspaces Space is the instrument's.
+anywhere else Space is the workspace's own: the instrument's in the Playground, the sequence's in
+the Sequencer.
 
 <!-- space:begin -->
 | Workspaces | Space |
 | --- | --- |
-| Playground, Analyzátor, Filtry, Porovnání, Syntéza, Sekvencer, Předvolby | Hold to play: sounds while held, stops on release (a programmed pattern: trigger once) |
+| Playground, Analyzátor, Filtry, Porovnání, Syntéza, Předvolby | Hold to play: sounds while held, stops on release (a programmed pattern: trigger once) |
 | Měření, Experimenty, Výuka, Synth, O aplikaci | Nothing: Space starts no sound in this workspace |
+| Sekvencer | Přehrání / zastavení sekvence |
 | Studio | Play / stop the Studio transport |
 <!-- space:end -->
 
