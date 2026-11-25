@@ -12,10 +12,15 @@
 // tabpanel, with its three chart hosts and their live instances) into its slot while open and
 // puts it back when closed, so the analyser is read once per frame as before. No
 // AudioNode is made (rule project.audio-engine-discipline).
+// Sonda adds, never removes (U146): in a place that shows the analysis panel itself (its
+// data-osc-modes lists the workspace: Playground, Analyzátor, Syntéza) the sheet never opens,
+// because moving the view would hollow the panel out; the Sonda button brings the panel into
+// view and focuses its view tab instead, and entering such a place closes an open sheet.
 //
 //   lensSubject({ owner, synthArmed }) -> { id, label, idle }       pure
 //   lensViews(subject)                 -> { views, marker, computedNote }  pure
 //   lensMarkerShown(owner)             -> boolean (allocation-free; read by the Spectrum per frame)
+//   lensInPlace(workspace, modes)      -> boolean: the place shows the analysis panel itself  pure
 //   createLensPart({ relayout })       -> the component part (lensOpen, lensShow, lensClose, ...)
 //   bindLensKeys({ keys, cmp })        -> unbind: Escape closes an open sheet before the page's
 //                                         Escape (it never also stops the sound)
@@ -93,8 +98,12 @@ export function lensViewFor(tab) {
   return LENS_VIEWS.includes(tab) ? tab : LENS_DEFAULT_VIEW;
 }
 
+/** The analysis panel, whose data-osc-modes names the places that show it. */
+export const LENS_PANEL_ID = 'osc-panel-analysis';
 /** The analysis panel's view: its tabpanel, found in the panel before the first move. */
-const VIEW_SELECTOR = '#osc-panel-analysis [role="tabpanel"]';
+const VIEW_SELECTOR = `#${LENS_PANEL_ID} [role="tabpanel"]`;
+/** The panel's selected view tab: where focus lands when the button brings the panel in. */
+const TAB_SELECTOR = `#${LENS_PANEL_ID} [role="tab"][aria-selected="true"]`;
 const SLOT_ID = 'osc-lens-slot';
 const TOGGLE_ID = 'osc-lens-toggle';
 /** The navbar's Sonda button, from a tablet up (the status bar's toggle serves a phone). */
@@ -127,6 +136,15 @@ export function reparentView(doc, into) {
   return true;
 }
 
+/**
+ * Whether `workspace` shows the analysis panel itself: its data-osc-modes (`modes`, the
+ * markup's own list, never a copy) names it. There the sheet would only take the panel's view
+ * away, so it never opens.
+ */
+export function lensInPlace(workspace, modes) {
+  return !!workspace && String(modes || '').split(/\s+/).includes(workspace);
+}
+
 /** The Pro button group's classes of view `v` at index `i` (the pressed one primary). */
 export function lensViewClass(v, i, current, n = LENS_VIEWS.length) {
   return [i === 0 ? 'rounded-s-lg' : '-ms-px', i === n - 1 ? 'rounded-e-lg' : '',
@@ -148,12 +166,35 @@ export function createLensPart({ relayout = () => {} } = {}) {
     },
     get lensViews() { return lensViews(this.lensSubject); },
     get lensView() { return lensViewFor(this.tabs && this.tabs.analysis); },
+    /** This place shows the analysis panel itself (lensInPlace over the panel's own markup). */
+    get lensInPlace() {
+      const panel = document.getElementById(LENS_PANEL_ID);
+      return lensInPlace(this.workspace, panel && panel.dataset && panel.dataset.oscModes);
+    },
+    /** What the Sonda buttons control here: the panel in its own place, else the sheet. */
+    get lensControls() { return this.lensInPlace ? LENS_PANEL_ID : 'osc-lens'; },
+    /** aria-expanded of the Sonda buttons: none where they open no sheet. */
+    get lensExpanded() { return this.lensInPlace ? null : String(this.lensOpen); },
     lensToggle() {
       if (this.lensOpen) this.lensClose();
       else this.lensShow();
     },
+    /** In the panel's own place: bring the panel into view and focus its view tab. */
+    lensRevealPanel() {
+      if (typeof this.closeMenus === 'function') this.closeMenus();
+      const panel = document.getElementById(LENS_PANEL_ID);
+      if (!panel) return;
+      panel.scrollIntoView({ block: 'start' });
+      const tab = panel.querySelector(TAB_SELECTOR) || panel.querySelector('[role="tab"]');
+      if (tab) tab.focus({ preventScroll: true });
+    },
+    /** The workspace changed: a place that shows the panel itself takes its view back. */
+    lensFollowPlace() {
+      if (this.lensOpen && this.lensInPlace) this.lensClose({ focus: false });
+    },
     lensShow() {
       if (this.lensOpen) return;
+      if (this.lensInPlace) { this.lensRevealPanel(); return; }
       // A computed tab (Harmonics, the Signal Path) is not shown here: the observed default.
       if (this.tabs && this.tabs.analysis !== this.lensView) this.setTab('analysis', this.lensView);
       reparentView(document, true);

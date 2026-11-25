@@ -369,6 +369,9 @@ function sidebarEntries(root) {
 
 /**
  * What Escape does in the shell's widgets (a pure decision, applied by createShell):
+ *   null        while Sonda's sheet is open (lensOpen), first of all: the key goes on to the key
+ *               registry, whose lens.escape bindings close the sheet and consume it (ui/lens.js,
+ *               U146), so a sidebar group never collapses under an open sheet;
  *   'clear'     a workspace search holding a query empties it (the drawer stays open);
  *   'close'     anywhere else in the open phone drawer, the drawer closes and focus returns to
  *               the menu button;
@@ -378,7 +381,9 @@ function sidebarEntries(root) {
  * search: the key came from a workspace search field; query: its text; inGroup: the focus is
  * inside a group's list.
  */
-export function shellEscape({ search = false, query = '', drawerOpen = false, inGroup = false }) {
+export function shellEscape({ search = false, query = '', drawerOpen = false, inGroup = false,
+  lensOpen = false }) {
+  if (lensOpen) return null;
   if (search && query) return 'clear';
   if (drawerOpen) return 'close';
   if (!search && inGroup) return 'collapse';
@@ -430,7 +435,7 @@ export function createShell({ get = storageGet, set = storageSet } = {}) {
         const search = !!(t && t.matches && t.matches('input[type="search"]'));
         const list = t && t.closest ? t.closest('[data-osc-nav-panel]') : null;
         const what = shellEscape({ search, query: this.navQuery, drawerOpen: this.drawerOpen,
-          inGroup: !!list });
+          inGroup: !!list, lensOpen: !!this.lensOpen });
         if (what === 'clear') this.navQuery = '';
         else if (what === 'close') this.closeDrawer(true);
         else if (what === 'collapse') {
@@ -543,7 +548,11 @@ export function createShell({ get = storageGet, set = storageSet } = {}) {
     shellContent() {
       return {
         ':class'() {
-          return { 'lg:ml-16': this.sidebarCollapsed, 'lg:ml-64': !this.sidebarCollapsed };
+          // An open Sonda sheet (lg:w-[420px], src/index.html) reflows the column beside it
+          // from lg up instead of covering it (U146): every child but the status bar, which
+          // runs under the sheet's end and keeps its width.
+          return { 'lg:ml-16': this.sidebarCollapsed, 'lg:ml-64': !this.sidebarCollapsed,
+            'lg:[&>:not(footer)]:mr-[420px]': !!this.lensOpen };
         },
         ':inert'() { return this.drawerOpen; },
       };

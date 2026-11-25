@@ -788,6 +788,7 @@ function integrationInit() {
     // (leaving a workspace: the bus's leave policy, registered first in init, C053)
     loadExperiments(ws);
     repairCharts();
+    cmp.lensFollowPlace();
   });
   loadExperiments(cmp.workspace); // the address opened Experiments (a reload, a shared link)
   const baseTitle = document.title;
