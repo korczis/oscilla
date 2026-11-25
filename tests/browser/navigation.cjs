@@ -89,6 +89,9 @@
 //                     shown (K247: the one keyboard in every workspace);
 //                     every other workspace keeps the state it opens with (read from a plain
 //                     page: armed everywhere since Q105), so a link changes only its own
+//   escape-menu-keeps-sound  Escape with More open closes it and gives focus back to its
+//                     button while a latched tone sounds on (the page's Escape, stopAll, never
+//                     sees the press); a second Escape, no menu open, stops the tone
 //   no-console-errors
 'use strict';
 const { serveDist } = require('./lib/serve.cjs');
@@ -478,6 +481,62 @@ function defineChecks() {
     await page.close();
     return { ...H.verdict(Object.fromEntries(Object.entries(res).map(([k, v]) => [k,
       k === 'synthPitch' ? v.ok : !v.timedOut]))), ...res };
+  });
+
+  // Escape with a header menu open is the menu's: it closes More and gives focus back to its
+  // button, and the latched tone sounds on (the page's Escape, the bus's stopAll, never sees the
+  // press); a second Escape, with no menu open, stops the tone. Real clicks and real keys; every
+  // wait is a condition poll with a named deadline (lib/wait.cjs until()).
+  def('escape-menu-keeps-sound', async (ctx) => {
+    const page = await H.open(ctx, `${ctx.baseUrl}#m=playground`);
+    const read = () => page.evaluate(() => {
+      const O = window.OSCILLA;
+      const a = O.app;
+      const panel = document.querySelector('[data-osc-menu-panel="overflow"]');
+      const btn = document.querySelector('[data-osc-menu-button="overflow"]');
+      return { playing: !!a.playing, sources: O.engine.activeSourceCount, status: a.status,
+        open: !!a.menus.overflow, shown: !!panel && panel.getClientRects().length > 0,
+        inMenu: !!panel && panel.contains(document.activeElement),
+        onButton: document.activeElement === btn };
+    });
+    const settle = async (pred, what) => {
+      try {
+        return await until(async () => { const s = await read(); return pred(s) ? s : null; },
+          { ms: 8000, what: `escape-menu-keeps-sound: ${what}` });
+      } catch (e) {
+        if (e.name !== 'WaitTimeout') throw e;
+        return { timedOut: true, ...(await read()) };
+      }
+    };
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.setContinuous(true);
+      if (!a.latched) a.toggleLatch();
+    });
+    const sounding = await settle((s) => s.playing && s.sources > 0, 'the latched tone plays');
+    await page.click('[data-osc="header.overflow"]');
+    // The click is also the gesture that resumes a context the browser held suspended: the
+    // status reads PLAYING before the key is pressed.
+    const opened = await settle((s) => s.open && s.shown && s.inMenu && s.status === 'PLAYING',
+      'More opens with focus on its first item while the tone plays');
+    await page.keyboard.press('Escape');
+    // The key's handlers ran in its own dispatch: what the page reads now is their outcome. A
+    // stop sets the status to RELEASING at once while the fade still sounds (and `playing` is
+    // still true), so the status is what tells a kept tone from a stopped one.
+    const closed = await settle((s) => !s.open && !s.shown && s.onButton,
+      'Escape closes More and focuses its button');
+    await page.keyboard.press('Escape');
+    const stopped = await settle((s) => !s.playing && s.sources === 0,
+      'a second Escape stops the tone');
+    await page.close();
+    return { ...H.verdict({
+      sounding: !sounding.timedOut,
+      opened: !opened.timedOut,
+      closedToButton: !closed.timedOut,
+      keepsSound: !closed.timedOut && closed.playing && closed.sources > 0
+        && closed.status === 'PLAYING',
+      secondStops: !stopped.timedOut,
+    }), sounding, opened, closed, stopped };
   });
 
   // C030: a visible Play on every workspace that should sound. At the desktop width (the suite's

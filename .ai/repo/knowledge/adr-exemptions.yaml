@@ -102,3 +102,7 @@ exemptions:
       a proposed decision (Q100): an opt-in loopback bridge exports trace steps to a local
       Majordomus and the default build stays offline; nothing implements it yet, and R046's
       claim cites it when the bridge ships, and this entry then fails as stale
+  - adr: "0089"
+    reason: >-
+      a proposed shell decision nothing implements yet (M124, U131 and U132 build it); the entry
+      is stale once the title bar, the instrument strip or the places ship with a claim citing it

@@ -1,0 +1,24 @@
+id: U138
+milestone: M124
+serves:
+  - "one-instrument#see-what-sounds"
+title: "Reopening work: a reload restores the instrument, labs, Synth patch and sequence, and saved work is found in one place"
+slug: "reload-restores-work"
+priority: p0
+profile: implementation
+objective: "Measured in journey J9 (docs/reconstruction/03b): a reload resets the generator, the lab settings, the Synth patch and the sequence; only Studio Save (IndexedDB), presets (localStorage) and experiments survive, each found in its own place. The session state the URL codecs already serialise (instrument, labs, synth y*, sequence) is restored on reload from a session draft, and the palette lists the stored work. Builds on the Studio draft recovery of V604 rather than a second store. core/storage* is guarded (review-verdict)."
+why: "User journeys of 2026-11-24 (docs/reconstruction/03b-journeys.md), owner decision Q114."
+scope:
+  - "src/js/ui/"
+  - "src/js/core/storage.js"
+  - "tests/"
+depends_on: ["Q114"]
+acceptance_criteria:
+  - "A browser check in three engines: set a saw at 220 Hz with the filter at 400 Hz, a Synth preset and an added sequence block, reload, and each is restored and named in a dismissible recovery notice."
+  - "The recovery never restores a running measurement or plays sound by itself."
+validation:
+  - "npm run verify"
+  - "npm run test:browser"
+evidence_required:
+  - "verified"
+created_at: 2026-11-24

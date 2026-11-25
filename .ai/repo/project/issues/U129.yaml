@@ -1,0 +1,26 @@
+id: U129
+milestone: M124
+serves:
+  - "one-instrument#registry-owns-composition"
+title: "The registry owns which panels a place shows"
+slug: "registry-owns-panel-membership"
+priority: p1
+profile: implementation
+objective: "Seven mechanisms decide membership (docs/reconstruction/01 section 1); the registry owns none. The registry row declares membership, order, the phone primary and the open state; data-osc-modes is generated from it or checked equal to it; markWorkspacePanels stays the one applier; the visibility selectors (about 20) go; CSS keeps geometry."
+why: "Product reconstruction audit of 2026-11-24 (docs/reconstruction/), target architecture 07, owner decision Q114."
+scope:
+  - "src/js/ui/shell.js"
+  - "src/js/ui/app.js"
+  - "src/index.html"
+  - "src/styles/"
+  - "tests/"
+depends_on: ["U128", "F002"]
+acceptance_criteria:
+  - "A census test refuses a second membership mechanism (data-mode visibility selector, :hidden on a workspace, a hard-coded mode list); its baseline only shrinks to empty."
+  - "The U128 geometry census is unchanged in three engines; tests/unit/ui-flowbite-pro-baseline.json falls in the same commit."
+validation:
+  - "npm run verify"
+  - "npm run test:browser"
+evidence_required:
+  - "verified"
+created_at: 2026-11-24
