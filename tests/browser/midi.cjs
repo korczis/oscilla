@@ -58,8 +58,9 @@
 //                               held note sounds past the session safety limit while held and a
 //                               window blur releases it (ADR 0062); the on-screen keys light a
 //                               MIDI note while it sounds (K026); starting the sequencer
-//                               releases held notes, a Note On while it plays is refused and said
-//                               once (C036), and after it stops a note sounds again. The engine
+//                               releases held notes, a Note On while it plays sounds over it with
+//                               nothing said and its Note Off leaves the sequence playing (U139),
+//                               and after it stops a note sounds again. The engine
 //                               voice's own laws (velocity, polyphony, click-free automation)
 //                               are unit/midi/notes.test.mjs's, on the fake audio context
 //   midi-seam-sink              review of src/js/synth (S2), K247: a stub note held on the
@@ -225,7 +226,6 @@ const NYQUIST_NOTE = 124;
 const LIMIT_MARGIN_S = 2;    // a note at the safety limit is freed within its release + this
 let NOTE_POLYPHONY;
 let MAX_OUTPUT_GAIN; // the safety chain's ceiling (core/constants.js), loaded in main()
-let MIDI_REFUSED;
 let WORKSPACE_IDS; // src/js/ui/shell.js, the registry (K247)
 let OUTPUT_OWNER_NAMES; // src/js/visualization/output-owner.js (C024)
 
@@ -941,9 +941,11 @@ async function seamNotes(browser, b, origin, url) {
       !end.lastError && end.alerts === 0 && errors.length === 0,
       JSON.stringify({ lastError: end.lastError, alerts: end.alerts, errors }));
 
-    // The sequencer plays into the master outside the instrument (review of #261, P2-1, C036):
-    // starting a sequence releases every held note, and while it plays a Note On is refused and
-    // said once. It loops, so it is still playing however long the checks take.
+    // Starting a sequence releases every held note (review of #261, P2-1, C036); once it
+    // plays, a Note On sounds over it (U139, journey J8; before, every note was refused): the
+    // note is held on the one instrument, nothing is said, and the sequence plays on, owns the
+    // output and survives the Note Off. It loops, so it is still playing however long the
+    // checks take.
     await page.evaluate(() => window.OSCILLA.app.setSafetyLimit(5));
     await seam(page, 'message', SECOND, [0x90, 60, 100]);
     await seam(page, 'message', SECOND, [0x90, 64, 100]);
@@ -961,25 +963,40 @@ async function seamNotes(browser, b, origin, url) {
       start.started === true && tStart.held.length === 0,
       JSON.stringify({ ...start, held: tStart.held, hushed: hushed && hushed.timedOut }));
     await page.evaluate((x) => window.OSCILLA.app.setSafetyLimit(x), limitS);
-    await seam(page, 'message', SECOND, [0x90, 67, 100]);
-    await seam(page, 'message', SECOND, [0x90, 69, 100]);
-    const tDuring = await instrument(page); // read at once: a note let through would be held
-    let said = null;
-    try {
-      said = await until(() => page.evaluate(() => {
-        const t = [...document.querySelectorAll('[data-osc="alerts"] .osc-toast')]
+    const seqState = () => page.evaluate(() => {
+      const o = window.OSCILLA;
+      return { playing: o.labs.sequencer.editor.playing,
+        owner: o.app.playback ? o.app.playback.owner : null,
+        said: [...document.querySelectorAll('[data-osc="alerts"] .osc-toast')]
           .filter((el) => !el.querySelector('[data-osc="alert.undo"]')) // the insert's (K247)
-          .map((el) => el.textContent.replace(/\s+/g, ' ').trim());
-        return t.length ? t : null;
-      }), { ms: STEP_MS, what: `${leg}: the refused note is said` });
+          .map((el) => el.textContent.replace(/\s+/g, ' ').trim()) };
+    });
+    await seam(page, 'message', SECOND, [0x90, 67, 100]);
+    let tDuring = null;
+    try {
+      tDuring = await until(async () => {
+        const [t, q] = [await instrument(page), await seqState()];
+        return t.held.includes(67) ? { ...t, ...q } : null;
+      }, { ms: STEP_MS, what: `${leg}: a Note On is held over the sequence` });
     } catch (error) {
       if (!(error instanceof WaitTimeout)) throw error;
     }
-    const playing = await page.evaluate(() => window.OSCILLA.labs.sequencer.editor.playing);
-    check(leg, id, 'while the sequencer plays a Note On is refused, and said once',
-      playing === true && tDuring.held.length === 0 && !!said && said.length === 1
-      && said[0].includes(MIDI_REFUSED.sequencer),
-    JSON.stringify({ playing, held: tDuring.held, said }));
+    check(leg, id, 'while the sequencer plays a Note On sounds over it (U139): held on the '
+      + 'instrument, nothing said, and the sequence plays on and owns the output',
+    !!tDuring && tDuring.playing === true && tDuring.owner === 'sequencer'
+      && tDuring.said.length === 0, JSON.stringify(tDuring));
+    await seam(page, 'message', SECOND, [0x80, 67, 0]);
+    let tOff = null;
+    try {
+      tOff = await until(async () => {
+        const [t, q] = [await instrument(page), await seqState()];
+        return t.held.length === 0 ? { ...t, ...q } : null;
+      }, { ms: STEP_MS, what: `${leg}: the Note Off releases the note over the sequence` });
+    } catch (error) {
+      if (!(error instanceof WaitTimeout)) throw error;
+    }
+    check(leg, id, 'its Note Off releases the note and leaves the sequence playing',
+      !!tOff && tOff.playing === true && tOff.owner === 'sequencer', JSON.stringify(tOff));
     await page.evaluate(() => window.OSCILLA.labs.sequencer.editor.stop());
     await seam(page, 'message', SECOND, [0x90, 72, 100]);
     const again = await heard(page, sounding, `${leg}: a note sounds once the sequence stopped`);
@@ -2385,8 +2402,6 @@ async function main() {
     'audio-engine.js')).href));
   ({ MAX_OUTPUT_GAIN } = await import(pathToFileURL(path.join(ROOT, 'src', 'js', 'core',
     'constants.js')).href));
-  ({ MIDI_REFUSED } = await import(pathToFileURL(path.join(ROOT, 'src', 'js', 'midi',
-    'ui.js')).href));
   ({ OUTPUT_OWNER_NAMES } = await import(pathToFileURL(path.join(ROOT, 'src', 'js',
     'visualization', 'output-owner.js')).href));
   ({ WORKSPACE_IDS } = await import(pathToFileURL(path.join(ROOT, 'src', 'js', 'ui',

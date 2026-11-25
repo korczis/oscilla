@@ -208,10 +208,14 @@ test('C037 bus: the newest action wins, one case per player', () => {
     assert.equal(bus.claim(p, 'test').ok, true, p);
     assert.deepEqual(log, stopped, `${p} stops what it yields`);
   }
-  // the notes are refused while the sequencer or the Studio plays (C002), not newest-wins
+  // the notes are refused while the Studio plays (C002), not newest-wins; over a running
+  // sequence they are admitted and stop nothing, and the sequence keeps the output (U139)
   const seq = component();
   seq.editor.playing = true;
-  assert.equal(seq.bus.claim('notes').by, 'sequencer');
+  assert.equal(seq.bus.claim('sequencer', 'test').ok, true);
+  assert.equal(seq.bus.claim('notes').ok, true);
+  assert.deepEqual(seq.log, [], 'a note over the sequence stops nothing');
+  assert.equal(seq.bus.owner(), 'sequencer');
   assert.equal(component({ studioPlaying: true }).bus.claim('notes').by, 'studio');
 });
 

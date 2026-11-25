@@ -618,9 +618,9 @@ function mountLabs(root) {
   // The status bar's sequence length follows the sounding pass and the edited sequence (C006).
   if (labs.sequencer) labs.sequencer.onPassChange(() => { if (app) app.labRev += 1; });
   if (labs.sequencer) {
-    // MIDI notes and a sequence never sound together (V502): the sequence plays into the
-    // master outside the engine's voices, so its start stops every note first (they fade within
-    // ESCAPE_RELEASE_S) and the MIDI part refuses notes while it plays (sequencerPlaying).
+    // A sequence's start stops every held note first (V502; they fade within
+    // ESCAPE_RELEASE_S); once it plays, the keys and MIDI play over it (U139: the sequencer row
+    // of the one output table admits the notes, and the sequence keeps the output).
     const editor = labs.sequencer.editor;
     const playSequence = editor.play;
     editor.play = function playAfterMidi(...args) {

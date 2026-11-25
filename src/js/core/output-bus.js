@@ -11,11 +11,12 @@
 // OUTPUT_OWNER_TABLE below is the one table of who may own the shared output, in precedence
 // order: what refuses every claim (a measurement, a microphone level-reference capture), what
 // yields to whom when an owner takes it, what refuses the keyboard and MIDI notes and with
-// which sentence, and how the views name the owner. Every other site imports a projection of
-// it (C036): OUTPUT_REFUSALS and OUTPUT_YIELDS here (ui/output-owner.js re-exports them), the views' owners and names
-// (visualization/output-owner.js), the notes' refusals (midi/ui.js, midi/keyboard-ui.js), the
-// Space owners (ui/shortcuts.js), the instrument's "another owner's voice" check
-// (core/instrument.js) and the riff audition's owner mark (studio/riffs/audition.js).
+// which sentence, who sounds over an owner without taking the output from it (U139: the notes
+// over a running sequence), and how the views name the owner. Every other site imports a
+// projection of it (C036): OUTPUT_REFUSALS and OUTPUT_YIELDS here (ui/output-owner.js
+// re-exports them), the views' owners and names (visualization/output-owner.js), the notes'
+// refusals (midi/ui.js, midi/keyboard-ui.js), the Space owners (ui/shortcuts.js), the
+// instrument's "another owner's voice" check (core/instrument.js) and the riff audition's owner mark (studio/riffs/audition.js).
 // tests/unit/output-owner-one-table.test.mjs refuses a second table anywhere in src/js, and
 // tests/unit/output-claims.test.mjs a start of sound outside a claim.
 //
@@ -42,6 +43,13 @@ export const REFERENCE_REFUSAL = 'Výstup zůstává tichý, dokud se z mikrofon
  *             the editor's own flag, read through createOutputOwner and the MIDI part)
  *   title, text   the notice of a refused claim ('all' rows)
  *   notes     { midi, keyboard }: the sentence a refused note says, per player
+ *   admits    who sounds over it while it holds the output (U139): a claim of the notes, or
+ *             the instrument's claim a note makes while it arms it (the notes row's `arming`
+ *             probe), is admitted: it stops none of the host's sound, the host keeps the output
+ *             and its name (soundingOwner, the views), and the admitted guest holds the output
+ *             only if it still sounds when the host releases it
+ *   arming    the component's method that says a key or MIDI note is arming the one instrument
+ *             now (K247: the Studio transport's armed run, whose claim is then the notes')
  *   yields    who stops when this owner claims the output
  *   forced    the yields stop without asking whether they sound (the notes are released even
  *             where no key is lit: an XY pad's note, a note routed to the Synth)
@@ -49,8 +57,9 @@ export const REFERENCE_REFUSAL = 'Výstup zůstává tichý, dokud se z mikrofon
  *             bar); rows without one are never named as the output owner
  * Precedence: the refusing rows first (the measurement, then the reference), then the views'
  * order: the instrument, the sequencer, the Studio, the held notes (refused while the
- * sequencer or the Studio owns the output; a note and an instrument voice never sound
- * together, ADR 0002). The audition plays through the instrument's path under its own name.
+ * Studio owns the output; sounding over a running sequence, U139; a note and an instrument
+ * voice never sound together, ADR 0002). The audition plays through the instrument's path
+ * under its own name.
  * The measurement row's yields are the claim of MEASURE (stopPlayback).
  */
 export const OUTPUT_OWNER_TABLE = Object.freeze([
@@ -79,11 +88,11 @@ export const OUTPUT_OWNER_TABLE = Object.freeze([
     yields: Object.freeze(['sequencer', 'instrument', 'studio', 'notes']), forced: true }),
   // The sequencer's start releases the notes itself (main.js playAfterMidi, before its first
   // claim): its claim repeats before every loop pass (C002), where releasing a note routed to
-  // the Synth or the Studio would cut it, so 'notes' is not among its yields.
-  Object.freeze({ owner: 'sequencer', view: 'sequencer', refuses: 'notes',
-    notes: Object.freeze({
-      midi: 'MIDI noty nehrají, dokud hraje sekvencer: nejdřív ho zastavte (Esc).',
-      keyboard: 'Noty z klávesnice nehrají, dokud hraje sekvencer: nejdřív ho zastavte (Esc).' }),
+  // the Synth or the Studio would cut it, so 'notes' is not among its yields. While it plays,
+  // the keys and MIDI play over it (U139, journey J8: playing over a running pattern is the
+  // instrument's basic performance case; before, every note was refused): a note's claim is
+  // admitted, the sequence plays on and the views go on naming it.
+  Object.freeze({ owner: 'sequencer', view: 'sequencer', admits: Object.freeze(['notes']),
     yields: Object.freeze(['instrument', 'studio']) }),
   // Studio PLAY and the Synth arm (the transport's onClaimOutput): every other owner stops and
   // every note is released; the Studio itself is not playing while it claims.
@@ -92,7 +101,8 @@ export const OUTPUT_OWNER_TABLE = Object.freeze([
       midi: 'MIDI noty nehrají, dokud hraje Studio: nejdřív ho zastavte.',
       keyboard: 'Noty z klávesnice nehrají, dokud hraje Studio: nejdřív ho zastavte.' }),
     yields: Object.freeze(['sequencer', 'instrument', 'notes']), forced: true }),
-  Object.freeze({ owner: 'notes', view: 'noty', yields: Object.freeze([]) }),
+  Object.freeze({ owner: 'notes', view: 'noty', arming: 'midiArming',
+    yields: Object.freeze([]) }),
 ]);
 
 /**
@@ -311,7 +321,7 @@ export function createOutputBus({ app, sequencer, changed = () => {}, claimed = 
     return OUTPUT_YIELDS.measure.some((owner) => STOPS[owner].busy(cmp));
   }
 
-  /** The row that refuses `owner` now, or null: the notes also yield to the sequencer and Studio. */
+  /** The row that refuses `owner` now, or null: the notes also yield to the Studio. */
   function refusalFor(cmp, owner) {
     if (owner !== OWNER.notes) return outputRefusalOf(cmp);
     const by = notesRefusalOf(cmp, { sequencerPlaying });
@@ -319,6 +329,23 @@ export function createOutputBus({ app, sequencer, changed = () => {}, claimed = 
   }
 
   let current = null; // { owner, reason } of the granted claim that still holds the output
+  // { owner, reason } of a claim admitted over `current` (U139: the notes over a running
+  // sequence): it sounds without holding the output, and takes it only if it still sounds when
+  // the host releases it.
+  let guest = null;
+
+  /**
+   * The owner that admits `owner`'s claim over it now (U139), or null: the holder of the output
+   * while it still sounds, when its row admits the notes and the claim is the notes' own or the
+   * instrument's claim a key or MIDI note makes while it arms it (the notes row's `arming`).
+   */
+  function hostFor(cmp, owner) {
+    if (!current || current.owner === owner) return null;
+    const admits = ownerRow(current.owner).admits || [];
+    const asNotes = owner === OWNER.notes || !!call(cmp, ownerRow(OWNER.notes).arming);
+    const s = STOPS[current.owner];
+    return asNotes && admits.includes(OWNER.notes) && s && s.busy(cmp) ? current.owner : null;
+  }
 
   /** A claimable row of the table, or a programming error. */
   function claimable(owner) {
@@ -333,7 +360,9 @@ export function createOutputBus({ app, sequencer, changed = () => {}, claimed = 
    * refusing owner; `text` its notice, said here once for every owner but the notes, whose
    * player says its own sentence once per run of refused notes). A granted claim stops what
    * the owner's row yields, from the live state of each owner. `notify: false` leaves the
-   * notice to the caller (Studio PLAY announces it on its own live region).
+   * notice to the caller (Studio PLAY announces it on its own live region). A claim the
+   * holder's row admits (hostFor, U139) is granted over it: what it yields stops but the host,
+   * which keeps the output; the host's own claim then stops nothing of its guest.
    */
   function claim(owner, reason = '', { notify = true } = {}) {
     const row = claimable(owner);
@@ -347,8 +376,18 @@ export function createOutputBus({ app, sequencer, changed = () => {}, claimed = 
           by: refusal.owner } });
         return Object.freeze({ ok: false, by: refusal.owner, text });
       }
-      yieldOutput(cmp, row.yields, !!row.forced);
+      const host = hostFor(cmp, owner);
+      if (host) {
+        yieldOutput(cmp, row.yields.filter((o) => o !== host), !!row.forced);
+        guest = { owner, reason: String(reason || '') };
+        step('claim', owner, { outcome: 'admitted', detail: { reason: guest.reason, over: host } });
+        claimed(owner, guest.reason);
+        return GRANTED;
+      }
+      const kept = guest && current && current.owner === owner ? guest.owner : null;
+      yieldOutput(cmp, row.yields.filter((o) => o !== kept), !!row.forced);
     }
+    if (!(guest && current && current.owner === owner)) guest = null;
     const from = current ? current.owner : null;
     current = { owner, reason: String(reason || '') };
     step('claim', owner, { outcome: 'granted', detail: { reason: current.reason } });
@@ -402,17 +441,30 @@ export function createOutputBus({ app, sequencer, changed = () => {}, claimed = 
     }
     const was = current ? current.owner : null; // an owner that released itself is gone
     current = null;
+    guest = null;
     step('stopAll', null, { outcome: 'stopped', detail: { cause: String(reason) } });
     moved(was, null);
     if (failure) throw failure;
   }
 
-  /** `owner` stopped sounding: it no longer holds the output (a no-op for any other owner). */
+  /**
+   * `owner` stopped sounding: it no longer holds the output (a no-op for any other owner). An
+   * admitted guest that releases leaves its host the output; a host that releases hands it to
+   * its guest while the guest still sounds (U139: the keys held past the end of a sequence).
+   */
   function release(owner) {
+    if (guest && guest.owner === owner) {
+      guest = null;
+      step('release', owner, { outcome: 'released' });
+      return;
+    }
     if (!current || current.owner !== owner) return;
-    current = null;
+    const cmp = app();
+    const s = guest ? STOPS[guest.owner] : null;
+    current = s && cmp && s.busy(cmp) ? guest : null;
+    guest = null;
     step('release', owner, { outcome: 'released' });
-    moved(owner, null);
+    moved(owner, current ? current.owner : null);
   }
 
   /** fn({ owner, since }) on every change of the playing state (C051) -> off(). */
@@ -468,6 +520,7 @@ export function createOutputBus({ app, sequencer, changed = () => {}, claimed = 
     yieldOutput(cmp, OUTPUT_YIELDS.measure, true);
     const was = current ? current.owner : null;
     current = null;
+    guest = null;
     step('stopAll', null, { outcome: 'stopped', detail: { cause } });
     moved(was, null);
   }
