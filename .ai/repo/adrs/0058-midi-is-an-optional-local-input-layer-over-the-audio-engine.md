@@ -583,6 +583,21 @@ status stays `proposed`.**
    Studio document's out of every workspace but the Synth, the Synth panel's out of every
    workspace); a run started with PLAY sounds on.
 
+### 2026-11-25: a key never changes the Studio document (U140)
+
+**Note of 2026-11-25 (issue U140, journey J1 and the interim review of 2026-11-25, problem 1),
+amending the K247 note's point 1; the status stays `proposed`.**
+
+A key, the on-screen keys and MIDI play the document's note target, else the Synth panel when the
+document already holds it, else the engine's own voice; they never insert the panel. Under the
+K247 note a key outside the Synth and the Studio inserted it into the untouched default document
+(6 to 28 nodes), took Master Output's input from its Filter 1 and silenced the Studio's Play
+(peak 0.0547 to 0.0000) while the document stayed clean. The insert and its notice with its own
+Zpět (review C3-553-1) are gone; the Synth's Vložit is the explicit insert (one Zpět, the
+document unsaved), and in the Synth a key with no panel in the document says that Vložit puts it
+in. Opening the Synth still inserts the panel by itself (`synth/ui.js` ensurePanel, Q093): that
+is not a key's, and whether it stays is an owner question U140 leaves open.
+
 ### 2026-11-15: a controller's transport plays the workspace in view; the clock is shown (V508)
 
 **Note of 2026-11-15 (issue V508), amending this ADR's "no MIDI clock in the first version"; the

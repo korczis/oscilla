@@ -106,12 +106,19 @@
 //                               reaches B, then two Note Offs: the analyser falls below -70 dB
 //                               rel and the sink and the transport hold no note. With the
 //                               sink's re-press release removed, A's note hangs and it fails
-//   keys-insert-notice          K247, review C3-553-1: on a fresh page (the untouched default
-//                               document, 6 nodes) a key in the Playground inserts the Synth
-//                               panel into the Studio document and says K246's sentence once,
-//                               as a warning notice with its own Zpět (a second key raises no
-//                               second one); Zpět there undoes it (6 nodes, Master Output fed
-//                               as before); the same in Measure
+//   keys-never-edit-document    U140 (journey J1, the interim review of 2026-11-25, problem
+//                               1): on a fresh page (the default document, 6 nodes) the
+//                               Studio's Play is measured (its loudest sample over 1.5 s); A in
+//                               the Generátor and the docked C4 by pointer in Filtry play the
+//                               page's own voice, which the status bar names (the notes, C4) and
+//                               the analyser hears (C4), the Studio document unchanged (nodes,
+//                               Master Output feed, undo, clean); the Studio's Play then is
+//                               within 1 dB of the fresh one. In the Synth (whose visit still
+//                               inserts the panel, left to the owner) A plays the panel and
+//                               changes nothing; after Zpět A plays nothing, says that Vložit
+//                               puts the panel in and inserts nothing; the Studio's Play again
+//                               within 1 dB. Fails on the merge base (a key inserted the panel,
+//                               6 -> 28 nodes, the Studio's Play silent)
 //   keyboard-qwerty             K026, no MIDI involved (a context without the seam, so it is in
 //                               neither group and says nothing about MIDI support): the link
 //                               #m=playground&kbd=1 arms the Playground; A, D and G held play C4,
@@ -270,7 +277,28 @@ function check(leg, id, name, ok, detail = '') {
 }
 
 // ------------------------------------------------------------------------------ page helpers
-async function openPage(browser, url, { init, permissions, also } = {}) {
+/**
+ * The document holds the Synth panel, put in the way a user does (U140: a key never inserts it):
+ * the Synth opened and, where it shows its Vložit, Vložit pressed; then back to the workspace the
+ * page was on. The checks of K247's one instrument start from it.
+ */
+async function panelIn(page, what) {
+  const held = () => page.evaluate(() => window.OSCILLA.studio.model.graph.nodes
+    .some((n) => n.metadata && n.metadata.panel && n.metadata.panel.module === 'keys'));
+  const from = await page.evaluate(() => window.OSCILLA.app.workspace);
+  await page.evaluate(() => window.OSCILLA.app.setWorkspace('synth'));
+  await until(async () => {
+    if (await held()) return true;
+    const insert = page.locator('[data-insert-panel]');
+    if (await insert.isVisible()) await insert.click();
+    return null;
+  }, { ms: STEP_MS, what: `${what}: the document holds the Synth panel` });
+  await page.evaluate((w) => window.OSCILLA.app.setWorkspace(w), from);
+  await until(() => page.evaluate((w) => window.OSCILLA.app.workspace === w, from),
+    { ms: STEP_MS, what: `${what}: back in ${from}` });
+}
+
+async function openPage(browser, url, { init, permissions, also, panel = false } = {}) {
   const context = await browser.newContext(permissions ? { permissions } : {});
   if (init) await context.addInitScript(init.fn, init.arg);
   if (also) await context.addInitScript(also.fn, also.arg);
@@ -284,6 +312,7 @@ async function openPage(browser, url, { init, permissions, also } = {}) {
     const el = document.querySelector('[data-osc="midi.status"]');
     return document.documentElement.dataset.ready === 'true' && !!el && !!el.dataset.midiState;
   }), { ms: LOAD_MS, what: `${url}: the page is ready and states a MIDI support state` });
+  if (panel) await panelIn(page, url);
   return { context, page, errors };
 }
 
@@ -297,10 +326,7 @@ const readMidi = (page) => page.evaluate(() => {
     offered: !!btn && !!row && row.contains(btn) && row.style.display !== 'none'
       && btn.style.display !== 'none',
     lastError: app && app.lastError ? app.lastError.message : null,
-    // The keys' insert of the Synth panel is said by a notice of its own (K247, C3-553-1, its
-    // own Zpět): not a MIDI notification, and keys-insert-notice proves it.
-    alerts: [...document.querySelectorAll('[data-osc="alerts"] .osc-toast')]
-      .filter((el) => !el.querySelector('[data-osc="alert.undo"]')).length };
+    alerts: document.querySelectorAll('[data-osc="alerts"] .osc-toast').length };
 });
 
 // What the page itself can see of MIDI: which group this context is in, and the platform.
@@ -817,7 +843,8 @@ async function seamNotes(browser, b, origin, url) {
   const id = 'midi-seam-notes';
   const NAME = midiStub.STUB_NAME;
   const { context, page, errors } = await openPage(browser, url,
-    { init: { fn: midiStub.install, arg: {} }, also: { fn: audioProbe, arg: { sr: NOTES_RATE } } });
+    { panel: true, init: { fn: midiStub.install, arg: {} },
+      also: { fn: audioProbe, arg: { sr: NOTES_RATE } } });
   try {
     await assertGroup(leg, id, page, 'seam');
     await openSettings(page);
@@ -968,7 +995,6 @@ async function seamNotes(browser, b, origin, url) {
     try {
       said = await until(() => page.evaluate(() => {
         const t = [...document.querySelectorAll('[data-osc="alerts"] .osc-toast')]
-          .filter((el) => !el.querySelector('[data-osc="alert.undo"]')) // the insert's (K247)
           .map((el) => el.textContent.replace(/\s+/g, ' ').trim());
         return t.length ? t : null;
       }), { ms: STEP_MS, what: `${leg}: the refused note is said` });
@@ -1015,7 +1041,8 @@ async function seamSink(browser, b, origin, url) {
   const id = 'midi-seam-sink';
   const NAME = midiStub.STUB_NAME;
   const { context, page, errors } = await openPage(browser, url,
-    { init: { fn: midiStub.install, arg: {} }, also: { fn: audioProbe, arg: { sr: NOTES_RATE } } });
+    { panel: true, init: { fn: midiStub.install, arg: {} },
+      also: { fn: audioProbe, arg: { sr: NOTES_RATE } } });
   try {
     await assertGroup(leg, id, page, 'seam');
     await openSettings(page);
@@ -1076,7 +1103,8 @@ async function seamResponse(browser, b, origin, url) {
   const id = 'midi-seam-response';
   const NAME = midiStub.STUB_NAME;
   const { context, page, errors } = await openPage(browser, `${url}#m=playground`,
-    { init: { fn: midiStub.install, arg: {} }, also: { fn: audioProbe, arg: { sr: NOTES_RATE } } });
+    { panel: true, init: { fn: midiStub.install, arg: {} },
+      also: { fn: audioProbe, arg: { sr: NOTES_RATE } } });
   try {
     await assertGroup(leg, id, page, 'seam');
     await openSettings(page);
@@ -1373,7 +1401,8 @@ async function seamCc(browser, b, origin, url) {
   const id = 'midi-seam-cc';
   const NAME = midiStub.STUB_NAME;
   const { context, page, errors } = await openPage(browser, url,
-    { init: { fn: midiStub.install, arg: {} }, also: { fn: audioProbe, arg: { sr: NOTES_RATE } } });
+    { panel: true, init: { fn: midiStub.install, arg: {} },
+      also: { fn: audioProbe, arg: { sr: NOTES_RATE } } });
   try {
     await assertGroup(leg, id, page, 'seam');
     await openSettings(page);
@@ -1446,7 +1475,8 @@ async function seamMonitor(browser, b, origin, url) {
   const PLAY = `${midiStub.STUB_NAME} · KeyLab mkII 61 MIDI`;
   const DAW = `${midiStub.STUB_NAME} · KeyLab mkII 61 DAW`;
   const { context, page, errors } = await openPage(browser, url,
-    { init: { fn: midiStub.install, arg: {} }, also: { fn: audioProbe, arg: { sr: NOTES_RATE } } });
+    { panel: true, init: { fn: midiStub.install, arg: {} },
+      also: { fn: audioProbe, arg: { sr: NOTES_RATE } } });
   try {
     await assertGroup(leg, id, page, 'seam');
     await openSettings(page);
@@ -1682,7 +1712,8 @@ async function keysOneKeyboard(browser, b, origin, url) {
   const id = 'keys-one-keyboard';
   const NAME = midiStub.STUB_NAME;
   const { context, page, errors } = await openPage(browser, url,
-    { init: { fn: midiStub.install, arg: {} }, also: { fn: audioProbe, arg: { sr: NOTES_RATE } } });
+    { panel: true, init: { fn: midiStub.install, arg: {} },
+      also: { fn: audioProbe, arg: { sr: NOTES_RATE } } });
   const app = (f) => page.evaluate(f);
   const go = async (ws) => {
     await page.evaluate((w) => window.OSCILLA.app.setWorkspace(w), ws);
@@ -1770,8 +1801,8 @@ async function keysOneKeyboard(browser, b, origin, url) {
 async function keyboardEverywhere(browser, b, origin, url) {
   const leg = `${b}/${origin}`;
   const id = 'keyboard-everywhere';
-  const { context, page, errors } = await openPage(browser, url, { also: { fn: audioProbe,
-    arg: {} } });
+  const { context, page, errors } = await openPage(browser, url, { panel: true,
+    also: { fn: audioProbe, arg: {} } });
   const go = async (ws) => {
     await page.evaluate((w) => window.OSCILLA.app.setWorkspace(w), ws);
     await until(() => page.evaluate((w) => window.OSCILLA.app.workspace === w
@@ -2038,22 +2069,71 @@ async function seamReroute(browser, b, origin, url) {
 }
 
 // keyboard-qwerty (K026): the computer and on-screen keyboard play the same note voices.
-// keys-insert-notice (K247, C3-553-1): see the header.
-async function keysInsertNotice(browser, b, origin, url) {
+// keys-never-edit-document (U140, journey J1, the interim review's problem 1): see the header.
+// The Studio's Play from the start of its timeline, its loudest sample over 3 s of the audio clock
+// (read in the page every analyser window, so a slow poll from here misses no part of it; ended by
+// a condition on currentTime, bounded by a wall-clock deadline), then Stop.
+async function studioPlayPeak(page, what) {
+  await page.evaluate(() => window.OSCILLA.app.setWorkspace('studio'));
+  await until(() => page.evaluate(() => window.OSCILLA.app.workspace === 'studio'),
+    { ms: STEP_MS, what: `${what}: the Studio opens` });
+  const t0 = await page.evaluate(() => {
+    const a = window.OSCILLA.app;
+    const e = window.OSCILLA.engine;
+    a.studioReturn();
+    a.studioPlay();
+    const buf = new Float32Array(e.analyser.fftSize);
+    const w = { peak: 0 };
+    // The analyser's window lasts fftSize / sampleRate s; it is read in a fraction of that.
+    w.timer = setInterval(() => {
+      e.analyser.getFloatTimeDomainData(buf);
+      for (const x of buf) w.peak = Math.max(w.peak, Math.abs(x));
+    }, (e.analyser.fftSize / e.ctx.sampleRate) * 250);
+    window.__u140Peak = w;
+    return e.ctx.currentTime;
+  });
+  await until(() => page.evaluate((t) => window.OSCILLA.engine.ctx.currentTime - t >= 3, t0),
+    { ms: STEP_MS * 2, what: `${what}: 3 s of the Studio's Play` });
+  const peak = await page.evaluate(() => {
+    clearInterval(window.__u140Peak.timer);
+    window.OSCILLA.app.studioStop();
+    return window.__u140Peak.peak;
+  });
+  await until(() => page.evaluate(() => !window.OSCILLA.studio.transport.playing),
+    { ms: STEP_MS, what: `${what}: the Studio stops` });
+  return peak;
+}
+
+async function keysNeverEditDocument(browser, b, origin, url) {
   const leg = `${b}/${origin}`;
-  const id = 'keys-insert-notice';
+  const id = 'keys-never-edit-document';
   const { context, page, errors } = await openPage(browser, `${url}#m=playground`,
     { also: { fn: audioProbe, arg: {} } });
   const doc = () => page.evaluate(() => {
-    const m = window.OSCILLA.studio.model;
+    const s = window.OSCILLA.studio;
+    const m = s.model;
     const master = m.graph.nodes.find((n) => n.type === 'master');
-    return { nodes: m.graph.nodes.length,
+    return { nodes: m.graph.nodes.length, dirty: s.dirty, undo: s.store.undoLabel(),
       feeds: m.graph.edges.filter((e) => master && e.to.node === master.id)
-        .map((e) => e.from.node).sort() };
+        .map((e) => e.from.node).sort().join(',') };
   });
-  const notices = () => page.evaluate(() => [...document.querySelectorAll('[data-osc="alert"]')]
-    .filter((el) => el.querySelector('[data-osc="alert.undo"]'))
-    .map((el) => el.textContent.replace(/\s+/g, ' ').trim()));
+  const same = (a, c) => a.nodes === c.nodes && a.dirty === c.dirty && a.undo === c.undo
+    && a.feeds === c.feeds;
+  // What sounds and what the status bar names, read in one evaluate.
+  const voice = () => page.evaluate(() => {
+    const a = window.OSCILLA.app;
+    const e = window.OSCILLA.engine;
+    const t = window.OSCILLA.studio.transport;
+    const f = new Float32Array(e.analyser.frequencyBinCount);
+    e.analyser.getFloatFrequencyData(f);
+    let k = 1;
+    for (let i = 2; i < f.length; i++) if (f[i] > f[k]) k = i;
+    return { notes: e.noteCount, studioArmed: !!t.armed, owner: a.outputOwner,
+      named: a.statusFreqText, wave: a.statusWaveText, held: a.kbdHeld,
+      lens: a.lensSubject ? a.lensSubject.text : null,
+      hz: (k * e.ctx.sampleRate) / e.analyser.fftSize,
+      binHz: e.ctx.sampleRate / e.analyser.fftSize };
+  });
   const go = async (ws) => {
     await page.evaluate((w) => window.OSCILLA.app.setWorkspace(w), ws);
     await until(() => page.evaluate((w) => window.OSCILLA.app.workspace === w, ws),
@@ -2061,30 +2141,99 @@ async function keysInsertNotice(browser, b, origin, url) {
     await page.locator('#osc-main').click({ position: { x: 4, y: 4 } }); // a gesture
     await focusOffEditors(page);
   };
+  const C4_HZ = 440 * 2 ** (-9 / 12);
+  // The page's own voice sounds C4, and the status bar (the notes, C4) and Sonda's subject (the
+  // keyboard's notes, U126) name it.
+  const ownVoice = async (what) => {
+    const m = await heard(page, (x) => x.peak > 0.002 && x.notes > 0, `${leg}: ${what} sounds`);
+    const v = await until(async () => {
+      const x = await voice();
+      return Math.abs(x.hz - C4_HZ) <= 2 * x.binHz ? x : null;
+    }, { ms: STEP_MS, what: `${leg}: ${what}: the analyser hears C4` }).catch(voice);
+    return { ok: !m.timedOut && v.notes > 0 && !v.studioArmed && v.owner === 'notes'
+      && /C4/.test(v.named) && v.lens === 'Zní: Noty z klávesnice'
+      && Math.abs(v.hz - C4_HZ) <= 2 * v.binHz, peak: m.peak, v };
+  };
+  const within1dB = (p, ref) => ref > 0 && p > 0 && Math.abs(20 * Math.log10(p / ref)) <= 1;
   try {
-    const before = await doc();
-    for (const ws of ['playground', 'measure']) {
-      await go(ws);
-      await page.keyboard.press('KeyA');
-      await page.keyboard.press('KeyS'); // a second key: no second notice
-      const said = await until(async () => {
-        const n = await notices();
-        return n.length ? n : null;
-      }, { ms: STEP_MS, what: `${leg}: ${ws}: the insert is said` }).catch(() => []);
-      const inserted = await doc();
-      await page.locator('[data-osc="alert.undo"]').first().click();
-      const undone = await until(async () => {
-        const d = await doc();
-        return d.nodes === before.nodes ? d : null;
-      }, { ms: STEP_MS, what: `${leg}: ${ws}: Zpět undoes the insert` }).catch(doc);
-      check(leg, id, `${ws}: a key inserts the Synth panel, says K246's sentence once with its `
-        + 'own Zpět, and Zpět there gives the document back whole', before.nodes === 6
-        && inserted.nodes > before.nodes && said.length === 1 && /Master Output/.test(said[0])
-        && undone.nodes === before.nodes
-        && JSON.stringify(undone.feeds) === JSON.stringify(before.feeds)
-        && (await notices()).length === 0,
-      JSON.stringify({ before, inserted: inserted.nodes, said, undone }));
+    const fresh = await doc();
+    const ref = await studioPlayPeak(page, `${leg}: the fresh Studio`);
+    check(leg, id, 'the fresh document plays in the Studio', fresh.nodes === 6 && ref > 0.01
+      && fresh.dirty === false, JSON.stringify({ fresh, ref }));
+
+    // The Generátor (Playground): a computer key.
+    await go('playground');
+    await page.keyboard.down('KeyA');
+    const pg = await ownVoice('A in the Generátor');
+    await page.keyboard.up('KeyA');
+    await heard(page, (x) => x.notes === 0, `${leg}: A released in the Generátor`);
+    const afterPg = await doc();
+    check(leg, id, 'Generátor: A plays the page\'s own voice, which the status bar (the notes, '
+      + 'C4) and Sonda name and the analyser hears (C4), and the Studio document is unchanged',
+    pg.ok && same(afterPg, fresh), JSON.stringify({ pg, afterPg }));
+
+    // Filtry: the docked keys by pointer (unfolded from their handle where folded).
+    await go('filter');
+    if (!(await page.locator('[data-osc="keyboard.keys"]').isVisible())) {
+      await page.locator('[data-osc="keyboard.handle"]').click();
+      await until(() => page.locator('[data-osc="keyboard.keys"]').isVisible(),
+        { ms: STEP_MS, what: `${leg}: the handle unfolds the keys in Filtry` });
     }
+    const canvas = page.locator('[data-osc="keyboard.keys"]');
+    const box = await canvas.boundingBox();
+    const at = await page.evaluate((w) => { // C4 as drawn, as keyboard-qwerty finds it
+      const octaves = w < 560 ? 2 : 3;
+      const first = octaves === 3 ? 48 : 60;
+      const whites = [];
+      for (let n = first; n <= first + 12 * octaves; n++) {
+        if (![1, 3, 6, 8, 10].includes(n % 12)) whites.push(n);
+      }
+      return { x: (whites.indexOf(60) + 0.5) * (w / whites.length), y: 120 };
+    }, box.width);
+    await page.mouse.move(box.x + at.x, box.y + Math.min(at.y, box.height - 8));
+    await page.mouse.down();
+    const fl = await ownVoice('the docked C4 in Filtry');
+    await page.mouse.up();
+    await heard(page, (x) => x.notes === 0, `${leg}: the pointer up frees C4 in Filtry`);
+    const afterFl = await doc();
+    check(leg, id, 'Filtry: the docked C4 by pointer plays the page\'s own voice, named and '
+      + 'heard as C4, and the Studio document is unchanged', fl.ok && same(afterFl, fresh),
+    JSON.stringify({ fl, afterFl }));
+
+    const p1 = await studioPlayPeak(page, `${leg}: the Studio after the keys`);
+    const after1 = await doc();
+    check(leg, id, 'after the keys the Studio\'s Play sounds its own chain within 1 dB of the '
+      + 'fresh page\'s, with the same nodes, Master Output feed and clean state',
+    within1dB(p1, ref) && same(after1, fresh), JSON.stringify({ ref, p1, after1 }));
+
+    // The Synth: opening it still brings its panel in by itself (U140 leaves that to the owner);
+    // a key there plays the panel and changes nothing more, and with the panel taken out (Zpět)
+    // a key plays nothing, says that Vložit puts it in and inserts nothing.
+    await go('synth');
+    const opened = await doc();
+    await page.keyboard.down('KeyA');
+    const sy = await heard(page, (x) => x.peak > 0.002, `${leg}: A sounds in the Synth`);
+    await page.keyboard.up('KeyA');
+    const afterSy = await doc();
+    check(leg, id, 'Synth: A plays the panel and does not change the document',
+      !sy.timedOut && same(afterSy, opened), JSON.stringify({ opened, afterSy, peak: sy.peak }));
+    await page.evaluate(() => window.OSCILLA.app.studioUndo());
+    await until(async () => ((await doc()).nodes === fresh.nodes ? true : null),
+      { ms: STEP_MS, what: `${leg}: Zpět takes the panel out` });
+    const undone = await doc();
+    await focusOffEditors(page);
+    await page.keyboard.down('KeyA');
+    const said = await until(() => page.evaluate(() => window.OSCILLA.app.synth.status || null),
+      { ms: STEP_MS, what: `${leg}: the Synth says why A plays nothing` }).catch(() => '');
+    const none = await voice();
+    await page.keyboard.up('KeyA');
+    const afterNone = await doc();
+    check(leg, id, 'Synth without its panel: A plays nothing, says that Vložit puts it in and '
+      + 'inserts nothing', /Vložit/.test(said) && none.held === '' && same(afterNone, undone),
+    JSON.stringify({ said, none, undone, afterNone }));
+    const p2 = await studioPlayPeak(page, `${leg}: the Studio after the Synth's key`);
+    check(leg, id, 'after the Synth\'s key the Studio\'s Play is within 1 dB of the fresh page\'s',
+      within1dB(p2, ref) && (await doc()).nodes === fresh.nodes, JSON.stringify({ ref, p2 }));
     check(leg, id, 'no console or page error', errors.length === 0, errors.join(' | '));
   } finally {
     await context.close();
@@ -2100,7 +2249,7 @@ async function keysEverywhereCentral(browser, b, origin, url) {
   const leg = `${b}/${origin}`;
   const id = 'keys-everywhere-central';
   const { context, page, errors } = await openPage(browser, `${url}#m=playground`,
-    { also: { fn: audioProbe, arg: {} } });
+    { panel: true, also: { fn: audioProbe, arg: {} } });
   const keys = () => page.evaluate(() => {
     const visible = (el) => {
       if (!el) return false;
@@ -2153,7 +2302,7 @@ async function keyboardChecks(browser, b, origin, url) {
   const leg = `${b}/${origin}`;
   const id = 'keyboard-qwerty';
   const { context, page, errors } = await openPage(browser, `${url}#m=playground&kbd=1`,
-    { also: { fn: audioProbe, arg: {} } });
+    { panel: true, also: { fn: audioProbe, arg: {} } });
   try {
     const kbd = () => page.evaluate(() => {
       const a = window.OSCILLA.app;
@@ -2418,7 +2567,7 @@ async function main() {
             await seamTransport(browser, b, origin, url);
             await seamClockOut(browser, b, origin, url);
             await keyboardChecks(browser, b, origin, url);
-            await keysInsertNotice(browser, b, origin, url);
+            await keysNeverEditDocument(browser, b, origin, url);
             await keyboardEverywhere(browser, b, origin, url);
             await keysEverywhereCentral(browser, b, origin, url);
             await keysOneKeyboard(browser, b, origin, url);

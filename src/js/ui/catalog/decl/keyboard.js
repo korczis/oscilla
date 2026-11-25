@@ -9,14 +9,6 @@ import { defineComponent } from '../define.js';
 
 export default [
   defineComponent({
-    id: 'alert.undo',
-    kind: 'action',
-    label: 'Zpět',
-    docs: 'Vrátí vložení panelu Synthu, které klávesy udělaly mimo Synth a Studio, přímo z oznámení.',
-    state: { none: 'vrací jednu změnu dokumentu Studia a žádnou hodnotu nedrží' },
-    effect: { command: 'vrátit vložení panelu klávesami, dokud je poslední změnou dokumentu' },
-  }),
-  defineComponent({
     id: 'keyboard',
     kind: 'panel',
     label: 'Klávesy',

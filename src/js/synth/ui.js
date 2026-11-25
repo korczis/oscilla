@@ -681,7 +681,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   // ------------------------------------------------------------------ notes
 
   const { noteOn, noteOff, legato, allOff, disarm, armedText } = createSynthNotes({ get,
-    transport, ensurePanel, cmp: () => cmp, say, played, playedModule, present, nodes, panel,
+    transport, cmp: () => cmp, say, played, playedModule, present, nodes, panel,
     ENGINE_IDS, syncArmed });
   // K222 Drums tab: the step grid on the percussion engine's notes clip
   const drums = createDrumsTab({ nodes, model, dispatch, say, transport, tab,

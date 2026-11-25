@@ -413,16 +413,17 @@ function defineChecks() {
     await go('playground');
     await page.locator('[data-osc="keyboard.readout"]').click(); // a gesture, on no control
     await page.keyboard.down('KeyA');
-    // K247: the key plays the one instrument (the Studio transport), lit on the keys; the
-    // engine's own note count stays 0.
-    res.keyHeld = await settle((s) => s.kbd && s.studioHeld > 0, 'a held key sounds and is lit');
+    // U140: the fresh document holds no instrument and a key inserts none, so the key plays the
+    // page's own voice (an engine note), lit on the keys; the Studio transport holds nothing.
+    res.keyHeld = await settle((s) => s.kbd && s.notes > 0 && s.studioHeld === 0,
+      'a held key sounds and is lit');
     await forget();
     await go('studio'); // the keys' dock folds there: the fold releases nothing (U133)
-    res.keysKeep = await settle((s) => s.kbd && s.studioHeld > 0
+    res.keysKeep = await settle((s) => s.kbd && s.notes > 0
       && s.said.includes(sentence('notes')),
     'leaving the Playground with a key held, it sounds on and the status bar says so');
     await page.keyboard.up('KeyA');
-    res.keyUpEnds = await settle((s) => !s.kbd && s.studioHeld === 0,
+    res.keyUpEnds = await settle((s) => !s.kbd && s.notes === 0 && s.studioHeld === 0,
       'the key\'s own keyup ends it in the Studio');
     await quiet('the keys');
     // The Synth, armed by its own Arm switch, a key held on the computer keyboard, then the
@@ -443,9 +444,14 @@ function defineChecks() {
       noteHz, peakHz: inSynth.peak.hz, bin: inSynth.peak.bin, octave };
     await forget();
     await nav('analyzer');
+    // The same note in the Analyzer: its pitch class, as synthPitch reads it. Since U140 the panel
+    // goes in at this visit to the Synth, just before the key, and the voice's filter envelope may
+    // make the second harmonic the analyser's peak at the first reading and the fundamental later
+    // (webkit, 262 then 131 Hz), so the octave of the peak is not the note's.
+    const sameNote = (hz) => Math.abs(hz - noteHz * 2 ** Math.round(Math.log2(hz / noteHz)))
+      <= inSynth.peak.bin;
     res.synthKeeps = await settle((s) => s.ws === 'analyzer' && s.armed && s.kbd
-      && s.studioHeld > 0 && s.peak.db > SOUNDING_DB
-      && Math.abs(s.peak.hz - inSynth.peak.hz) <= s.peak.bin
+      && s.studioHeld > 0 && s.peak.db > SOUNDING_DB && sameNote(s.peak.hz)
       && s.said.includes(sentence('synth')) && s.said.includes(sentence('notes')),
     'in the Analyzer the armed Synth\'s held note sounds on: the analyser reads its peak and the '
       + 'status bar says why');
