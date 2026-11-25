@@ -35,4 +35,32 @@ export default [
     docs: 'Říká, co zkopírovaný odkaz na nastavení obnoví a že nikdy nespustí přehrávání.',
     state: { none: 'popisuje odkaz a nic nemění' },
   }),
+  // U138: the reload's recovery notice (ui/session-draft.js).
+  defineComponent({
+    id: 'draft.notice',
+    kind: 'readout',
+    label: 'Obnovená práce',
+    docs: 'Po opětovném načtení stránky jmenuje, co se vrátilo z rozpracované relace: nástroj, '
+      + 'laboratoře, patch Synthu a sekvenci (U138).',
+    state: { none: 'ukazuje větu obnovy a nic neupravuje' },
+  }),
+  defineComponent({
+    id: 'draft.reset',
+    kind: 'action',
+    label: 'Začít znovu',
+    docs: 'Vrátí obnovené části do stavu, s nímž se stránka otevřela, a zahodí rozpracovanou '
+      + 'relaci (U138).',
+    state: 'instrument.frequency',
+    effect: { command: 'zahodit obnovenou práci' },
+    in: 'draft.notice',
+  }),
+  defineComponent({
+    id: 'draft.close',
+    kind: 'action',
+    label: 'Zavřít oznámení',
+    docs: 'Zavře oznámení o obnovené práci; obnovené části zůstanou (U138).',
+    state: { none: 'skryje jen oznámení a obnovené části nechá' },
+    effect: { command: 'zavřít oznámení o obnovené práci' },
+    in: 'draft.notice',
+  }),
 ];

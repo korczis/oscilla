@@ -1276,7 +1276,12 @@ function defineChecks() {
     const quietReload = await reload(page, 'seq-unsaved-guard (exported)');
     await page.mouse.click(3, 1000);
     const fresh = await seqState(page);
-    // The exported file restores the sequence; an imported sequence is saved work.
+    // The exported file restores the sequence; an imported sequence is saved work. The draft
+    // is forgotten first (Začít znovu), so the import, not the reload, restores it.
+    await page.click('[data-osc="draft.reset"]');
+    await until(() => page.evaluate((n) => window.OSCILLA.labs.sequencer.editor.model.blocks
+      .length === n, clean.blocks), { ms: MS,
+    what: 'seq-unsaved-guard: Začít znovu resets the sequence' });
     await H.navTo(page, 'sequencer');
     await page.setInputFiles('#osc-import-file', file);
     const imported = await until(async () => {
@@ -1309,8 +1314,9 @@ function defineChecks() {
         && afterAsk.blocks === addedNow.blocks && armedSeq(afterAsk),
       exportDisarms: !!exported && Array.isArray(doc.sequencer && doc.sequencer.blocks)
         && doc.sequencer.blocks.length === addedNow.blocks,
+      // U138: the reload gives the exported sequence back from the session draft, still saved
       exportedReloads: quietReload.dialog === null && !quietReload.stayed && quiet(fresh)
-        && fresh.blocks === clean.blocks,
+        && fresh.blocks === addedNow.blocks && fresh.types === addedNow.types,
       importRestoresQuiet: !!imported && quiet(importedNow),
       tempoArms: !!tempo && tempo.tempoBpm === 90,
       savedTempoQuiet: !!back && back.tempoBpm === importedNow.tempoBpm,
