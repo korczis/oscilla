@@ -89,6 +89,7 @@ import {
   buildConfigExport, parseConfigImport, CONFIG_FILE_VERSION, limitedValues,
 } from './ui/config-file.js';
 import { applyLabRecord, applyLabSections, labImportLimits, snapshotLabs } from './ui/lab-state.js';
+import { createSessionDraftUi } from './ui/session-draft.js';
 import { renderPlanToWav, renderSequenceToWav, screenshotCanvases } from './ui/exporters.js';
 import { BUILD } from './core/build-info.js';
 import { aboutPart } from './ui/about.js';
@@ -861,6 +862,7 @@ function integrationInit() {
       // Every sequence change bumps cmp.seqRev, which its readouts read (C004).
       followSequenceEdits(cmp, labs.sequencer.editor);
     }
+    cmp.draftBoot(); // U138: the reload's session draft, once every domain is mounted
     setAnalysisTab(cmp.tabs.analysis);
     if (cmp.debug) setInterval(() => cmp.refreshDebug(), 250);
     cmp.initialized = true;
@@ -932,7 +934,8 @@ function createOscillaComponent(ui) {
   const cmp = compose(instrument, ui, workbench, measure, experiments, findings, connections,
     studio, navigation, midi, createCrossLinksUi(), provenancePart(), aboutPart(), proClassesPart(),
     createLensPart({ relayout: () => { if (host) host.resize(); repairCharts(); } }),
-    TEMPLATE_HELPERS, { busArmed: (owner, on) => bus.armed(owner, on) });
+    TEMPLATE_HELPERS, createSessionDraftUi({ sequencer: () => labs.sequencer }),
+    { busArmed: (owner, on) => bus.armed(owner, on) });
   cmp.dismissAlert = focusSafeDismiss(cmp.dismissAlert);
   const baseRefreshDebug = cmp.refreshDebug;
   Object.defineProperty(cmp, 'refreshDebug', {
