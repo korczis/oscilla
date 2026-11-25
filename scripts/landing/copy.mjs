@@ -116,6 +116,11 @@ export const AREA_COPY = Object.freeze({ none: 'bez implementace', tooling: 'ná
  * tests/unit/landing-lab.test.mjs proves each named test reads its file and each rule exists.
  */
 export const RATCHET_COPY = Object.freeze({
+  'tests/browser/chrome-budget-baseline.json': { name: 'Rozpočet chromu',
+    short: 'chrom', counts: 'pixely, o které vlastní obsah místa na první obrazovce nedosahuje '
+      + 'svého podílu výšky, po prohlížečích, viewportech, místech a stavech kláves (součet '
+      + 'debt); dluh smí stoupnout jen se záznamem v knize raises',
+    test: 'tests/unit/chrome-budget.test.mjs', rule: null },
   'tests/browser/collection-count-baseline.json': { name: 'Napevno zapsané počty v testech',
     short: 'počty', counts: 'kontroly prohlížečových sad, které porovnávají napevno zapsaný počet '
       + 'prvků (délka seznamu entries)',
