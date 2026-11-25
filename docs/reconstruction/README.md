@@ -23,6 +23,7 @@ The owner-facing summary is a Czech page published separately.
 | [05 Accessibility audit](05-accessibility-audit.md) | axe and keyboard audit, the accessibility model |
 | [07 Target architecture](07-target-architecture.md) | competing architectures, target architecture, visual system, desktop and phone composition, migration strategy |
 | [08 Owner decision Q114](08-owner-decision-q114.md) | the owner's answers, verbatim |
+| [09 U131/U135 design](09-u131-u135-design.md) | title bar, instrument strip, phone keys: the approved design (Q115) |
 | [evidence/](evidence/) | layout metrics for 3 engines × 6 viewports × 13 workspaces |
 
 ## Method

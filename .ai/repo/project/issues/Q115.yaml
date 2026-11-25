@@ -1,0 +1,23 @@
+id: Q115
+milestone: M124
+serves:
+  - "one-instrument#chrome-budget"
+title: "LLM decision: the instrument strip shows Play at every width, the Playground keys live in it, Související is one menu, phone black keys 24 px, the place h1 moves to the title bar"
+slug: "llm-decision-u131-u135-design"
+priority: p1
+profile: routine
+owner: "reconstruction coordinator (oscilla-60, session 40c3f589)"
+objective: "Record the coordinator's five rulings on the U131/U135 design (docs/reconstruction/09-u131-u135-design.md), each derived from the owner's Q114 answers, so the builders state testable criteria: (1) the strip's Play shows at every width wherever PLAY_TARGET does not hide it (C030 amended: since U133 the sound survives a place change and the strip is where it is stopped); (2) the keys have one home, the strip, the Playground included, folded by default there (the one-keyboard order of 2026-11-15); (3) Související is one menu at every width, its first line the place summary; (4) on a phone white keys are 44 px or wider and black keys 24 px or wider (WCAG 2.5.8), since black keys are 0.6 of a white key and 44 px for every key cannot hold; (5) the one h1 names the place and stands in the title bar (Q110: the title only in the shared bar), the Playground's lead sentence stays as p[data-osc=page.lead] (Q089 supersedes Q004's first screen)."
+why: "The architect's design of 2026-11-25 for U131/U135 named these as needing a ruling. The owner delegated such decisions to the sessions (be llm autonomous; settle with peers, owner-only excepted); each follows from Q114 (model E, ADR 0089, sound survives, phone keys as a sheet). None is owner-only: none changes a route, removes a feature or contradicts an owner answer."
+scope:
+  - ".ai/repo/project/issues/Q115.yaml"
+  - "docs/reconstruction/09-u131-u135-design.md"
+depends_on: ["Q114"]
+acceptance_criteria:
+  - "The five rulings are recorded as evidence on this issue (covers decision) with the deciding session and date."
+  - "U131 and U135 cite Q115 where they depart from C030, the Playground keyboard exception, the md+ Related strip or the 44 px rule for black keys."
+validation:
+  - "manual"
+evidence_required:
+  - "verified"
+created_at: 2026-11-25
