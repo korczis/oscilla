@@ -28,7 +28,7 @@ import { scopeWindow } from './p5-views.js';
 import { OUTPUT_OWNER_NAMES, outputOwnerOf } from '../visualization/output-owner.js';
 import { OSCILLA_VERSION } from './version.js';
 import { formatHz } from '../charts/axes.js';
-import { rovingKeydown } from './app.js';
+import { TABS_PART } from './tabs-part.js';
 import { LABS_INCLUDED_TEXT, SEQUENCE_NOT_INCLUDED_TEXT, labSectionsText } from './lab-state.js';
 import {
   LAB_HASH_KEY, LAB_PARAM_MAX, decodeLabParam, encodeLabParam,
@@ -87,7 +87,7 @@ export function createWorkbench(svc) {
   return {
     OSCILLA_VERSION,
     SWEEP_FORM,
-    rovingKeydown,
+    ...TABS_PART,
     timeWindowMs: 5,
     announceText: '',
     // The playback bus's one playing state (C051, core/output-bus.js publishes it here in the

@@ -793,8 +793,9 @@ async function runOne(name) {
             const ctl = (await p.evaluate(phoneWhole,
               { ws, gap: WORK_GAP, touchMin: TOUCH_MIN })).covered;
             await p.evaluate(() => document.querySelector('[data-osc="test.cover"]').remove());
+            // The chips sit in the Synth tabpanel (#osc-synth-panel, U125), their nearest id.
             check('phone-whole-covered-control-synth-375',
-              ctl.some((c) => /^osc-view-synth>BUTTON\.snap-start under test\.cover$/.test(c)),
+              ctl.some((c) => /^osc-synth-panel>BUTTON\.snap-start under test\.cover$/.test(c)),
               `a section chip under a planted cover is not listed as covered: `
                 + `${ctl.slice(0, 6).join('; ') || 'none listed'}`);
           }
