@@ -2130,6 +2130,7 @@ async function keysNeverEditDocument(browser, b, origin, url) {
     for (let i = 2; i < f.length; i++) if (f[i] > f[k]) k = i;
     return { notes: e.noteCount, studioArmed: !!t.armed, owner: a.outputOwner,
       named: a.statusFreqText, wave: a.statusWaveText, held: a.kbdHeld,
+      lens: a.lensSubject ? a.lensSubject.text : null,
       hz: (k * e.ctx.sampleRate) / e.analyser.fftSize,
       binHz: e.ctx.sampleRate / e.analyser.fftSize };
   });
@@ -2141,7 +2142,8 @@ async function keysNeverEditDocument(browser, b, origin, url) {
     await focusOffEditors(page);
   };
   const C4_HZ = 440 * 2 ** (-9 / 12);
-  // The page's own voice sounds C4 and the status bar names it: the notes, C4, the waveform.
+  // The page's own voice sounds C4, and the status bar (the notes, C4) and Sonda's subject (the
+  // keyboard's notes, U126) name it.
   const ownVoice = async (what) => {
     const m = await heard(page, (x) => x.peak > 0.002 && x.notes > 0, `${leg}: ${what} sounds`);
     const v = await until(async () => {
@@ -2149,7 +2151,8 @@ async function keysNeverEditDocument(browser, b, origin, url) {
       return Math.abs(x.hz - C4_HZ) <= 2 * x.binHz ? x : null;
     }, { ms: STEP_MS, what: `${leg}: ${what}: the analyser hears C4` }).catch(voice);
     return { ok: !m.timedOut && v.notes > 0 && !v.studioArmed && v.owner === 'notes'
-      && /C4/.test(v.named) && Math.abs(v.hz - C4_HZ) <= 2 * v.binHz, peak: m.peak, v };
+      && /C4/.test(v.named) && v.lens === 'Zní: Noty z klávesnice'
+      && Math.abs(v.hz - C4_HZ) <= 2 * v.binHz, peak: m.peak, v };
   };
   const within1dB = (p, ref) => ref > 0 && p > 0 && Math.abs(20 * Math.log10(p / ref)) <= 1;
   try {
@@ -2165,8 +2168,8 @@ async function keysNeverEditDocument(browser, b, origin, url) {
     await page.keyboard.up('KeyA');
     await heard(page, (x) => x.notes === 0, `${leg}: A released in the Generátor`);
     const afterPg = await doc();
-    check(leg, id, 'Generátor: A plays the page\'s own voice, which the status bar names (the '
-      + 'notes, C4) and the analyser hears (C4), and the Studio document is unchanged',
+    check(leg, id, 'Generátor: A plays the page\'s own voice, which the status bar (the notes, '
+      + 'C4) and Sonda name and the analyser hears (C4), and the Studio document is unchanged',
     pg.ok && same(afterPg, fresh), JSON.stringify({ pg, afterPg }));
 
     // Filtry: the docked keys by pointer (unfolded from their handle where folded).
