@@ -106,6 +106,7 @@
     <symbol id="i-ws-experiments" viewBox="0 0 24 24"><!-- @icon:flask-conical --></symbol>
     <symbol id="i-ws-analyze" viewBox="0 0 24 24"><!-- @icon:chart-spline --></symbol>
     <symbol id="i-ws-analyzer" viewBox="0 0 24 24"><!-- @icon:activity --></symbol>
+    <symbol id="i-lens" viewBox="0 0 24 24"><!-- @icon:scan-eye --></symbol>
     <symbol id="i-ws-filter" viewBox="0 0 24 24"><!-- @icon:funnel --></symbol>
     <symbol id="i-ws-compare" viewBox="0 0 24 24"><!-- @icon:git-compare --></symbol>
     <symbol id="i-ws-synthesis-group" viewBox="0 0 24 24"><!-- @icon:sliders-horizontal --></symbol>
@@ -191,6 +192,13 @@
           x-text="navQuery.trim() ? 'Nalezené pracovní plochy: ' + navSearchResults().length + '; Enter otevře první' : ''"></p>
       </div>
       <div class="flex items-center flex-none gap-1" data-osc="header.actions">
+        <button type="button" id="osc-lens-header" data-osc="header.lens" aria-controls="osc-lens"
+          aria-label="Sonda" :aria-expanded="String(lensOpen)" @click="lensToggle()"
+          title="Sonda: co právě zní na výstupu"
+          class="items-center justify-center hidden w-11 h-11 text-gray-500 rounded-lg md:inline-flex hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-700"
+          :class="lensOpen && '!bg-primary-700 !text-white'">
+          <svg class="w-5 h-5" aria-hidden="true"><use href="#i-lens"/></svg>
+        </button>
         <button type="button" id="osc-theme-toggle" data-osc="header.theme"
           aria-label="Přepnout na světlý motiv" @click="toggleTheme()"
           :aria-label="theme === 'dark' ? 'Přepnout na světlý motiv' : 'Přepnout na tmavý motiv'"
@@ -762,6 +770,9 @@
                 data-osc-chart="analysis-spectrogram" role="img"
                 aria-label="Živý spektrogram výstupu: čas, frekvence, relativní úroveň"></div>
             </div>
+            <p x-show="lensOpen" x-cloak
+              class="p-4 my-3 text-sm text-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 dark:text-gray-300">Průběh,
+              spektrum a spektrogram jsou právě otevřené v Sondě; po jejím zavření se vrátí sem.</p>
 
             <div class="osc-analysis-foot"
               :class="{ 'is-inert': !['waveform', 'spectrum'].includes(tabs.analysis) }">
@@ -3257,6 +3268,14 @@
       </button>
       <div class="osc-sb-actions" id="osc-sb-actions" role="group" aria-label="Akce"
         :class="{ 'is-open': menus.actions }">
+        <!-- Sonda (ui/lens.js) on a phone, in the Akce menu; from 768 px the navbar's. -->
+        <button type="button" id="osc-lens-toggle" data-osc="status.lens" aria-controls="osc-lens"
+          :aria-expanded="String(lensOpen)" @click="lensToggle()"
+          title="Sonda: co právě zní na výstupu, z kterékoli pracovní plochy"
+          class="inline-flex md:hidden items-center flex-none h-11 gap-2 px-3 text-sm font-medium max-md:w-full text-gray-900 bg-white border border-solid border-gray-300 rounded-lg hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 dark:bg-gray-800 dark:text-white dark:border-gray-600 dark:hover:bg-gray-700 md:h-9"
+          :class="lensOpen && '!bg-primary-700 !text-white !border-primary-700'">
+          <svg class="w-4 h-4" aria-hidden="true"><use href="#i-lens"/></svg><span>Sonda</span>
+        </button>
         <button type="button" class="osc-sb-action" id="osc-act-url" data-osc="action.copyUrl" data-osc-link="jump" @click="copyConfigUrl()"
           aria-label="Kopírovat odkaz na nastavení">
           <svg aria-hidden="true"><use href="#i-link"/></svg><span>Odkaz</span>
@@ -3290,6 +3309,50 @@
     <button type="button" tabindex="-1" aria-hidden="true"
       class="fixed inset-0 z-30 hidden w-full cursor-default bg-gray-900/50 dark:bg-gray-900/80 lg:hidden" data-osc="sidebar.backdrop"
       :class="{ hidden: !drawerOpen }" @click="closeDrawer(true)"></button>
+
+    <!-- ================= Sonda: the observed lens (src/js/ui/lens.js) ====================
+         The Flowbite drawer pattern, driven by Alpine (lensOpen): a right side sheet at lg and
+         up (the workspace stays usable: no backdrop, not modal), a bottom sheet of at most 60 %
+         of the height below; shown by a class binding, as the drawer is, so focus can move into
+         it in the same task (x-show defers a show to a later frame). It names what sounds (soundingOwner) and shows only the views that
+         read the output analyser: the analysis panel's one view element is moved into
+         #osc-lens-slot while it is open, so no chart is mounted twice. -->
+    <section id="osc-lens" data-osc="lens" role="dialog" aria-modal="false"
+      aria-labelledby="osc-lens-title" aria-describedby="osc-lens-subject" :class="{ hidden: !lensOpen }"
+      class="hidden fixed inset-x-0 bottom-0 z-40 flex flex-col w-full max-h-[60vh] p-4 overflow-y-auto bg-white border-t border-solid border-gray-200 rounded-lg shadow dark:bg-gray-800 dark:border-gray-700 max-lg:rounded-b-none lg:inset-x-auto lg:right-0 lg:top-16 lg:bottom-[var(--osc-statusbar-h)] lg:w-[420px] lg:max-h-none lg:rounded-none lg:border-t-0 lg:border-l">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <h2 id="osc-lens-title" class="inline-flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-white">
+            <svg class="w-5 h-5" aria-hidden="true"><use href="#i-lens"/></svg><span>Sonda</span>
+          </h2>
+          <p id="osc-lens-subject" data-osc="lens.subject" aria-live="polite"
+            class="mt-1 text-sm font-medium text-gray-900 dark:text-white" x-text="lensSubject.text"></p>
+        </div>
+        <button type="button" id="osc-lens-close" aria-label="Zavřít Sondu"
+          aria-controls="osc-lens" @click="lensClose()"
+          class="inline-flex items-center justify-center flex-none w-11 h-11 text-gray-500 bg-transparent rounded-lg hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white">
+          <svg class="w-5 h-5" aria-hidden="true"><use href="#i-close"/></svg>
+        </button>
+      </div>
+      <div id="osc-lens-idle" x-show="lensSubject.idle"
+        class="p-4 mt-3 text-sm text-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 dark:text-gray-300">
+        <p x-text="lensText.idleNote"></p>
+      </div>
+      <div x-show="!lensSubject.idle" class="mt-2">
+        <p id="osc-lens-caption" class="text-xs text-gray-600 dark:text-gray-300" x-text="lensText.caption"></p>
+        <div role="group" aria-label="Pohled Sondy" class="inline-flex mt-3 rounded-lg shadow-sm">
+          <template x-for="(v, i) in lensViews.views" :key="v">
+            <button type="button" data-osc="lens.view" :data-value="v" @click="lensSelect(v)"
+              :aria-pressed="String(lensView === v)" x-text="lensViewLabel(v)"
+              class="h-11 px-3 text-sm font-medium border border-solid border-gray-200 focus:z-10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 dark:border-gray-600 lg:h-9"
+              :class="lensViewClass(v, i)"></button>
+          </template>
+        </div>
+        <div id="osc-lens-slot" class="mt-2"></div>
+        <p id="osc-lens-computed" x-show="lensViews.computedNote" x-text="lensViews.computedNote"
+          class="mt-3 text-xs text-gray-600 dark:text-gray-300"></p>
+      </div>
+    </section>
   </div>
 
   <input type="file" id="osc-import-file" class="osc-sr-only" accept="application/json,.json"

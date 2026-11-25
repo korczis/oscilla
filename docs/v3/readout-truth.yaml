@@ -742,3 +742,22 @@ readouts:
       (LAB_PARAM_MAX); the sequence is never in a link
     tests: [tests/unit/lab-state-round-trip.test.mjs, tests/browser/navigation.cjs]
     label: VERIFIED
+  - key: lens.subject
+    audit: []
+    readout: "Sonda's subject line #osc-lens-subject: Zní: <owner>, or Nic nehraje"
+    quantity: The owner whose sound reaches the master chain now (a name, not a measurement)
+    unit: none (a Czech name)
+    source: [src/js/ui/lens.js, src/js/core/output-bus.js]
+    algorithm: >-
+      lensSubject({ owner: soundingOwner(cmp), synthArmed: cmp.synth.armed }): a running
+      measurement first, else the owner the playback bus published (cmp.playback, C051); an
+      armed Synth run of the Studio transport is named Synth; the workspace owners by the
+      registry's labels, the instrument Generátor
+    resolution: one owner at a time; changes in the event that changes the bus's owner
+    calibration: none needed (it names a state; the views beside it are the relative analyser)
+    limitations: >-
+      Names the owner of the output, not whether it is audible now: an armed Synth with no key
+      held is still named Synth while the analyser reads silence; a release tail after the owner
+      let go is shown as Nic nehraje
+    tests: [tests/unit/lens.test.mjs, tests/browser/journeys.cjs]
+    label: VERIFIED
