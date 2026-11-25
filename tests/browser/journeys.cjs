@@ -33,9 +33,22 @@
 //                         the next Escape stops the output; `studio` a PLAYed Studio run is named
 //                         Studio and plays on after the sheet's Escape, Close closes it and the
 //                         view is back in the panel; `layout` with a note held, a 420 px right
-//                         side sheet between the navbar and the status bar beside a workspace
-//                         that still takes a click, on the phone a bottom sheet of at most 60 %
-//                         of the height, every control 44 px or more, no text under 12 px;
+//                         side sheet between the navbar and the docked keys (or the status bar)
+//                         beside a workspace that still takes a click, on the phone a bottom
+//                         sheet of at most 60 % of the height ending above the docked keys,
+//                         every control 44 px or more, no text under 12 px; U146: `in-place` in
+//                         every place the analysis panel's data-osc-modes lists, Sonda brings
+//                         the panel into view and focuses its view tab, the sheet stays closed
+//                         and the panel's chart is drawn there (no placeholder); `keys` with the
+//                         sheet open every white key is the keys' own at its centre
+//                         (elementFromPoint) and 44 px or wider, a held key sounds at its
+//                         fundamental on the analyser while the sheet draws the Spectrum, and
+//                         on the phone a real tap reaches the keys and is heard; `reflow`
+//                         (desktop) the column reflows beside the sheet: no control under it,
+//                         the content's right edge takes the click, the status bar keeps its
+//                         width; `escape-sidebar` (desktop) after a navigation click Escape from
+//                         the focused sidebar item closes the sheet first and the nav group
+//                         stays expanded, then the same Escape collapses the group;
 //                         `axe` axe-core on the open sheet (idle and sounding) and on the Sonda
 //                         button: no critical or serious violation. --shots <dir> saves the
 //                         sheet over the Synth and the Studio per browser and size
@@ -673,8 +686,8 @@ function defineChecks() {
 
   // ============================================================== 3b. Sonda, the observed lens
   // Each check at 1536 x 1024 and at 390 x 844 with touch, on its own fresh page.
-  const lensDef = (id, hash, body) => {
-    for (const size of Object.keys(LENS_SIZES)) {
+  const lensDef = (id, hash, body, sizes = Object.keys(LENS_SIZES)) => {
+    for (const size of sizes) {
       def(`journey-3-views:sonda-${id}@${size}`, async ({ browser }) => {
         const ctx = await lensOpen(browser, size, hash);
         try {
@@ -787,23 +800,29 @@ function defineChecks() {
         .filter((el) => el.getClientRects().length > 0 && el.textContent.trim())
         .map((el) => parseFloat(getComputedStyle(el).fontSize));
       const s = r(sheet);
+      // The docked keys (fixed over the page's bottom edge) or, with none, the status bar and
+      // on a phone the viewport's edge: where the sheet ends (U146: it never covers a key).
+      const kb = document.querySelector('[data-osc="keyboard"]');
+      const dockTop = kb && getComputedStyle(kb).position === 'fixed' ? r(kb).top : null;
       const title = document.querySelector('[data-osc="page.title"]');
       const t = r(title);
       const hit = document.elementFromPoint(t.left + t.width / 2, t.top + t.height / 2);
       return { sheet: { left: s.left, right: s.right, top: s.top, bottom: s.bottom,
         width: s.width, height: s.height }, vw: innerWidth, vh: innerHeight,
-      barBottom: r(bar).bottom, statusTop: r(status).top, controls,
+      barBottom: r(bar).bottom, statusTop: r(status).top, dockTop, controls,
       minText: Math.min(...texts), scrollX: document.documentElement.scrollWidth > innerWidth,
       titleTakesClick: !!hit && (hit === title || title.contains(hit)) };
     });
     await page.keyboard.up('KeyA');
     let ok;
     if (size === 'desktop') {
+      const end = Math.min(m.statusTop, m.dockTop === null ? Infinity : m.dockTop);
       ok = Math.abs(m.sheet.width - 420) <= 1 && Math.abs(m.sheet.right - m.vw) <= 1
-        && Math.abs(m.sheet.top - m.barBottom) <= 1 && Math.abs(m.sheet.bottom - m.statusTop) <= 1
+        && Math.abs(m.sheet.top - m.barBottom) <= 1 && Math.abs(m.sheet.bottom - end) <= 1
         && m.titleTakesClick;
     } else {
-      ok = m.sheet.height <= 0.6 * m.vh + 0.5 && Math.abs(m.sheet.bottom - m.vh) <= 1
+      const end = m.dockTop === null ? m.vh : m.dockTop;
+      ok = m.sheet.height <= 0.6 * m.vh + 0.5 && Math.abs(m.sheet.bottom - end) <= 1
         && m.controls.every((c) => c.w >= 44 && c.h >= 44) && m.minText >= 12 && !m.scrollX;
     }
     const toggle = toggleBox ? { w: toggleBox.width, h: toggleBox.height } : null;
@@ -811,6 +830,197 @@ function defineChecks() {
     else ok = ok && !!toggle;
     return { ok, toggle, ...m };
   });
+
+  // U146: in every place whose own analysis panel is shown (its data-osc-modes, read from the
+  // page), Sonda brings that panel into view and focuses its view tab; the sheet stays closed
+  // and the panel keeps its chart, drawn (no placeholder, the analyser read once).
+  lensDef('in-place', '#m=playground', async ({ page, size }) => {
+    const places = await page.evaluate(() => document.getElementById('osc-panel-analysis')
+      .dataset.oscModes.split(/\s+/).filter(Boolean));
+    must(places.includes('playground'), 'the Playground shows the analysis panel', places);
+    const res = {};
+    for (const ws of places) {
+      await page.evaluate((w) => { window.location.hash = `#m=${w}`; }, ws);
+      await until(() => page.evaluate((w) => window.OSCILLA.app.workspace === w, ws),
+        { ms: LENS_UI_MS, what: `${ws} is shown` });
+      await lensReveal(page, size);
+      await (size === 'phone' ? page.tap('#osc-lens-toggle') : page.click('#osc-lens-header'));
+      const v = await until(() => page.evaluate(lensInPanel).then((r) => (r.focusInPanel
+        && r.inked > 200 ? r : null)), { ms: LENS_UI_MS,
+        what: `${ws}: Sonda brings the analysis panel into view, its chart drawn there` });
+      res[ws] = v;
+    }
+    const bad = Object.entries(res).filter(([, r]) => r.open || r.sheetShown || !r.viewInPanel
+      || !r.hostShown || r.placeholder || r.hosts !== 1 || !r.inView || r.expanded !== null
+      || r.controls !== 'osc-panel-analysis');
+    return { ok: bad.length === 0, places, bad: Object.fromEntries(bad), res };
+  });
+
+  // U146: the keys play under an open sheet. The sheet ends above the docked keys, every white
+  // key's centre is the keys' own (elementFromPoint) and a 44 px target, a press on one sounds
+  // on the engine's analyser while the sheet shows the Spectrum, and on the phone a real tap
+  // reaches the keys and sounds.
+  lensDef('keys', '#m=synth', async ({ page, size }) => {
+    const { keysInput, keysOctaves, TOUCH_KEY_MIN } = await import(pathToFileURL(path.join(ROOT,
+      'src', 'js', 'midi', 'keyboard-ui.js')).href);
+    const { visibleRange } = await import(pathToFileURL(path.join(ROOT, 'src', 'js', 'midi',
+      'keyboard.js')).href);
+    const { keyLayout } = await import(pathToFileURL(path.join(ROOT, 'src', 'js', 'midi',
+      'keyboard-view.js')).href);
+    await until(() => page.evaluate(() => {
+      const c = document.querySelector('[data-osc="keyboard.keys"]');
+      return !!c && c.getBoundingClientRect().width > 0;
+    }), { ms: LENS_LOAD_MS, what: 'the Synth\'s docked keys are drawn' });
+    await lensReveal(page, size);
+    await (size === 'phone' ? page.tap('#osc-lens-toggle') : page.click('#osc-lens-header'));
+    await lensUntil(page, (s) => s.open && s.sheetShown, 'the sheet opens');
+    const g = await page.evaluate(() => {
+      const c = document.querySelector('[data-osc="keyboard.keys"]').getBoundingClientRect();
+      const sh = document.getElementById('osc-lens').getBoundingClientRect();
+      const mq = (q) => matchMedia(q).matches;
+      return { canvas: { left: c.left, top: c.top, width: c.width, height: c.height },
+        sheetBottom: sh.bottom, base: window.OSCILLA.app.kbdBase,
+        media: { '(pointer: coarse)': mq('(pointer: coarse)'),
+          '(any-pointer: fine)': mq('(any-pointer: fine)') } };
+    });
+    const input = keysInput({ matchMedia: (q) => ({ matches: !!g.media[q] }) });
+    const range = visibleRange(g.base, keysOctaves(Math.floor(g.canvas.width), input));
+    const whites = keyLayout(range.first, range.last, g.canvas.width, g.canvas.height)
+      .filter((k) => !k.black).map((k) => ({ note: k.note, w: k.w,
+        x: g.canvas.left + k.x + k.w / 2, y: g.canvas.top + k.h * 0.85 }));
+    const hits = await page.evaluate((pts) => pts.map((p) => {
+      const el = document.elementFromPoint(p.x, p.y);
+      return !!el && el.matches('[data-osc="keyboard.keys"]');
+    }), whites);
+    const geometry = { whites: whites.length, narrowest: Math.min(...whites.map((k) => k.w)),
+      covered: whites.filter((k, i) => !hits[i]).map((k) => k.note),
+      sheetAboveKeys: g.sheetBottom <= g.canvas.top + 0.5 };
+    must(geometry.covered.length === 0 && geometry.sheetAboveKeys
+      && geometry.narrowest >= TOUCH_KEY_MIN, 'every white key is reachable beside the open '
+      + 'sheet and a 44 px target', geometry);
+    // A held press on the middle white key: the sheet names the Synth, shows the Spectrum
+    // (chosen from the keyboard: the pointer stays down) and the analyser hears the note.
+    const key = whites[Math.floor(whites.length / 2)];
+    await page.mouse.move(key.x, key.y);
+    await page.mouse.down();
+    let drawn;
+    let peak;
+    try {
+      await lensUntil(page, (s) => s.views.length === 3, 'the pressed key sounds: the views show');
+      await page.focus('[data-osc="lens.view"][data-value="spectrum"]');
+      await page.keyboard.press('Enter');
+      drawn = await lensUntil(page, (s) => s.hostInSheet && s.hostShown && s.inked > 200
+        && s.chartMax > -60, 'the Spectrum is drawn in the sheet while the key sounds');
+      const hz = 440 * 2 ** ((key.note - 69) / 12);
+      peak = await lensSound(page, (q) => q.rmsDb > -40 && q.peakHz
+        && [hz / 2, hz].some((f) => Math.abs(q.peakHz - f) <= 1.5 * q.binHz),
+      `the analyser peaks at the pressed key's fundamental (${hz.toFixed(1)} Hz or an octave `
+        + 'below)');
+    } finally { await page.mouse.up(); }
+    let tap = null;
+    if (size === 'phone') {
+      // A real tap on another white key (touch input): it reaches the keys and is heard.
+      await lensSound(page, (q) => q.rmsDb < -70, 'the released key falls silent');
+      await page.evaluate(() => {
+        const c = document.querySelector('[data-osc="keyboard.keys"]');
+        const a = window.OSCILLA.engine.analyser;
+        const t = new Float32Array(a.fftSize);
+        const w = { types: [], maxDb: -240, view: null, on: true };
+        window.__u146tap = w;
+        c.addEventListener('pointerdown', (e) => w.types.push(e.pointerType));
+        const step = () => {
+          if (!w.on) return;
+          a.getFloatTimeDomainData(t);
+          let s = 0;
+          for (const x of t) s += x * x;
+          const db = 10 * Math.log10(s / t.length + 1e-24);
+          if (db > w.maxDb) { w.maxDb = db; w.view = window.OSCILLA.app.lensView; }
+          requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+      });
+      const other = whites[Math.max(0, Math.floor(whites.length / 2) - 2)];
+      await page.touchscreen.tap(other.x, other.y);
+      tap = await until(() => page.evaluate(() => ({ ...window.__u146tap }))
+        .then((w) => (w.types.includes('touch') && w.maxDb > -60 ? w : null)),
+      { ms: LENS_SOUND_MS, what: 'a tapped key reaches the keys and is heard on the analyser' });
+      await page.evaluate(() => { window.__u146tap.on = false; });
+    }
+    return { ok: drawn.spectrumHosts === 1 && (size !== 'phone'
+      || (tap && tap.view === 'spectrum')), geometry, key: key.note, peakHz: peak.peakHz,
+    rmsDb: peak.rmsDb, tap: tap && { types: tap.types, maxDb: tap.maxDb, view: tap.view } };
+  });
+
+  // U146: from lg up the open sheet reflows the workspace column; no control lies under it and
+  // the content's right edge takes the click (elementFromPoint), the status bar keeps its width.
+  lensDef('reflow', '#m=synth', async ({ page }) => {
+    await until(() => page.evaluate(() => !!document.querySelector('[data-osc="synth.bay.svg"]')),
+      { ms: LENS_LOAD_MS, what: 'the Synth panel is rendered' });
+    await page.click('#osc-lens-header');
+    await lensUntil(page, (s) => s.open && s.sheetShown, 'the sheet opens');
+    const m = await until(() => page.evaluate(() => {
+      const r = (el) => el.getBoundingClientRect();
+      const sheet = document.getElementById('osc-lens');
+      const s = r(sheet);
+      const col = document.getElementById('osc-main-content');
+      const main = document.getElementById('osc-main');
+      const status = document.querySelector('footer[aria-label="Stavový řádek"]');
+      const shown = (el) => el.getClientRects().length > 0
+        && getComputedStyle(el).visibility !== 'hidden';
+      const under = [...col.querySelectorAll('button, a[href], input, select, textarea, '
+        + '[role="tab"], [role="slider"], [tabindex="0"]')].filter(shown).filter((el) => {
+        const b = r(el);
+        return b.width > 0 && b.height > 0 && b.right > s.left + 1 && b.left < s.right - 1
+          && b.bottom > s.top + 1 && b.top < s.bottom - 1;
+      }).map((el) => el.id || el.dataset.osc || el.textContent.trim().slice(0, 30));
+      const mr = r(main);
+      const edge = [];
+      for (let y = Math.max(mr.top, s.top) + 12; y < Math.min(mr.bottom, s.bottom) - 12; y += 48) {
+        const el = document.elementFromPoint(mr.right - 4, y);
+        edge.push(!!el && !sheet.contains(el) && col.contains(el));
+      }
+      return { sheet: { left: s.left, top: s.top, bottom: s.bottom }, mainRight: mr.right,
+        statusWidth: r(status).width, colWidth: r(col).width, under, edge,
+        scrollX: document.documentElement.scrollWidth > innerWidth };
+    }).then((v) => (v.mainRight <= v.sheet.left + 0.5 ? v : null)),
+    { ms: LENS_UI_MS, what: 'the column reflows beside the sheet' });
+    return { ok: m.under.length === 0 && m.edge.length > 0 && m.edge.every(Boolean)
+      && Math.abs(m.statusWidth - m.colWidth) <= 1 && !m.scrollX, ...m };
+  }, ['desktop']);
+
+  // U146: Escape from a focused sidebar item, after a navigation click, closes the open sheet
+  // first (the shell passes the key to the registry) and leaves the nav group expanded; with the
+  // sheet closed the same Escape is the shell's again (the group collapses).
+  lensDef('escape-sidebar', '#m=synth', async ({ page }) => {
+    await page.click('#osc-lens-header');
+    await lensUntil(page, (s) => s.open, 'the sheet opens');
+    const target = await page.evaluate(() => {
+      const modes = document.getElementById('osc-panel-analysis').dataset.oscModes.split(/\s+/);
+      const link = [...document.querySelectorAll('[data-osc-nav-panel] a[data-osc^="nav."]')]
+        .find((a) => a.getClientRects().length
+          && !modes.includes(a.dataset.osc.slice('nav.'.length)));
+      const group = link.closest('[data-osc-nav-panel]').dataset.oscNavPanel;
+      return { osc: link.dataset.osc, group };
+    });
+    const link = `[data-osc="${target.osc}"]`;
+    const group = () => page.evaluate((g) => document
+      .querySelector(`[data-osc="nav-group.${g}"]`).getAttribute('aria-expanded'), target.group);
+    await page.click(link);
+    await until(() => page.evaluate((ws) => window.OSCILLA.app.workspace === ws,
+      target.osc.slice('nav.'.length)), { ms: LENS_UI_MS, what: `${target.osc} navigates` });
+    await page.focus(link); // WebKit leaves a clicked link unfocused
+    const before = { open: (await lensState(page)).open, group: await group() };
+    await page.keyboard.press('Escape');
+    const closed = await lensUntil(page, (s) => !s.open && s.focus === 'osc-lens-header',
+      'Escape from the sidebar closes the sheet first');
+    const kept = await group();
+    await page.focus(link);
+    await page.keyboard.press('Escape');
+    const collapsed = await until(() => group().then((v) => (v === 'false' ? v : null)),
+      { ms: LENS_UI_MS, what: 'with the sheet closed Escape collapses the group again' });
+    return { ok: before.open && before.group === 'true' && kept === 'true'
+      && closed.owner === null && collapsed === 'false', target, before, kept, collapsed };
+  }, ['desktop']);
 
   lensDef('axe', '#m=synth', async ({ page, size }) => {
     const source = fs.readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
@@ -1563,6 +1773,34 @@ function lensSheet() {
   };
 }
 const lensState = (page) => page.evaluate(lensSheet);
+/** The analysis panel in its own place (U146): its view still there, its chart drawn, no sheet. */
+function lensInPanel() {
+  const q = (s) => document.querySelector(s);
+  const panel = q('#osc-panel-analysis');
+  const view = panel.querySelector('[role="tabpanel"]');
+  const shown = (el) => !!el && el.getClientRects().length > 0
+    && getComputedStyle(el).visibility !== 'hidden';
+  const host = view && [...view.querySelectorAll('[data-osc-chart]')].find(shown);
+  const canvas = host && host.querySelector('canvas');
+  let inked = 0;
+  if (canvas && canvas.width && canvas.height) {
+    const d = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+    for (let i = 3; i < d.length; i += 16) if (d[i] > 0) inked += 1;
+  }
+  const r = view ? view.getBoundingClientRect() : null;
+  const hit = r ? document.elementFromPoint(r.left + r.width / 2,
+    Math.max(r.top + 4, Math.min(r.top + r.height / 2, innerHeight - 4))) : null;
+  const toggle = shown(q('#osc-lens-header')) ? q('#osc-lens-header') : q('#osc-lens-toggle');
+  return { open: window.OSCILLA.app.lensOpen, sheetShown: shown(q('#osc-lens')),
+    viewInPanel: !!view, hostShown: !!host, host: host ? host.id : null, inked,
+    hosts: document.querySelectorAll('#osc-chart-spectrum').length,
+    placeholder: /otevřen\S* v Sondě/.test(panel.textContent),
+    inView: !!r && r.bottom > 0 && r.top < innerHeight && !!hit && panel.contains(hit),
+    focusInPanel: panel.contains(document.activeElement)
+      && document.activeElement.getAttribute('role') === 'tab',
+    expanded: toggle.getAttribute('aria-expanded'), controls: toggle.getAttribute('aria-controls') };
+}
+
 /** Poll the sheet until `pred(state)` holds; returns the state that held. */
 async function lensUntil(page, pred, what, ms = LENS_UI_MS) {
   let last = null;
