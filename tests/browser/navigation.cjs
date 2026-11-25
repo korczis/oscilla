@@ -139,6 +139,8 @@ const LONG_RUN = { ...SHORT, duration: 4, repeats: 2 };
 // one below SILENT_DB.
 const SOUNDING_DB = -70;
 const SILENT_DB = -80;
+// A held note's peak is steady when two consecutive reads differ by less than this (dB).
+const STEADY_DB = 0.5;
 // A valid recipe link (url-state-measure.js wire keys): 50 Hz-12 kHz.
 const RECIPE = Buffer.from(JSON.stringify({ v: 1, f1: 50, f2: 12000 })).toString('base64url');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -327,8 +329,9 @@ function defineChecks() {
       const a = O.app;
       const e = O.engine;
       // The output analyser's strongest bin, interpolated (a parabola through it and its
-      // neighbours): the frequency the engine reads now and its level in dBFS.
-      let peak = { db: -Infinity, hz: 0, bin: 0 };
+      // neighbours): the frequency the engine reads now and its level in dBFS; `at` is the audio
+      // clock of the read and `window` the analyser's window in seconds.
+      let peak = { db: -Infinity, hz: 0, bin: 0, at: 0, window: Infinity };
       if (e.analyser && e.ctx) {
         const an = e.analyser;
         const d = new Float32Array(an.frequencyBinCount);
@@ -339,7 +342,8 @@ function defineChecks() {
         const den = l - 2 * c + r;
         const p = Number.isFinite(den) && den !== 0 ? 0.5 * (l - r) / den : 0;
         const bin = e.ctx.sampleRate / an.fftSize;
-        peak = { db: Number.isFinite(c) ? c : -Infinity, hz: (k + p) * bin, bin };
+        peak = { db: Number.isFinite(c) ? c : -Infinity, hz: (k + p) * bin, bin,
+          at: e.ctx.currentTime, window: an.fftSize / e.ctx.sampleRate };
       }
       const t = O.studio && O.studio.transport;
       const sb = document.getElementById('osc-sb-play');
@@ -354,15 +358,27 @@ function defineChecks() {
         label: document.querySelector('[data-osc="status.label"]').textContent.trim(),
         stopName: sb.getAttribute('aria-label'), stopShown: sb.getClientRects().length > 0 };
     });
+    // A timed-out record says how long it waited, whether its condition holds on the read taken
+    // after the deadline (a page too busy to answer in time reads as met there; a wrong state
+    // does not), which of a named predicate's conditions did not hold, and every sentence the
+    // live region said with its time and workspace.
     const settle = async (pred, what, ms = 6000) => {
+      const t0 = Date.now();
       try {
         return await until(async () => { const s = await read(); return pred(s) ? s : null; },
           { ms, what: `leave-policy: ${what}` });
       } catch (e) {
         if (e.name !== 'WaitTimeout') throw e;
-        return { timedOut: true, ...(await read()) };
+        const s = await read();
+        const unmet = pred.conds ? Object.entries(pred.conds(s)).filter(([, v]) => !v)
+          .map(([k]) => k) : undefined;
+        return { timedOut: true, waitedMs: Date.now() - t0, metAtEnd: !!pred(s), unmet,
+          heard: await ev(() => window.__heard.slice(-6)), ...s };
       }
     };
+    // A predicate of named conditions: met when every one holds.
+    const named = (conds) => Object.assign((s) => Object.values(conds(s)).every(Boolean),
+      { conds });
     const go = async (ws) => {
       await ev((w) => window.OSCILLA.app.setWorkspace(w), ws);
       await until(() => ev((w) => window.OSCILLA.app.workspace === w, ws),
@@ -386,7 +402,12 @@ function defineChecks() {
     // (the stopped voice's "Playback STOPPED") may follow the leave sentence at once.
     await ev(() => {
       window.__said = [];
-      window.OSCILLA.app.$watch('announceText', (v) => { if (v) window.__said.push(v); });
+      window.__heard = []; // [ms since load, workspace, sentence], kept across forget()
+      window.OSCILLA.app.$watch('announceText', (v) => {
+        if (!v) return;
+        window.__said.push(v);
+        window.__heard.push([Math.round(performance.now()), window.OSCILLA.app.workspace, v]);
+      });
     });
     // The live region is cleared too, so a leave that says the same sentence again is heard.
     const forget = () => ev(() => {
@@ -432,8 +453,28 @@ function defineChecks() {
     await settle((s) => s.armed, 'the Synth is armed');
     await page.locator('[data-osc="page.header"]').click(); // a gesture, on no control
     await page.keyboard.down('KeyA');
-    const inSynth = await settle((s) => s.kbd && s.studioHeld > 0 && s.peak.db > SOUNDING_DB,
-      'the key held on the armed Synth sounds through the output analyser');
+    // The reference is the note's steady peak, not its onset: the fundamental and its octave
+    // are within 1 dB, and the first read above SOUNDING_DB can land in the attack, where the
+    // octave leads (CI webkit/file on #666: 261.6 Hz at -63.1 dB in the Synth, then 130.8 Hz
+    // at -46.3 dB in the Analyzer for the whole wait). Steady: two consecutive reads at the
+    // same peak (within one bin) and level (within STEADY_DB), one whole analyser window apart
+    // on the audio clock, so the second read analyses audio the first did not.
+    let prev = null;
+    const inSynth = await settle((s) => {
+      if (!(s.kbd && s.studioHeld > 0 && s.peak.db > SOUNDING_DB)) {
+        prev = null;
+        return false;
+      }
+      if (!prev) {
+        prev = s.peak;
+        return false;
+      }
+      if (s.peak.at - prev.at < s.peak.window) return false;
+      const steady = Math.abs(s.peak.db - prev.db) < STEADY_DB
+        && Math.abs(s.peak.hz - prev.hz) <= s.peak.bin;
+      prev = s.peak;
+      return steady;
+    }, 'the key held on the armed Synth sounds through the output analyser, at a steady peak');
     res.synthSounds = inSynth;
     // The pitch class of the key the keyboard plays (its base note, kbdBase): the analyser's peak
     // is that note in some octave of the Synth's range, within one analyser bin.
@@ -443,12 +484,13 @@ function defineChecks() {
       noteHz, peakHz: inSynth.peak.hz, bin: inSynth.peak.bin, octave };
     await forget();
     await nav('analyzer');
-    res.synthKeeps = await settle((s) => s.ws === 'analyzer' && s.armed && s.kbd
-      && s.studioHeld > 0 && s.peak.db > SOUNDING_DB
-      && Math.abs(s.peak.hz - inSynth.peak.hz) <= s.peak.bin
-      && s.said.includes(sentence('synth')) && s.said.includes(sentence('notes')),
-    'in the Analyzer the armed Synth\'s held note sounds on: the analyser reads its peak and the '
-      + 'status bar says why');
+    res.synthKeeps = await settle(named((s) => ({ analyzer: s.ws === 'analyzer',
+      armed: s.armed, held: s.kbd && s.studioHeld > 0, sounds: s.peak.db > SOUNDING_DB,
+      samePeak: Math.abs(s.peak.hz - inSynth.peak.hz) <= s.peak.bin,
+      saysSynth: s.said.includes(sentence('synth')), saysNotes: s.said.includes(sentence('notes')),
+    })), 'in the Analyzer the armed Synth\'s held note sounds on: the analyser reads its peak and '
+      + 'the status bar says why');
+    res.synthKeeps.inSynthPeak = inSynth.peak;
     // The status bar names what sounds as the scope's description does (C024: the notes, the
     // held note's name), says the Synth is still on (its leave sentence) and its key reads Stop.
     res.barNamesIt = await settle((s) => s.pattern.toLowerCase() === NOTES_NAME.toLowerCase()
@@ -1860,6 +1902,11 @@ async function runOne(browserName, origin, baseUrl) {
         for (const n of bad) {
           const why = res[n].failed ? `failed [${res[n].failed.join(', ')}] ` : '';
           console.log(`   x ${n}: ${why}${JSON.stringify(res[n]).slice(0, 900)}`);
+          // The line above is cut; each failed part follows in full, on its own line.
+          for (const f of res[n].failed || []) {
+            const part = res[n][f];
+            if (part !== undefined) console.log(`     ${n}.${f}: ${JSON.stringify(part)}`);
+          }
         }
       }
     }
