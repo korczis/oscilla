@@ -27,7 +27,10 @@
 //
 // No Web Audio here: the owners stop through their own click-free paths (editor.stop(),
 // cmp.stopNow(), cmp.studioStop(), cmp.midiAllOff()), so the AudioEngine stays the one
-// authority over nodes. No imports either: every layer may read this table and inject the bus.
+// authority over nodes. No imports either, but the import-free core/live-region.js (the status
+// bar's one announcer, U144): every layer may read this table and inject the bus.
+
+import { nextFrame, say } from './live-region.js';
 
 export const OUTPUT_REFUSAL = 'Výstup patří měření: před přehráváním ho zastavte (Esc).';
 export const REFERENCE_REFUSAL = 'Výstup zůstává tichý, dokud se z mikrofonu snímá referenční '
@@ -149,6 +152,16 @@ export const LEAVE_POLICY = Object.freeze([
     sentence: 'Mikrofon laboratoře zůstává zapnutý.' }),
 ]);
 
+/**
+ * What the status bar says when Escape or its Stop ended a sound the instrument's own status
+ * announcement does not name (U144: an armed Synth, the Studio, the sequence, held notes; a
+ * stopped tone says "Playback STOPPED" through main.js, so it is said once either way).
+ */
+export const STOP_SENTENCE = 'Přehrávání se zastavilo; nic nehraje.';
+
+/** The stops that say STOP_SENTENCE: the user's own (a page hide speaks to nobody). */
+const STOP_SAYS = new Set(['escape', 'status-stop']);
+
 /** cmp[name](...args) when it is a function, else undefined. */
 function call(cmp, name, ...args) {
   return cmp && typeof cmp[name] === 'function' ? cmp[name](...args) : undefined;
@@ -214,7 +227,9 @@ export const OUTPUT_YIELDS = Object.freeze(Object.fromEntries(OUTPUT_OWNER_TABLE
  *            null, changed() → called (in a microtask) after the playing state changed,
  *            claimed(owner, reason) → told of every granted claim (optional), trace → the one
  *            operation trace (core/trace.js) every bus event is recorded in (optional),
- *            engine → the live AudioEngine whose master level the bus alone writes (C052) }
+ *            engine → the live AudioEngine whose master level the bus alone writes (C052),
+ *            defer(fn) → when a repeated announcement fills the live region again (U144:
+ *            the next frame) }
  * → { claim(owner, reason), holds(owner), release(owner), owner(), stopAll(reason),
  *      onStop(fn), playback(), subscribe(fn), note(on, { note, input }), armed(owner, on),
  *      setMaster(level, { owner, at }), claimOutput(owner),
@@ -235,7 +250,7 @@ export function soundingOwner(cmp) {
 }
 
 export function createOutputBus({ app, sequencer, changed = () => {}, claimed = () => {},
-  trace = null, engine = null }) {
+  trace = null, engine = null, defer = nextFrame }) {
   // Every bus event is a step of the one operation trace (C050, core/trace.js, ADR 0042),
   // recorded here and never by a player: owner 'bus', the owner it concerns as the entity.
   const step = (kind, owner, f = {}) => (trace && typeof trace.record === 'function'
@@ -319,6 +334,13 @@ export function createOutputBus({ app, sequencer, changed = () => {}, claimed = 
   }
 
   let current = null; // { owner, reason } of the granted claim that still holds the output
+  // The owners the last leave found sounding (U144), as a key: a leave says its sentences only
+  // when they differ, so an armed Synth carried through three places is named once. A stop, a
+  // release or a disarm forgets it: the same sound started again is news.
+  let leaveSaid = null;
+
+  /** One sentence into the status bar's live region, re-armed when it repeats (U144). */
+  const announce = (cmp, text) => say(cmp, text, { defer });
 
   /** A claimable row of the table, or a programming error. */
   function claimable(owner) {
@@ -387,6 +409,10 @@ export function createOutputBus({ app, sequencer, changed = () => {}, claimed = 
   function stopAll(reason = 'stop') {
     const cmp = app();
     let failure = null;
+    const says = !!cmp && STOP_SAYS.has(String(reason)) && !cmp.playing
+      && (sequencerPlaying() || STOPS[OWNER.studio].busy(cmp) || !!cmp.notesSounding
+        || !!(cmp.synth && cmp.synth.armed));
+    leaveSaid = null;
     const guard = (fn) => {
       try { fn(); } catch (e) { failure = failure || e; } // the other owners still stop
     };
@@ -404,6 +430,7 @@ export function createOutputBus({ app, sequencer, changed = () => {}, claimed = 
     current = null;
     step('stopAll', null, { outcome: 'stopped', detail: { cause: String(reason) } });
     moved(was, null);
+    if (says) announce(cmp, STOP_SENTENCE);
     if (failure) throw failure;
   }
 
@@ -411,6 +438,7 @@ export function createOutputBus({ app, sequencer, changed = () => {}, claimed = 
   function release(owner) {
     if (!current || current.owner !== owner) return;
     current = null;
+    leaveSaid = null;
     step('release', owner, { outcome: 'released' });
     moved(owner, null);
   }
@@ -433,6 +461,7 @@ export function createOutputBus({ app, sequencer, changed = () => {}, claimed = 
 
   /** A player was armed or disarmed (the Synth's Arm, the computer keys): a step of the trace. */
   function armed(owner, on) {
+    if (!on) leaveSaid = null;
     step(on ? 'arm' : 'disarm', owner);
   }
 
@@ -468,6 +497,7 @@ export function createOutputBus({ app, sequencer, changed = () => {}, claimed = 
     yieldOutput(cmp, OUTPUT_YIELDS.measure, true);
     const was = current ? current.owner : null;
     current = null;
+    leaveSaid = null;
     step('stopAll', null, { outcome: 'stopped', detail: { cause } });
     moved(was, null);
   }
@@ -486,7 +516,9 @@ export function createOutputBus({ app, sequencer, changed = () => {}, claimed = 
   /**
    * The user left workspace `from` for `to` (C053): every row of LEAVE_POLICY that applies acts
    * now, and the rows that met a sounding owner say their sentence in the status bar's live
-   * region (cmp.announceText). -> the owners the rows met.
+   * region (cmp.announceText, through say()) when what sounds changed since the last
+   * leave or a stop came between (U144): one polite announcement per switch at most, and none
+   * for the same armed Synth carried on. -> the owners the rows met.
    */
   function leave(from, to) {
     const cmp = app();
@@ -495,7 +527,9 @@ export function createOutputBus({ app, sequencer, changed = () => {}, claimed = 
     for (const r of LEAVE_POLICY) if (r.act && r.applies(from, to)) r.act(cmp, from, to);
     step('leave', null, { detail: { from: String(from), to: String(to),
       met: met.map((r) => `${r.owner}:${r.effect}`).join(' ') } });
-    if (met.length) cmp.announceText = met.map((r) => r.sentence).join(' ');
+    const key = met.map((r) => r.owner).join(' ');
+    if (met.length && key !== leaveSaid) announce(cmp, met.map((r) => r.sentence).join(' '));
+    leaveSaid = key;
     return met.map((r) => r.owner);
   }
 

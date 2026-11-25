@@ -89,6 +89,11 @@
 //                     shown (K247: the one keyboard in every workspace);
 //                     every other workspace keeps the state it opens with (read from a plain
 //                     page: armed everywhere since Q105), so a link changes only its own
+//   leave-announces-once  (U144) the status bar's live region, observed through the switches:
+//                     an armed Synth carried Synth -> Analyzátor -> Studio -> Analyzátor is
+//                     named once; Escape says the stop once; the same sentence after a stop is
+//                     shown again, re-armed (emptied, then filled) when the region still held
+//                     it; at most one sentence per switch
 //   escape-menu-keeps-sound  Escape with More open closes it and gives focus back to its
 //                     button while a latched tone sounds on (the page's Escape, stopAll, never
 //                     sees the press); a second Escape, no menu open, stops the tone
@@ -481,6 +486,105 @@ function defineChecks() {
     await page.close();
     return { ...H.verdict(Object.fromEntries(Object.entries(res).map(([k, v]) => [k,
       k === 'synthPitch' ? v.ok : !v.timedOut]))), ...res };
+  });
+
+  // U144 (docs/reconstruction/05-accessibility-audit.md, problem 14): a place change announces
+  // only a change, once. A MutationObserver on the status bar's polite live region
+  // (status.announce), installed after the Synth's own Arm and before the switches, records
+  // every text the region shows. Synth -> Analyzátor -> Studio -> Analyzátor with the same armed
+  // Synth shows its leave sentence once, on the first switch; Escape stops it and the region
+  // says the stop once. Armed again, the same leave sentence after the stop's is shown again;
+  // after a silent stop (a page hide) the region still holds it, so the next leave empties the
+  // region and fills it again (re-armed, so a screen reader speaks it). No switch shows more
+  // than one sentence. Before each mark the page renders two frames, so a re-armed fill (made in
+  // the next frame) lands in its own switch; every wait is a condition poll with a named
+  // deadline (lib/wait.cjs until() and bounded()).
+  def('leave-announces-once', async (ctx) => {
+    const { LEAVE_POLICY, STOP_SENTENCE } = await import(pathToFileURL(path.join(ROOT, 'src',
+      'js', 'core', 'output-bus.js')).href);
+    const SYNTH = LEAVE_POLICY.find((r) => r.owner === 'synth').sentence;
+    const page = await H.open(ctx, ctx.baseUrl);
+    const ev = (fn, arg) => page.evaluate(fn, arg);
+    const what = (w) => `leave-announces-once: ${w}`;
+    const nav = async (ws) => {
+      await shell.navTo(page, ws);
+      await until(() => ev((w) => window.OSCILLA.app.workspace === w, ws),
+        { ms: 8000, what: what(`the navigation opens ${ws}`) });
+    };
+    const arm = async () => {
+      await page.click('[data-osc="synth.arm"]');
+      await until(() => ev(() => !!window.OSCILLA.app.synth.armed),
+        { ms: 6000, what: what('the Synth is armed') });
+    };
+    // Two rendered frames, then a mark between this step's texts and the next one's.
+    const mark = async (label) => {
+      await bounded(ev(() => new Promise((r) => requestAnimationFrame(() =>
+        requestAnimationFrame(() => r())))), { ms: 5000, what: what(`frames before ${label}`) });
+      await ev((l) => window.__u144.push({ mark: l }), label);
+    };
+    await nav('synth');
+    await arm();
+    await ev(() => {
+      window.__u144 = [];
+      const el = document.querySelector('[data-osc="status.announce"]');
+      new MutationObserver(() => window.__u144.push({ text: el.textContent }))
+        .observe(el, { childList: true, characterData: true, subtree: true });
+    });
+    await mark('start');
+    for (const [i, ws] of ['analyzer', 'studio', 'analyzer'].entries()) {
+      await nav(ws);
+      await mark(`to ${ws} ${i + 1}`);
+    }
+    // The focus leaves the nav item the click left it on (a focused menu keeps its own Escape):
+    // a gesture on no control, then the page's Escape.
+    await page.locator('[data-osc="page.header"]').click();
+    await page.keyboard.press('Escape');
+    await until(() => ev((t) => !window.OSCILLA.app.synth.armed
+      && window.__u144.some((e) => e.text === t), STOP_SENTENCE),
+    { ms: 6000, what: what('Escape disarms the Synth and the region says the stop') });
+    await mark('escape');
+    await nav('synth');
+    await mark('to synth');
+    await arm();
+    await mark('armed again');
+    await nav('analyzer');
+    await mark('to analyzer after the stop');
+    await ev(() => window.dispatchEvent(new Event('pagehide'))); // a stop that says nothing
+    await until(() => ev(() => !window.OSCILLA.app.synth.armed),
+      { ms: 6000, what: what('the page hide disarms the Synth') });
+    await mark('page hide');
+    await nav('synth');
+    await mark('to synth again');
+    await arm();
+    await mark('armed a third time');
+    await nav('analyzer');
+    await until(() => ev((t) => document.querySelector('[data-osc="status.announce"]')
+      .textContent === t, SYNTH), { ms: 6000, what: what('the region holds the sentence') });
+    await mark('to analyzer after the page hide');
+    const log = await ev(() => window.__u144);
+    await page.close();
+    // The texts each step showed, empty ones included, under the mark that ends the step:
+    // { mark: [text, ...] } ('start' collects what the region showed before the switches).
+    const steps = {};
+    let texts = [];
+    for (const e of log) {
+      if (e.mark) { steps[e.mark] = texts; texts = []; } else texts.push(e.text);
+    }
+    const shown = (k) => (steps[k] || []).filter(Boolean);
+    const leaveTotal = log.filter((e) => e.text === SYNTH).length;
+    const perSwitch = Object.keys(steps).filter((k) => k.startsWith('to '));
+    return { ...H.verdict({
+      quietBefore: shown('start').length === 0,
+      firstSwitchSays: JSON.stringify(shown('to analyzer 1')) === JSON.stringify([SYNTH]),
+      sameSynthQuiet: shown('to studio 2').length === 0 && shown('to analyzer 3').length === 0,
+      oncePerSwitch: perSwitch.every((k) => shown(k).length <= 1),
+      escapeSaysOnce: JSON.stringify(shown('escape')) === JSON.stringify([STOP_SENTENCE]),
+      afterStopSaysAgain: JSON.stringify(shown('to analyzer after the stop'))
+        === JSON.stringify([SYNTH]),
+      repeatReArmed: JSON.stringify(steps['to analyzer after the page hide'])
+        === JSON.stringify(['', SYNTH]),
+      leaveTotal: leaveTotal === 3,
+    }), steps, leaveTotal };
   });
 
   // Escape with a header menu open is the menu's: it closes More and gives focus back to its
