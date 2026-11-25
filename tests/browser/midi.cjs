@@ -63,9 +63,10 @@
 //                               voice's own laws (velocity, polyphony, click-free automation)
 //                               are unit/midi/notes.test.mjs's, on the fake audio context
 //   midi-seam-sink              review of src/js/synth (S2), K247: a stub note held on the
-//                               instrument in the Playground stops with the switch to the Synth
-//                               (leaving ends the keys' armed run) and its late Note Off leaves
-//                               nothing sounding; a note in the Synth then sounds and is freed
+//                               instrument in the Playground sounds on after the switch to the
+//                               Synth (U133, Q114: the sound survives a place change) and its
+//                               late Note Off, where it sounded, leaves nothing sounding; a note
+//                               in the Synth then sounds and is freed
 //   midi-seam-cc                V506: CC 64 holds a note on the instrument past its Note Off until the
 //                               pedal comes up; a CC in the Playground moves no Synth knob; in
 //                               the Synth CC 74 moves the LPF cutoff to its range's ends (0 -> 10
@@ -83,14 +84,16 @@
 //                               at 120 BPM shows "Hodiny MIDI: 120.0 BPM" in the MIDI section
 //   keys-one-keyboard           K178: with the stub device, the Playground, the Synth and the
 //                               Studio take one octave, light and sound the same keys for QWERTY
-//                               and MIDI, and release them on Escape and on a workspace switch
+//                               and MIDI, and release them on Escape; a key held across a
+//                               workspace switch stays held until its keyup (U133, Q114)
 //   keyboard-everywhere         M086, K247: the same A plays the one instrument from the
 //                               Playground (the Studio transport armed, no page voice), the Synth
 //                               panel and the Studio graph (its Keys node), the keys docked in
-//                               both; a key held in the Studio and released after leaving it
-//                               stops, leaving disarms the keys' run, and the Studio sink's held
-//                               map (synthDebug().sinkHeld) reads empty after leaving, the key
-//                               still down and after its release (K175, S18)
+//                               both; a key held in the Studio sounds on after leaving it and
+//                               its keyup stops it, the keys' run stays armed (U133, Q114), and
+//                               the Studio sink's held map (synthDebug().sinkHeld) holds the key
+//                               after leaving while it is down and is empty after its release
+//                               (K175, S18)
 //   keyboard-studio-held        K175, review S18 (af's criterion): A held on the Studio
 //                               keyboard (the Synth panel's Keys, the Studio transport), the
 //                               workspace switched to the Playground, then A up: the Studio
@@ -1003,10 +1006,10 @@ async function instrument(page) {
 }
 
 // midi-seam-sink (review of src/js/synth, S2; K247): a note-off goes where its note-on sounded.
-// A note held on the one instrument in the Playground, then a switch to the Synth: leaving the
-// Playground ends the keys' armed-only run (LEAVE_POLICY), so the note stops with the switch;
-// its later Note Off finds it released and leaves nothing sounding, and a note in the Synth then
-// sounds and is freed by its own Note Off.
+// A note held on the one instrument in the Playground, then a switch to the Synth: the note
+// sounds on (U133, the owner's Q114 'Sound survives'; before, leaving the Playground ended the
+// keys' armed-only run and the note with it); its later Note Off releases it where it sounded and
+// leaves nothing sounding, and a note in the Synth then sounds and is freed by its own Note Off.
 async function seamSink(browser, b, origin, url) {
   const leg = `${b}/${origin}`;
   const id = 'midi-seam-sink';
@@ -1038,13 +1041,17 @@ async function seamSink(browser, b, origin, url) {
     await page.evaluate(() => window.OSCILLA.app.setWorkspace('synth'));
     await until(async () => (await ws()) === 'synth', { ms: STEP_MS,
       what: `${leg}: the Synth workspace opens` });
-    const left = await quiet(`${leg}: leaving the Playground ends the keys' run`);
+    const kept = await heard(page, (m) => m.peak > 0.005,
+      `${leg}: the note held in the Playground sounds on in the Synth`);
+    const tKept = await instrument(page);
     await msg([0x80, 60, 0]);
     const after = await quiet(`${leg}: the late Note Off leaves nothing sounding`);
-    check(leg, id, 'a note held on the instrument in the Playground stops with the switch to the '
-      + 'Synth, and its late Note Off leaves nothing sounding', from === 'playground'
-      && !on.timedOut && tOn.held.includes(60) && !left.timedOut && !after.timedOut,
-    JSON.stringify({ from, on: on.peak, held: tOn.held, left, after }));
+    check(leg, id, 'a note held on the instrument in the Playground sounds on after the switch to '
+      + 'the Synth (U133), and its late Note Off leaves nothing sounding', from === 'playground'
+      && !on.timedOut && tOn.held.includes(60) && !kept.timedOut && tKept.held.includes(60)
+      && !after.timedOut,
+    JSON.stringify({ from, on: on.peak, held: tOn.held, kept: kept.peak, keptHeld: tKept.held,
+      after }));
     await msg([0x90, 62, 100]);
     const synthOn = await heard(page, (m) => m.peak > 0.005, `${leg}: a note sounds in the Synth`);
     await msg([0x80, 62, 0]);
@@ -1667,8 +1674,9 @@ async function seamClockOut(browser, b, origin, url) {
 // keys-one-keyboard (K178, the owner's question of 2026-11-04: why does the keyboard behave
 // differently in every workspace): with the stub MIDI device connected, the Playground, the Synth
 // and the Studio (the Synth panel's nodes, visited first) each take the same octave (Z/X set once, in the Playground), light
-// the same keys for QWERTY and MIDI, sound them, and release them the same way on Escape and on
-// a workspace switch, leaving nothing held and nothing lit.
+// the same keys for QWERTY and MIDI, sound them, and release them the same way on Escape; a key
+// held across a workspace switch sounds on until its keyup (U133, the owner's Q114 'Sound
+// survives'), leaving nothing held and nothing lit.
 async function keysOneKeyboard(browser, b, origin, url) {
   const leg = `${b}/${origin}`;
   const id = 'keys-one-keyboard';
@@ -1733,17 +1741,23 @@ async function keysOneKeyboard(browser, b, origin, url) {
         what: `${leg}: A held again in ${ws}` }).catch(() => '');
       const next = order[(i + 1) % order.length];
       await page.evaluate((w) => window.OSCILLA.app.setWorkspace(w), next);
-      const sw = await quiet(`${leg}: leaving ${ws} releases A`);
+      await until(() => page.evaluate((w) => window.OSCILLA.app.workspace === w, next),
+        { ms: STEP_MS, what: `${leg}: ${next} opens with A held` });
+      // U133 (the owner's Q114, 'Sound survives'): the held key sounds on in the next place, lit
+      // and held on the one instrument, and its own keyup releases it there.
+      const kept = { lit: await held(), inst: (await instrument(page)).held.length };
       await page.keyboard.up('KeyA');
+      const sw = await quiet(`${leg}: A's keyup after leaving ${ws} releases it`);
       const silent = await heard(page, (x) => x.peak < 0.001, `${leg}: silent after ${ws}`);
-      rows.push({ ws, base, qwerty, qSound: !qSound.timedOut, qOff, midi, mOff, esc, sw,
-        silent: !silent.timedOut });
+      rows.push({ ws, base, qwerty, qSound: !qSound.timedOut, qOff, midi, mOff, esc,
+        kept: kept.lit === 'C5' && kept.inst > 0, sw, silent: !silent.timedOut });
     }
     const want = { base: 72, qwerty: 'C5', qSound: true, qOff: true, midi: 'E4 (MIDI)',
-      mOff: true, esc: true, sw: true, silent: true };
+      mOff: true, esc: true, kept: true, sw: true, silent: true };
     const bad = rows.filter((r) => Object.entries(want).some(([k, v]) => r[k] !== v));
     check(leg, id, 'the Playground, the Synth and the Studio take the same octave, light and '
-      + 'sound the same keys for QWERTY and MIDI, and release them on Escape and on a switch',
+      + 'sound the same keys for QWERTY and MIDI, release them on Escape, and a key held across '
+      + 'a switch sounds on until its keyup (U133)',
     bad.length === 0 && errors.length === 0, JSON.stringify({ bad, errors }));
   } finally {
     await context.close();
@@ -1799,8 +1813,10 @@ async function keyboardEverywhere(browser, b, origin, url) {
     check(leg, id, 'the same A plays the Studio graph (its Keys node, the transport armed), not '
       + 'the Playground voice, the keys docked as in the Synth',
     !st.timedOut && st.armed && st.notes === 0 && st.docked === 'fixed', JSON.stringify(st));
-    // 21's R1 and R2: a key held in the Studio and released after leaving it stops the Studio
-    // note, and leaving disarms the keys' run, so the Playground's keys are not refused after.
+    // 21's R1 and R2, revised by U133 (the owner's Q114, 'Sound survives'): a key held in the
+    // Studio sounds on after leaving it, and its keyup in the Playground stops the Studio note
+    // on the node it played; the keys' run stays armed, and the Playground's keys are not
+    // refused after.
     await page.keyboard.down('KeyA');
     await heard(page, (x) => x.peak > 0.005, `${leg}: A held in the Studio sounds`);
     const sinkHeld = () => page.evaluate(() => window.OSCILLA.app.synthDebug().sinkHeld);
@@ -1812,32 +1828,25 @@ async function keyboardEverywhere(browser, b, origin, url) {
       return { held, inGraph: held.every((h) => ids.includes(h.node)) };
     });
     await page.evaluate(() => window.OSCILLA.app.setWorkspace('playground'));
-    // K175 (S18): the sink's held map, read through the Synth's debug seam, empties on leaving
-    // (the keyboard's workspace-change release and the sink's leave(), each through the node
-    // the note went to), while the key is still down; it stays empty after the key-up.
-    let leftHeld;
-    try {
-      leftHeld = await until(async () => {
-        const h = await sinkHeld();
-        return h.length === 0 ? { held: h } : null;
-      }, { ms: STEP_MS, what: `${leg}: leaving the Studio empties the sink's held map` });
-    } catch (error) {
-      if (!(error instanceof WaitTimeout)) throw error;
-      leftHeld = { held: await sinkHeld(), timedOut: error.message };
-    }
+    await until(() => page.evaluate(() => window.OSCILLA.app.workspace === 'playground'),
+      { ms: STEP_MS, what: `${leg}: the Playground opens with A held` });
+    // K175 (S18): the sink's held map, read through the Synth's debug seam, keeps the key while
+    // it is down in the next place (it sounds on), and empties at its keyup.
+    const leftHeld = { held: await sinkHeld() };
+    const kept = await heard(page, (x) => x.peak > 0.005,
+      `${leg}: A held from the Studio sounds on in the Playground`);
     await page.keyboard.up('KeyA');
-    const left = await heard(page, (x) => x.peak < 0.001, `${leg}: leaving the Studio silences A`);
+    const left = await heard(page, (x) => x.peak < 0.001, `${leg}: A's keyup silences it`);
     const tr = await page.evaluate(() => ({ armed: window.OSCILLA.studio.transport.armed,
-      playing: window.OSCILLA.studio.transport.playing,
       sinkHeld: window.OSCILLA.app.synthDebug().sinkHeld }));
-    check(leg, id, 'a key held in the Studio is released after leaving it, and leaving disarms '
-      + 'the keys\' run (the transport no longer owns the output)',
-    !left.timedOut && !tr.armed && !tr.playing, JSON.stringify({ peak: left.peak,
-      armed: tr.armed, playing: tr.playing }));
-    check(leg, id, 'the Studio sink\'s held map holds the key while it sounds in the Studio and '
-      + 'is empty after leaving, the key still down and after its release (K175, S18)',
+    check(leg, id, 'a key held in the Studio sounds on after leaving it and its keyup stops it; '
+      + 'the keys\' run stays armed (U133)',
+    !kept.timedOut && !left.timedOut && tr.armed, JSON.stringify({ kept: kept.peak,
+      peak: left.peak, armed: tr.armed }));
+    check(leg, id, 'the Studio sink\'s held map holds the key while it sounds, in the Studio and '
+      + 'after leaving it, and is empty after its release (K175, S18)',
     inStudio.held.length === 1 && inStudio.held[0].note === 60 && inStudio.inGraph
-      && !leftHeld.timedOut && tr.sinkHeld.length === 0,
+      && leftHeld.held.length === 1 && leftHeld.held[0].note === 60 && tr.sinkHeld.length === 0,
     JSON.stringify({ inStudio, left: leftHeld, afterUp: tr.sinkHeld }));
     await go('playground');
     const pg2 = await press('playground', (x) => x.notes === 0);
@@ -1897,9 +1906,10 @@ async function keyboardEverywhere(browser, b, origin, url) {
 }
 
 // keyboard-studio-held (K175, review S18; af's second-pass criterion): a key held on the
-// Studio keyboard across a workspace switch is released on the Studio node it played. The
-// run the Studio keys armed is not asserted here: leaving the Studio disarms it only with
-// S19's fix (K176), so the census read is the live notes', not the runtime's node count.
+// Studio keyboard across a workspace switch stays held there (U133, Q114) and its keyup
+// releases it on the Studio node it played. The
+// run the Studio keys armed is not asserted here (it stays armed since U133), so the census read
+// is the live notes', not the runtime's node count.
 const SILENT_PEAK = 10 ** (-70 / 20); // -70 dB rel
 async function keyboardStudioHeld(browser, b, origin, url) {
   const leg = `${b}/${origin}`;
@@ -1932,6 +1942,7 @@ async function keyboardStudioHeld(browser, b, origin, url) {
     const on = await heard(page, (x) => x.peak > 0.005, `${leg}: A held in the Studio sounds`);
     const during = await read();
     await go('playground');
+    const across = await read(); // U133 (Q114): still held there, until its keyup
     await page.keyboard.up('KeyA');
     const off = await heard(page, (x) => x.peak < SILENT_PEAK,
       `${leg}: A up after the switch falls below -70 dB rel`);
@@ -1944,10 +1955,10 @@ async function keyboardStudioHeld(browser, b, origin, url) {
       + 'released on the Studio node: the sink and the transport hold no note, the analyser '
       + 'below -70 dB rel', !on.timedOut && !off.timedOut
       && Array.isArray(during.held) && during.held.length === 1 && during.held[0].note === 60
-      && Array.isArray(after.held)
+      && Array.isArray(across.held) && across.held.length === 1 && Array.isArray(after.held)
       && !after.held.length && Array.isArray(after.notes) && !after.notes.length
       && errors.length === 0,
-    JSON.stringify({ on: on.peak, off: off.peak, during, after, errors }));
+    JSON.stringify({ on: on.peak, off: off.peak, during, across, after, errors }));
   } finally {
     await context.close();
   }

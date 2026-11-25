@@ -342,6 +342,52 @@ test('the pad folds the dock at every size; another workspace or home keeps it',
   assert.equal(s.ctl.state, 'collapsed');
 });
 
+// U133, the owner's Q114 of 2026-11-24 ('Sound survives'): "Whatever plays keeps playing across
+// places". The dock folds on a page that is not an instrument (K247), but a fold that comes with
+// the place change, or with the room the next place keeps, releases no held key: it sounds on,
+// and its own keyup ends it. Before U133 the fold released it with the switch.
+test('U133: a fold that comes with a workspace change releases no held key', () => {
+  const r = rig({ coarse: false, width: 1536 });
+  r.ctl.update('init');
+  r.flush();
+  assert.equal(r.ctl.state, 'docked', 'the Synth docks its keys');
+  r.v.workspace = 'analyzer'; // an unlisted page: folded (routes.js DEFAULT_ROUTE)
+  r.ctl.update('workspace');
+  r.flush();
+  assert.equal(r.ctl.state, 'collapsed');
+  assert.equal(r.releases(), 0, 'the held key sounds on in the next place');
+  // A room fold on arrival (the next place's toolbar laid out a frame later) releases nothing.
+  r.v.workspace = 'synth';
+  r.ctl.update('workspace');
+  r.flush();
+  assert.equal(r.ctl.state, 'docked');
+  r.v.workspace = 'measure';
+  r.ctl.update('viewport');
+  r.flush();
+  assert.equal(r.ctl.state, 'collapsed');
+  assert.equal(r.releases(), 0, 'a fold the place makes is no release');
+  // The note owner's fold and the user's still release the keys (K171).
+  const p = rig({ coarse: false, width: 1536 });
+  p.ctl.update('init');
+  p.flush();
+  p.ctl.claim(PAD);
+  p.flush();
+  assert.equal(p.releases(), 1, 'the pad taking the notes releases the keys');
+  p.ctl.toggle();
+  p.ctl.toggle();
+  assert.equal(p.releases(), 2, 'the user folding by the handle releases them');
+  // A pad claim that lands in the task of a place change does not make it a release.
+  const q = rig({ coarse: false, width: 1536 });
+  q.ctl.update('init');
+  q.flush();
+  q.v.workspace = 'analyzer';
+  q.ctl.update('workspace');
+  q.ctl.claim({ ...PAD, id: 'synth-xy-9', owner: null });
+  q.flush();
+  assert.equal(q.ctl.state, 'collapsed');
+  assert.equal(q.releases(), 0, 'the fold is the place change\'s');
+});
+
 /** A DOM just big enough for mountDockYield: the dock's top follows its state. */
 function fakeDom({ vh = 1024, folded = vh - 60, unfolded = vh - 400, pad = [200, 620] } = {}) {
   const page = { scrollTop: 0 };

@@ -2790,15 +2790,15 @@
       <!-- Tabs (Q019): Panel, the semi-modular voice; Engines, the polyphonic engines; XY, the
            performance pad (K097, src/js/ui/kinds/xy-pad.js over the xy-pad node). -->
       <div class="mb-3 border-0 border-b border-solid border-gray-200 dark:border-gray-700">
-        <ul class="-mb-px flex text-sm font-medium" role="tablist" aria-label="Nástroj Synthu">
+        <div class="-mb-px flex text-sm font-medium" role="tablist" aria-label="Nástroj Synthu">
           <template x-for="t in synth.tabs" :key="t.id">
-            <li><button type="button" role="tab" :id="'osc-synth-tab-' + t.id" data-osc="synth.tab"
-              :data-value="t.id" :data-synth-tab="t.id"
-              :aria-selected="String(synth.tab === t.id)" @click="synthTab(t.id)" x-text="t.label"
+            <button type="button" role="tab" :id="'osc-synth-tab-' + t.id" data-osc="synth.tab"
+              :data-value="t.id" :data-synth-tab="t.id" aria-controls="osc-synth-panel"
+              x-bind="synthTabBind(t.id)" x-text="t.label"
               :class="synth.tab === t.id ? 'border-primary-600 text-primary-600 dark:border-primary-500 dark:text-primary-500' : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300'"
-              class="inline-flex h-11 items-center rounded-t-lg border-0 border-b-2 border-solid bg-transparent px-4"></button></li>
+              class="inline-flex h-11 items-center rounded-t-lg border-0 border-b-2 border-solid bg-transparent px-4"></button>
           </template>
-        </ul>
+        </div>
       </div>
       <p class="mb-3 min-h-[1.25rem] text-sm text-gray-700 dark:text-gray-300" role="status"
         aria-live="polite" data-osc="synth.status" x-text="synth.status"></p>
@@ -2812,7 +2812,7 @@
         <h3 id="osc-synth-steps-title" class="mb-2 text-sm font-semibold text-gray-900 dark:text-white">Krokový sekvencer</h3>
         <div id="osc-synth-steps-grid"></div>
       </section>
-      <div data-osc="synth.panel" role="tabpanel" :aria-labelledby="'osc-synth-tab-' + synth.tab"
+      <div id="osc-synth-panel" data-osc="synth.panel" role="tabpanel" :aria-labelledby="'osc-synth-tab-' + synth.tab"
         :data-keeps-dock="synth.tabs.some((t) => t.id === synth.tab && t.keepsDock) ? '' : null"></div>
     </section>
 

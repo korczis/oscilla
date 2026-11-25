@@ -61,13 +61,15 @@ test('S1: a transport Stop made outside the Synth clears synth.armed; Arm then a
   const { cmp, transport, fx, go } = synthRig();
   assert.equal(cmp.synthArm(), true, 'Arm in the Synth');
   assert.equal(cmp.synth.armed, true);
-  go('studio'); // the Synth disarms on leaving; the Studio plays, then Stop
-  assert.equal(transport.armed, false);
-  go('synth');
-  assert.equal(cmp.synthArm(), true);
+  // U133 (the owner's Q114, 'Sound survives'): leaving the Synth keeps it armed; before, the
+  // leave disarmed it.
+  go('studio');
+  assert.equal(transport.armed, true, 'the armed run sounds on in the Studio');
+  assert.equal(cmp.synth.armed, true);
   transport.stop({ fast: true }); // Studio Stop: the Studio's own call on the one transport
   fx.advance(1);
   assert.equal(transport.armed, false);
+  go('synth');
   assert.equal(cmp.synth.armed, false, 'the button reads Arm after a Stop made elsewhere');
   assert.equal(cmp.synthArm(), true, 'and Arm arms');
   assert.equal(cmp.synth.armed, true);

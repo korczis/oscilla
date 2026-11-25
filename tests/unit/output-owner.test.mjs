@@ -226,8 +226,10 @@ test('C024: the description and the status bar name the notes while only notes s
   assert.strictEqual(held.statusPatternText.toLowerCase(), name.toLowerCase(),
     'the status bar names the owner the description names');
   assert.strictEqual(held.statusFreqText, 'C4, E4, G4', 'the status bar shows the held notes');
-  // The status Play button is the instrument's and the sequencer's (ADR 0050): not the notes'.
-  assert.strictEqual(held.isSounding, false);
+  // U133 (the owner's Q114, 'Sound survives': "the strip always shows it and stops it"): held
+  // notes sound on in every place, so the status Play reads Stop while they sound (before U133
+  // it was the instrument's and the sequencer's alone, ADR 0050).
+  assert.strictEqual(held.isSounding, true);
 
   const released = notesCmp({ kbdSounding: false, source: 'sweep', sweep: { curve: 'log' } });
   assert.strictEqual(released.outputOwner, null);
@@ -238,6 +240,21 @@ test('C024: the description and the status bar name the notes while only notes s
   const both = notesCmp({ kbdSounding: true, playing: true });
   assert.strictEqual(both.outputOwner, 'instrument');
 });
+
+test('U133 (Q114): held notes on an armed Synth, out of the Synth: named, and the key stops',
+  () => {
+    // K247: every key plays the Synth panel, so the bar names the notes' class (C024: the
+    // owner the scope's description names) and the held note, wherever the user went.
+    const note = notesCmp({ workspace: 'analyzer', synth: { armed: true }, kbdSounding: true,
+      kbdHeld: 'C4' });
+    assert.strictEqual(note.statusPatternText, 'Noty');
+    assert.strictEqual(note.statusFreqText, 'C4');
+    assert.strictEqual(note.statusLabel, 'HRAJE');
+    assert.strictEqual(note.isSounding, true, 'the status Play reads Stop');
+    // Armed with no note held it is silent: the key stays the instrument's Play (ADR 0050).
+    const silent = notesCmp({ workspace: 'analyzer', synth: { armed: true } });
+    assert.strictEqual(silent.isSounding, false);
+  });
 
 test('C024: the bridge takes the notes owner and the scope draws and names it', () => {
   const env = {
