@@ -2,9 +2,10 @@
 //
 // Since K247 (ADR 0058, its K247 note) every note of the keys and of MIDI goes to the one
 // instrument that route() gives (midi/ui.js centralSink: the Studio document's note target, else
-// the Synth panel); the engine voices below play a note only where the page has no instrument
-// (a document of the user's that plays no notes and that the panel may not rewire, a unit rig). The owner table still refuses a note while a measurement, a level reference
-// capture or the sequencer owns the output; the Studio row does not, the Studio being the
+// the Synth panel the document already holds); the engine voices below play a note only where
+// the page has no instrument (a document with no note target and no panel, which a key never
+// inserts, U140; a unit rig). The owner table still refuses a note while a measurement, a level
+// reference capture or the sequencer owns the output; the Studio row does not, the Studio being the
 // instrument.
 //
 // A message from an input becomes a note event, and a note event becomes a note voice of the

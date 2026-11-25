@@ -90,19 +90,14 @@ seam below.
 
 Once Connect MIDI has connected an input, its notes play the one instrument (K247, ADR 0058's
 K247 note): in every workspace the Studio document's note target (its routed node, else its first
-node that plays notes), and where it has none the Synth panel, which lives in the same document.
-The computer keys and the on-screen keys play the same instrument. There is no second
-synthesizer and no voice of a page's own: the Studio transport is a graph of the one audio
-engine. The one exception is a Studio document of the user's that plays no notes and whose
-Master Output the Synth panel would have to take: a key never rewires it, so there the keys play
-the engine's own voice (its laws, as V502 set them, are below) until **Vložit** puts the panel in.
-In the Studio workspace a key never inserts the panel into the document in sight: there the keys
-play the document's note target, else the engine's voice. In any other workspace, where the
-document holds nothing that plays notes and the panel may go in by itself (the untouched default
-document, or nothing of the user's would be cut), the first key inserts it and says so at once: a
-warning notice with K246's whole sentence (what went in, whose Master Output input it took) and
-its own **Zpět**, which undoes the insert right there while it is still the document's last
-change.
+node that plays notes), and where it has none the Synth panel, which lives in the same document,
+when the document holds it. The computer keys and the on-screen keys play the same instrument.
+There is no second synthesizer: the Studio transport is a graph of the one audio engine. A key never changes the Studio document (U140): where the document holds no note target
+and no Synth panel (the untouched default document a fresh page opens with among them), the keys
+play the engine's own voice, the page's voice (its laws, as V502 set them, are below), and the
+Studio's Play still plays the document's own chain. Only **Vložit** in the Synth puts the panel
+in, as one Zpět, and the document is then unsaved. In the Synth a key with no panel in the
+document plays nothing and says that Vložit puts it in.
 
 - **The instrument's voices.** The Keys node of the Synth panel is monophonic (the last key
   wins); an engine routed as the note target plays its own polyphony. Velocity reaches the node

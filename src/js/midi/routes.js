@@ -5,10 +5,10 @@
 //
 //   plays     the component method that gives the workspace's note sink. Every workspace plays
 //             the one instrument (K247, the owner's order of 2026-11-15): keysInstrument (the
-//             Studio part) gives the document's note target, else the Synth panel in the same
-//             document where it is there or may be inserted by itself; the Synth plays its panel
-//             (synthSink). Only a document of the user's that plays no notes and that the panel
-//             may not rewire by itself leaves the keys to the engine's own voice
+//             Studio part) gives the document's note target, else the Synth panel where the
+//             document already holds it; the Synth plays its panel (synthSink). A document that
+//             holds neither leaves the keys to the engine's own voice: a key never inserts the
+//             panel (U140), only the Synth's explicit Vložit does
 //   folded    the dock starts folded to its handle (the keys still armed and playing): a page
 //             that is not an instrument keeps its content; the user unfolds it
 //   armed     whether the computer keyboard is armed when the workspace first opens: armed

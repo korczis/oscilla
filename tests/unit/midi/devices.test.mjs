@@ -303,8 +303,8 @@ test('K247: the claim of the note arming the instrument yields only the engine v
   assert.equal(ui.kbdHeld, '');
 });
 
-test('K247: keysInstrument plays the document, else the panel it may take, else nothing; the '
-  + 'Studio itself inserts nothing', async () => {
+test('K247, U140: keysInstrument plays the document, else the panel it holds, else nothing; a '
+  + 'key never inserts the panel, and the Studio itself inserts nothing', async () => {
   const { createWorkspaceKeys, holdsPanel } = await import(
     '../../../src/js/ui/studio/workspace/keys.js');
   const panelNode = { id: 'k', type: 'keys', metadata: { panel: { module: 'keys' } } };
@@ -325,69 +325,8 @@ test('K247: keysInstrument plays the document, else the panel it may take, else 
   model = templateModel('demo-song');
   assert.equal(holdsPanel(model), false);
   assert.equal(cmp.keysInstrument(), null, 'never rewired from a key: the engine voice plays');
-  model = { graph: { nodes: [], edges: [] }, metadata: {} }; // nothing to cut: it may insert
-  const ins = cmp.keysInstrument();
-  assert.notEqual(ins, null, 'the panel it may take');
-  assert.equal(ins.noteOff, synth.noteOff, 'the same player (its note-off is the panel\'s)');
+  model = { graph: { nodes: [], edges: [] }, metadata: {} }; // nothing to cut
+  assert.equal(cmp.keysInstrument(), null, 'U140: nothing inserted either, the engine voice plays');
   cmp.workspace = 'studio';
   assert.equal(cmp.keysInstrument(), null, 'in the Studio a key inserts nothing (M086)');
-});
-
-test('C3-553-1: a key\'s insert outside the Synth and Studio is said once with its own Zpět, '
-  + 'which undoes it only while it is the last change', async () => {
-  const { createWorkspaceKeys, KEYS_INSERT_TEXT } = await import(
-    '../../../src/js/ui/studio/workspace/keys.js');
-  let model = { graph: { nodes: [], edges: [] }, metadata: {} };
-  let top = '';
-  const ctx = { handle: { getModel: () => model, undoLabel: () => top } };
-  const { part } = createWorkspaceKeys(ctx);
-  let alertSeq = 0;
-  const undone = [];
-  const synthNoteOn = [];
-  const cmp = {
-    workspace: 'playground', alerts: [], synth: { notice: null },
-    notify(level, title, message) {
-      if (this.alerts.some((a) => a.title === title && a.message === message)) return;
-      this.alerts = [...this.alerts, { id: ++alertSeq, level, title, message }];
-    },
-    dismissAlert(id) { this.alerts = this.alerts.filter((a) => a.id !== id); },
-    studioSink: () => null,
-    synthSink: () => ({ noteOff: () => true, noteOn: (n) => {
-      synthNoteOn.push(n);
-      if (!model.graph.nodes.length) { // the panel goes in, as ensurePanel does
-        model = { ...model, graph: { nodes: [{ id: 'keys', metadata: { panel: { module: 'keys' } } }],
-          edges: [] } };
-        top = 'Vložit Semimodulární monofonní hlas';
-        cmp.synth.notice = { text: 'Panel … převzal vstup Master Output od: Filter 1. Zpět ho odebere.' };
-      }
-      return { ok: true };
-    } }),
-    studioUndo() { undone.push(top); model = { graph: { nodes: [], edges: [] }, metadata: {} }; },
-    ...part,
-  };
-  const sink = cmp.keysInstrument();
-  sink.noteOn(60, 100);
-  assert.equal(cmp.alerts.length, 1, 'said once');
-  const [a] = cmp.alerts;
-  assert.equal(a.level, 'warning', 'a warning stays until it is closed');
-  assert.equal(a.title, KEYS_INSERT_TEXT.title);
-  assert.match(a.message, /Master Output/);
-  assert.equal(a.undo, true, 'with its own Zpět');
-  cmp.keysInstrument().noteOn(62, 100); // the panel is there now: no second notice
-  assert.equal(cmp.alerts.length, 1);
-  assert.equal(cmp.alertUndo(a.id), true);
-  assert.deepEqual(undone, ['Vložit Semimodulární monofonní hlas']);
-  assert.equal(model.graph.nodes.length, 0, 'the document is back');
-  assert.ok(cmp.alerts.some((x) => x.message === KEYS_INSERT_TEXT.undone),
-    'the follow-up names the way out (C3-553-2)');
-  // Another change after the insert: Zpět no longer undoes the wrong thing.
-  cmp.keysInstrument().noteOn(64, 100);
-  const b = cmp.alerts.find((x) => x.undo);
-  top = 'Změnit LPF Cutoff';
-  assert.equal(cmp.alertUndo(b.id), false);
-  assert.equal(undone.length, 1, 'nothing undone');
-  assert.ok(cmp.alerts.some((x) => x.message === KEYS_INSERT_TEXT.later), 'it says why');
-  cmp.workspace = 'studio';
-  model = { graph: { nodes: [], edges: [] }, metadata: {} };
-  assert.equal(cmp.keysInstrument(), null, 'the Studio inserts nothing (M086)');
 });

@@ -155,7 +155,6 @@ const CONTRACT = [
   ['synth.pads.toggle', 'choice', 'div'], ['synth.pads.l', 'panel', 'div'], ['synth.pads.l.pad', 'action', 'div'],
   ['synth.pads.r', 'panel', 'div'], ['synth.pads.r.scale', 'choice', 'div'],
   ['keyboard', 'panel', 'div'], ['keyboard.arm', 'switch', 'button'],
-  ['alert.undo', 'action', 'button'],
   ['keyboard.octave-down', 'action', 'button'], ['keyboard.octave-up', 'action', 'button'],
   ['keyboard.velocity-down', 'action', 'button'], ['keyboard.velocity-up', 'action', 'button'],
   ['keyboard.readout', 'readout', 'p'], ['keyboard.held', 'readout', 'p'],

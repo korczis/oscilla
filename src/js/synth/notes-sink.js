@@ -14,6 +14,10 @@
 // V503: a note's on and off may carry `at`, a context time (the call-and-response answer, planned
 // on the audio clock); without it the transport plays it now, as every key.
 //
+// U140: a note never inserts the panel. Where the document has none (the user's Zpět took it
+// out), the note is refused and says that Vložit puts it in (SYNTH_TEXT.notInserted): playing
+// never edits the Studio document.
+//
 //   createSynthNotes(deps) -> { noteOn(note, velocity, { at }), noteOff(note, { at }), legato(note, { from,
 //     velocity }), allOff(), disarm(reason), armedText() }
 
@@ -22,14 +26,18 @@ import { SYNTH_TEXT } from './insert.js';
 import { droppedText } from './view/engines.js';
 import { keysSilence } from './xy.js';
 
-export function createSynthNotes({ get, transport, ensurePanel, cmp, say, played, playedModule,
+export function createSynthNotes({ get, transport, cmp, say, played, playedModule,
   present, nodes, panel, ENGINE_IDS, syncArmed }) {
   const held = new Map(); // note -> the id of the node its note-on played
 
 
   function noteOn(note, velocity, { at } = {}) {
     const t = transport();
-    if (!t || !ensurePanel()) return { ok: false, reason: 'no-audio' };
+    if (!t) return { ok: false, reason: 'no-audio' };
+    if (!present()) {
+      say(SYNTH_TEXT.notInserted, true);
+      return { ok: false, reason: 'no-panel' };
+    }
     if (cmp() && typeof cmp().ensureAudio === 'function') cmp().ensureAudio();
     if (!t.playing) {
       const r = t.arm();
