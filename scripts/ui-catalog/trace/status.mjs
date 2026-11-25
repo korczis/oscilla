@@ -15,4 +15,8 @@ export default {
     tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/navigation.cjs'] }),
   'copy.note': entry({ source: 'src/index.html', plan: ['G001', 'C018'],
     tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/navigation.cjs'] }),
+  // U138: the reload's recovery notice
+  ...Object.fromEntries(['draft.notice', 'draft.reset', 'draft.close'].map((id) => [id, entry({
+    source: 'src/index.html', plan: ['U138'], intents: ['one-instrument#see-what-sounds'],
+    adrs: [], tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/journeys.cjs'] })])),
 };
