@@ -354,15 +354,27 @@ function defineChecks() {
         label: document.querySelector('[data-osc="status.label"]').textContent.trim(),
         stopName: sb.getAttribute('aria-label'), stopShown: sb.getClientRects().length > 0 };
     });
+    // A timed-out record says how long it waited, whether its condition holds on the read taken
+    // after the deadline (a page too busy to answer in time reads as met there; a wrong state
+    // does not), which of a named predicate's conditions did not hold, and every sentence the
+    // live region said with its time and workspace.
     const settle = async (pred, what, ms = 6000) => {
+      const t0 = Date.now();
       try {
         return await until(async () => { const s = await read(); return pred(s) ? s : null; },
           { ms, what: `leave-policy: ${what}` });
       } catch (e) {
         if (e.name !== 'WaitTimeout') throw e;
-        return { timedOut: true, ...(await read()) };
+        const s = await read();
+        const unmet = pred.conds ? Object.entries(pred.conds(s)).filter(([, v]) => !v)
+          .map(([k]) => k) : undefined;
+        return { timedOut: true, waitedMs: Date.now() - t0, metAtEnd: !!pred(s), unmet,
+          heard: await ev(() => window.__heard.slice(-6)), ...s };
       }
     };
+    // A predicate of named conditions: met when every one holds.
+    const named = (conds) => Object.assign((s) => Object.values(conds(s)).every(Boolean),
+      { conds });
     const go = async (ws) => {
       await ev((w) => window.OSCILLA.app.setWorkspace(w), ws);
       await until(() => ev((w) => window.OSCILLA.app.workspace === w, ws),
@@ -386,7 +398,12 @@ function defineChecks() {
     // (the stopped voice's "Playback STOPPED") may follow the leave sentence at once.
     await ev(() => {
       window.__said = [];
-      window.OSCILLA.app.$watch('announceText', (v) => { if (v) window.__said.push(v); });
+      window.__heard = []; // [ms since load, workspace, sentence], kept across forget()
+      window.OSCILLA.app.$watch('announceText', (v) => {
+        if (!v) return;
+        window.__said.push(v);
+        window.__heard.push([Math.round(performance.now()), window.OSCILLA.app.workspace, v]);
+      });
     });
     // The live region is cleared too, so a leave that says the same sentence again is heard.
     const forget = () => ev(() => {
@@ -443,12 +460,13 @@ function defineChecks() {
       noteHz, peakHz: inSynth.peak.hz, bin: inSynth.peak.bin, octave };
     await forget();
     await nav('analyzer');
-    res.synthKeeps = await settle((s) => s.ws === 'analyzer' && s.armed && s.kbd
-      && s.studioHeld > 0 && s.peak.db > SOUNDING_DB
-      && Math.abs(s.peak.hz - inSynth.peak.hz) <= s.peak.bin
-      && s.said.includes(sentence('synth')) && s.said.includes(sentence('notes')),
-    'in the Analyzer the armed Synth\'s held note sounds on: the analyser reads its peak and the '
-      + 'status bar says why');
+    res.synthKeeps = await settle(named((s) => ({ analyzer: s.ws === 'analyzer',
+      armed: s.armed, held: s.kbd && s.studioHeld > 0, sounds: s.peak.db > SOUNDING_DB,
+      samePeak: Math.abs(s.peak.hz - inSynth.peak.hz) <= s.peak.bin,
+      saysSynth: s.said.includes(sentence('synth')), saysNotes: s.said.includes(sentence('notes')),
+    })), 'in the Analyzer the armed Synth\'s held note sounds on: the analyser reads its peak and '
+      + 'the status bar says why');
+    res.synthKeeps.inSynthPeak = inSynth.peak;
     // The status bar names what sounds as the scope's description does (C024: the notes, the
     // held note's name), says the Synth is still on (its leave sentence) and its key reads Stop.
     res.barNamesIt = await settle((s) => s.pattern.toLowerCase() === NOTES_NAME.toLowerCase()
@@ -1854,6 +1872,11 @@ async function runOne(browserName, origin, baseUrl) {
         for (const n of bad) {
           const why = res[n].failed ? `failed [${res[n].failed.join(', ')}] ` : '';
           console.log(`   x ${n}: ${why}${JSON.stringify(res[n]).slice(0, 900)}`);
+          // The line above is cut; each failed part follows in full, on its own line.
+          for (const f of res[n].failed || []) {
+            const part = res[n][f];
+            if (part !== undefined) console.log(`     ${n}.${f}: ${JSON.stringify(part)}`);
+          }
         }
       }
     }
