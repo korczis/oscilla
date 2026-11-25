@@ -1,0 +1,25 @@
+id: U147
+milestone: M124
+serves:
+  - "one-instrument#one-instrument-places"
+title: "Building in the Studio from scratch: an empty document, new nodes in free space, clips go with their target"
+slug: "studio-from-scratch"
+priority: p1
+profile: implementation
+objective: "The interim review (problem 8) and journey J7: there is no empty document (every template is English), select-all plus Delete leaves a Source track with clips that have no target, and a node added from the library lands exactly on top of an existing one (both at 759, 324.6), so a from-scratch patch needs dragging nodes apart before it can be cabled. src/js/studio is guarded."
+why: "Independent interim product review of 2026-11-25 (docs/reconstruction/10-interim-review.md)."
+scope:
+  - "src/js/ui/studio/"
+  - "src/js/studio/templates/"
+  - "tests/"
+depends_on: []
+acceptance_criteria:
+  - "A new empty Studio document is offered from the templates dialog and the palette, Czech-labelled."
+  - "A node added without a pointer position lands in free space (no overlap with an existing node box), unit-tested on the layout function and checked in a browser."
+  - "Deleting a node removes the timeline clips and automation that target it, in one undo step."
+validation:
+  - "npm run verify"
+  - "node tests/browser/v31-studio-graph.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-11-25
