@@ -42,7 +42,6 @@ function sounding(fields = {}) {
     studioOwnsOutput: () => true, stopNow() { log.push('instrument.stop'); },
     measureAbort(why) { log.push(`measure.abort ${why}`); return true; },
     kbdReleaseAll() { log.push('keys.release'); },
-    synthLeave() { log.push('synth.disarm'); },
     midiRouteLeave(from) { log.push(`route.leave ${from}`); },
     ...fields,
   };
@@ -147,7 +146,7 @@ test('C053: a workspace change applies every row in the same event', () => {
 
 // ---------------------------------------------------------------- the scans
 
-const STOPS = new RegExp('kbdRelease|measureAbort|disarm\\(|synthLeave|midiRouteLeave|'
+const STOPS = new RegExp('kbdRelease|measureAbort|disarm\\(|midiRouteLeave|'
   + '\\.leave\\(\\)|\\[leave\\]\\(|stopNow|studioStop|midiAllOff|\\.stop\\(');
 const WATCH = /\$watch\('workspace',\s*\(([^)]*)\)\s*=>\s*(\{[\s\S]*?\n\s*\}|[^\n]*)\)/g;
 
@@ -176,6 +175,19 @@ test('C053 scan mutation: a leave handler re-added outside the bus is named', ()
   const src = () => "cmp.$watch('workspace', () => { kbdRelease(); if (view) view.resize(); });";
   assert.deepEqual(strayLeaves([f], src), ['src/js/midi/keyboard-ui.js:1']);
   assert.deepEqual(strayLeaves([f], () => "cmp.$watch('workspace', (ws) => resize(ws));"), []);
+});
+
+// U141: U133 left the Synth's leave code without a caller (the bus keeps the Synth's row); it
+// goes, and no comment says that leaving the Synth disarms it.
+test('U141 scan: no Synth or Studio-sink leave code without a caller, no stale comment', () => {
+  const synth = jsFiles().filter((f) => f.startsWith(path.join('src', 'js', 'synth')));
+  assert.ok(synth.length > 10, `the Synth's sources: ${synth.length}`);
+  assert.deepEqual(jsFiles().filter((f) => /\bsynthLeave\b/.test(read(f))), [],
+    'synthLeave is defined or called nowhere');
+  assert.deepEqual(synth.filter((f) => /^\s*function leave\(|\bleave,\s*heldNotes\b/m
+    .test(read(f))), [], 'the Studio sink defines no leave()');
+  assert.deepEqual(synth.filter((f) => /Leaving the Synth disarms/i.test(read(f))), [],
+    'no comment says leaving the Synth disarms it');
 });
 
 /** Every refusal sentence of the owners, from the one table. */

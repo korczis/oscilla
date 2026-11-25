@@ -14,9 +14,9 @@
 //     owner      who owns the mount, default 'synth' (the Synth workspace); a later target
 //                owned by 'landing' (its home: the landing) is released by Stop like this one,
 //                never by the Synth panel's own live updates
-//     app        the Alpine component: its root's `osc:ui` 'mode' event (a workspace leave),
-//                its outputOwner (the audio owner), its audioState (a suspended context: the
-//                cold first touch) and kbdPad (the keys' note layer, below); optional
+//     app        the Alpine component: its outputOwner (the audio owner), its audioState (a
+//                suspended context: the cold first touch) and kbdPad (the keys' note layer,
+//                below); optional
 //     arm()      the first touch arms the instrument (synth/ui.js synthArm): true, or the
 //                reason it did not ({ ok: false, reason, said } | reason | false); the reason
 //                is said (assertively, unless `said`) and shown on the line that describes the
@@ -58,12 +58,14 @@
 // The document's Synth panel (documentTarget) is the only implementation: its controls edit
 // the StudioModel, one BATCH and one undo entry each, and it plays the panel's xy-pad node
 // through transport.live. The release paths are the mount's, never a target's: transport
-// Stop (its 'state' event with playing false), leaving the workspace (`osc:ui` 'mode' on the
-// app root), the audio owner moving away from the target's output (app.outputOwner; a change
-// to no owner at all is the Stop's, released as 'stop'), page hide, blur and Escape (the pad
-// kind's own listeners) and the keys' forced releases (kbdPad). Each closes the pad's gate, sends
-// its note-off and then the router's all-off (studio/live-notes.js through transport.live), so a
-// lost note-off never leaves a voice held. No window listener and no key binding is added here.
+// Stop (its 'state' event with playing false), the audio owner moving away from the target's
+// output (app.outputOwner; a change to no owner at all is the Stop's, released as 'stop'),
+// page hide, blur and Escape (the pad kind's own listeners) and the keys' forced releases
+// (kbdPad). Leaving the workspace is none (U142, the owner's Q114 "Sound survives"): a held pad
+// sounds on in the next place as a held key does, until its own release. Each closes the pad's
+// gate, sends its note-off and then the router's all-off (studio/live-notes.js through
+// transport.live), so a lost note-off never leaves a voice held. No window listener and no key
+// binding is added here.
 //
 // First open (K183 supersedes K167's phone first action): opening the tab edits nothing (no
 // BATCH, no history entry, no dirty document); the pad is enabled and states its default and
@@ -98,7 +100,7 @@
 //   padReleasePaths({ transport, app, owner, output, release }) -> { listenStop(), off() }
 //   padTargets(model, panel, module = 'xyl') -> { x: [jack], y: [jack] }   what each output
 //     drives, normals and cables alike ('lpf.frequency'); muted edges left out
-//   mountPadL(host, { store, transport, panel, app, arm, say, jackName, mountPad, owner })
+//   mountPadL(host, { store, transport, panel, app, arm, say, jackName, mountPad })
 //     -> { view, record, release(reason), destroy() }
 //     Its Record switch (K231, ui/kinds/record-switch.js) arms the transport's one recorder
 //     (studio/notes-record.js) with padTakeId(pad L's node): a take of its X and Y is written as
@@ -148,9 +150,9 @@ export const XY_SOURCE = 'kbd-xy';
 export const XY_VELOCITY_FLOOR = 40;
 export const xyVelocity = (y) => Math.max(XY_VELOCITY_FLOOR, Math.min(127,
   Math.round(XY_VELOCITY_FLOOR + (127 - XY_VELOCITY_FLOOR) * (Number.isFinite(y) ? y : 0))));
-// The workspace an owner's mount lives in: leaving it releases the pad.
 /** Y's name when it drives no cable: the touch's velocity (K220). */
 const VELOCITY_NAME = 'síla úhozu';
+// The workspace an owner's mount lives in: the notes it claims are that workspace's (K171).
 const HOME = Object.freeze({ synth: 'synth', landing: 'landing' });
 const SELECT = 'h-11 rounded-lg border border-solid border-gray-300 bg-gray-50 px-3 text-sm '
   + 'text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white';
@@ -312,12 +314,12 @@ function documentTarget({ store, panel, transport, owner, arm, say, jackName, di
 
 /**
  * The release paths every Synth pad mount shares (K220: pad R's mountSynthXy and pad L's
- * view/pads.js): transport Stop (its 'state' event with playing false), leaving the workspace
- * (`osc:ui` 'mode' on the app root) and the audio owner moving away from `output` (a change to
- * no owner at all is the Stop's, released as 'stop'). -> { listenStop(), off() }; listenStop
+ * view/pads.js): transport Stop (its 'state' event with playing false) and the audio owner
+ * moving away from `output` (a change to no owner at all is the Stop's, released as 'stop').
+ * Leaving the workspace releases nothing (U142, Q114). -> { listenStop(), off() }; listenStop
  * follows a transport made only by a later touch.
  */
-export function padReleasePaths({ transport, app, owner, output, release }) {
+export function padReleasePaths({ transport, app, output, release }) {
   const offs = [];
   let heard = null; // the transport whose Stop this mount listens to
   let offHeard = () => {};
@@ -331,16 +333,6 @@ export function padReleasePaths({ transport, app, owner, output, release }) {
     });
   };
   listenStop();
-  const root = app && app.$root;
-  if (root && typeof root.addEventListener === 'function') { // leaving the workspace
-    const home = HOME[owner] || app.workspace;
-    const leave = (e) => {
-      const d = e.detail || {};
-      if (d.kind === 'mode' && d.value !== home) release('leave');
-    };
-    root.addEventListener('osc:ui', leave);
-    offs.push(() => root.removeEventListener('osc:ui', leave));
-  }
   // A notification is a move only when the owner changed: the playback bus re-reads
   // outputOwner on its own claim (C051), and a touch's arm made it say null again.
   let seen = app ? app.outputOwner : undefined;
@@ -398,7 +390,7 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
   }
 
   // ---- the release paths (the mount's, never the target's)
-  const paths = padReleasePaths({ transport: tp, app, owner, output: target.output, release });
+  const paths = padReleasePaths({ transport: tp, app, output: target.output, release });
   const { listenStop } = paths;
   // Page hide, blur and Escape: the pad kind's own listeners end the gate ('hide', 'blur',
   // 'escape'), which onGate below routes through the same release.
@@ -684,7 +676,7 @@ function armedOf(arm) {
 }
 
 export function mountPadL(host, { store, transport = null, panel, app = null, arm = null,
-  say = () => {}, jackName = (id) => String(id), mountPad = mountXyPad, owner = 'synth' } = {}) {
+  say = () => {}, jackName = (id) => String(id), mountPad = mountXyPad } = {}) {
   const tp = () => (typeof transport === 'function' ? transport() : transport);
   const node = () => panel.resolve(store.getModel()).get('xyl');
   const uid = `synth-pad-l-${(padMounts += 1)}`;
@@ -705,7 +697,7 @@ export function mountPadL(host, { store, transport = null, panel, app = null, ar
     live('all-off', { x: 0, y: 0 });
     return 0;
   }
-  const paths = padReleasePaths({ transport: tp, app, owner, output: 'studio', release });
+  const paths = padReleasePaths({ transport: tp, app, output: 'studio', release });
   const t = padTargets(store.getModel(), panel);
   const name = (list) => (list.length ? list.map(jackName).join(' + ') : PADS_TEXT.none);
   const nx = name(t.x);

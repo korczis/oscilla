@@ -5,10 +5,10 @@
 // X a note of the scale, Y the touch's velocity), with its scale picker beside it; pad L is the
 // `xyl` module, which plays no notes: its X and Y reach its node through transport.live and its
 // typed normals carry them to the LPF and HPF cutoffs (panels/semi-mono.js n25, n26), so a cable
-// replaces either as any cable does. Both release on Stop, on leaving the workspace and when the
-// audio owner moves away (xy-wiring.js padReleasePaths), and on blur, page hide and Escape (the
-// kind's own listeners). Pad R here claims no notes, so the docked keyboard stays (K171 is the
-// XY tab's).
+// replaces either as any cable does. Both release on Stop and when the audio owner moves away
+// (xy-wiring.js padReleasePaths), and on blur, page hide and Escape (the kind's own listeners);
+// a held pad sounds on across a place change (U142, Q114). Pad R here claims no notes, so the
+// docked keyboard stays (K171 is the XY tab's).
 //
 //   padTargets, mountPadL, PADS_TEXT: xy-wiring.js's (the pad kind's one mount site), re-exported
 //   createPads({ panel, get, host, nodes, dispatch, say, jackName, tab, cmp, arm })

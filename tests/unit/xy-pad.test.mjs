@@ -2,7 +2,8 @@
 // pitch of nodes/instrument.js xyDegree over core/music.js SCALE_MODES), its runtime adapter
 // (three ConstantSources, census 0 after stop), its live events (studio/live-notes.js: the gate
 // opens on touch and closes on release), the XY pad kind (ui/kinds/xy-pad.js createXyModel: the
-// gate closes on release, blur, hide and Escape; a second touch sets Y only; keys), the XY tab
+// gate closes on release, blur, hide and Escape, and a pad its place hid keeps it, U142; a second
+// touch sets Y only; keys), the XY tab
 // as a module of the Synth panel, Y into its target through a CONTROL edge, and the XY presets
 // as ordinary patches (studio/patches.js, category 'xy' and a scale), each one undoable BATCH.
 // A document holding the type is refused by name by a registry without it (rollback).
@@ -445,7 +446,7 @@ async function mountedPad() {
     globalThis.window = saved.window;
     globalThis.document = saved.document;
   };
-  return { view, surface, gates, restore };
+  return { view, surface, group, gates, restore };
 }
 
 test('a lost pointer capture of a holding pointer cancels; after its pointerup it changes '
@@ -470,6 +471,71 @@ test('a lost pointer capture of a holding pointer cancels; after its pointerup i
     a.surface.fire('lostpointercapture', { pointerId: 9 });
     assert.equal(a.view.model.gated, true, 'a capture another pointer lost cancels nothing');
     assert.deepEqual(a.gates, [[true, 'touch']]);
+  } finally {
+    a.restore();
+  }
+});
+
+// U142, the owner's Q114 "Sound survives": a place change hides the pad with its note held; the
+// focus the browser then takes from it (the focus fixup: relatedTarget null, the surface without
+// a box) is no user's move, so the gate stays open until the pad's own release, as a held key
+// sounds on (U133). Any other focus move out of the pad still ends it ('blur').
+test('focusLeaveEnds: only a focus move out of a shown pad ends its gate (U142, Q114)',
+  async () => {
+  const { focusLeaveEnds } = await import('../../src/js/ui/kinds/xy-pad.js');
+  assert.equal(typeof focusLeaveEnds, 'function');
+  assert.equal(focusLeaveEnds({ inside: false, shown: true }), true, 'a blur ends it');
+  assert.equal(focusLeaveEnds({ inside: false, shown: false }), false, 'its place hid it');
+  assert.equal(focusLeaveEnds({ inside: true, shown: true }), false, 'a move to a slider');
+  assert.equal(focusLeaveEnds({ inside: true, shown: false }), false);
+});
+
+test('the kind: a pad hidden by a place change keeps a held Enter or pointer until its own '
+  + 'release; a blur of a shown pad still ends it (U142, Q114)', async () => {
+  const a = await mountedPad();
+  let box = { left: 0, top: 0, width: 100, height: 100 };
+  a.surface.getBoundingClientRect = () => box;
+  a.group.contains = (t) => !!t && t.inPad === true;
+  const doc = globalThis.document;
+  const enter = (type, target = a.surface) => a.group.fire(type, { key: 'Enter', target });
+  try {
+    // Enter held, the place left: the surface has no box, the focus goes to nobody.
+    enter('keydown');
+    assert.equal(a.view.model.gated, true, 'Enter opens the gate');
+    box = { left: 0, top: 0, width: 0, height: 0 };
+    a.group.fire('focusout', { relatedTarget: null });
+    assert.equal(a.view.model.gated, true, 'the hidden pad sounds on');
+    assert.ok(doc.on.has('keyup'), 'the key\'s release is heard wherever the focus is now');
+    doc.fire('keyup', { key: 'a' });
+    assert.equal(a.view.model.gated, true, 'another key\'s release changes nothing');
+    doc.fire('keyup', { key: 'Enter' });
+    assert.equal(a.view.model.gated, false, 'the Enter keyup ends it');
+    assert.equal(doc.on.has('keyup'), false, 'and its listener goes with the gate');
+    assert.deepEqual(a.gates, [[true, 'touch'], [false, 'release']]);
+    // A pointer held, the place left: the captured pointerup ends it.
+    a.gates.length = 0;
+    box = { left: 0, top: 0, width: 100, height: 100 };
+    a.surface.fire('pointerdown', { pointerId: 4, clientX: 50, clientY: 50 });
+    box = { left: 0, top: 0, width: 0, height: 0 };
+    a.group.fire('focusout', { relatedTarget: null });
+    assert.equal(a.view.model.gated, true, 'the hidden pad keeps the pointer\'s note');
+    assert.equal(doc.on.has('keyup'), false, 'a pointer\'s gate waits for no key');
+    a.surface.fire('pointerup', { pointerId: 4 });
+    assert.deepEqual(a.gates, [[true, 'touch'], [false, 'release']], 'its pointerup ends it');
+    // A blur of the shown pad (the focus moved elsewhere on the page) still ends it.
+    a.gates.length = 0;
+    box = { left: 0, top: 0, width: 100, height: 100 };
+    enter('keydown');
+    a.group.fire('focusout', { relatedTarget: { inPad: false } });
+    assert.deepEqual(a.gates, [[true, 'touch'], [false, 'blur']]);
+    // A move inside the pad's group (to a slider) ends nothing and waits for no document key.
+    a.gates.length = 0;
+    enter('keydown');
+    a.group.fire('focusout', { relatedTarget: { inPad: true } });
+    assert.equal(a.view.model.gated, true);
+    assert.equal(doc.on.has('keyup'), false);
+    enter('keyup');
+    assert.deepEqual(a.gates, [[true, 'touch'], [false, 'release']]);
   } finally {
     a.restore();
   }

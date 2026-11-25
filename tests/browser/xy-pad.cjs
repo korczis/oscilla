@@ -62,9 +62,14 @@
 //   x-release-stop   (K167) a held pad is released by the Studio transport's Stop: silent
 //              (below -70 dB rel), runtime census 0, no held note, the pad's gate closed, and
 //              the next press sounds again
-//   x-release-leave  (K167, U133) a held pad is released by leaving the Synth workspace (the
-//              workspace switch itself, no focus move): silent, gate closed, nothing held; the
-//              Synth stays armed (Q114) and Escape then brings the runtime census to 0
+//   x-release-leave  (K167, U133, U142) under the owner's Q114 ('Sound survives') a held pad
+//              sounds on across a place change, as a held key does: Enter held, then a pointer
+//              held, the workspace switched to the Studio (the switch itself; the browser takes
+//              the focus from the hidden pad): once the pad has no box and no focus it is still
+//              loud on the engine analyser, its gate open and its note held; its own release
+//              (the Enter keyup, wherever the focus is; the captured pointerup) closes the gate,
+//              holds nothing and silences; the Synth stays armed and Escape then brings the
+//              runtime census to 0
 //   x-release-owner  (K167) a held pad is released when another workspace's player (the
 //              Pattern Sequencer) takes the audio owner: gate closed, no held note, the
 //              transport stopped; once that player stops, silent and census 0
@@ -734,26 +739,65 @@ function defineChecks() {
     return { ok: true, after };
   });
 
-  // Under the owner's Q114 (U133, 'Sound survives') the Synth stays armed across places, so its
-  // runtime outlives the switch; the pad's own note is still released by leaving (U142 may let it
-  // sound on too). Escape then stops everything, as before.
+  // U142, the owner's Q114 ('Sound survives', docs/reconstruction/08-owner-decision-q114.md):
+  // the pad's held note sounds on across places as a held key does (U133), and only its own
+  // release ends it. The Synth stays armed across the switch; Escape then stops everything.
   def('x-release-leave', async ({ page }) => {
-    await holdEnter(page, 'leave');
-    await page.evaluate(() => window.OSCILLA.app.setWorkspace('studio'));
-    let c = null;
-    await until(async () => {
-      c = await census(page);
-      // The armed Synth's transport runs on (playing, its runtime alive) but sounds nothing.
-      return c.pressed === 'false' && c.held === 0;
-    }, { ms: SOUND_MS, what: 'leaving the Synth releases the held pad: gate closed, nothing held' })
-      .catch((e) => { throw new Error(`${e.message}; census ${JSON.stringify(c)}`); });
-    const q = await silent(page, 'leaving the Synth releases the held pad: silent');
+    /** Switch to the Studio and wait until the pad is hidden and has lost the focus. */
+    const away = async (what) => {
+      await page.evaluate(() => window.OSCILLA.app.setWorkspace('studio'));
+      await until(() => page.evaluate(() => {
+        const s = document.querySelector('[data-xy-surface]');
+        const r = s.getBoundingClientRect();
+        return window.OSCILLA.app.workspace === 'studio' && r.width === 0
+          && document.activeElement !== s;
+      }), { ms: SOUND_MS, what: `${what}: the Studio shown, the pad hidden and unfocused` });
+      const now = () => page.evaluate(() => window.OSCILLA.engine.ctx.currentTime);
+      const t0 = await now();
+      const gate = async (when) => {
+        const c = await census(page);
+        if (c.pressed !== 'true' || c.held === 0) {
+          throw new Error(`${what}: the pad's gate closed ${when}; census ${JSON.stringify(c)}`);
+        }
+        return c;
+      };
+      await gate('on leaving');
+      // A second of the audio clock later: a release's tail has decayed by then, a held note not.
+      await until(async () => (await now()) - t0 >= 1, { ms: SOUND_MS,
+        what: `${what}: one second of the audio clock in the Studio` });
+      const q = await loud(page, `${what}: the held pad still sounds in the Studio (Q114)`);
+      const c = await gate('in the Studio');
+      return { ...c, rmsDb: Number(q.rmsDb.toFixed(1)) };
+    };
+    /** Its own release: gate closed, nothing held, silent; the armed Synth runs on. */
+    const ended = async (what) => {
+      let c = null;
+      await until(async () => {
+        c = await census(page);
+        return c.pressed === 'false' && c.held === 0;
+      }, { ms: SOUND_MS, what: `${what}: gate closed, nothing held` })
+        .catch((e) => { throw new Error(`${e.message}; census ${JSON.stringify(c)}`); });
+      const q = await silent(page, `${what}: silent`);
+      return { ...c, rmsDb: Number(q.rmsDb.toFixed(1)) };
+    };
+    await holdEnter(page, 'leave, Enter');
+    const keyLeft = await away('Enter held');
+    await page.keyboard.up('Enter'); // the focus is on the body now
+    const keyUp = await ended('the Enter keyup after leaving');
+    const back = () => page.evaluate(() => window.OSCILLA.app.setWorkspace('synth'));
+    await back();
+    const p = await padPoint(page, 5, 0.5);
+    await page.mouse.move(p.x, p.y);
+    await page.mouse.down();
+    await loud(page, 'a held pointer sounds');
+    const pointerLeft = await away('the pointer held');
+    await page.mouse.up(); // the captured pointerup
+    const pointerUp = await ended('the pointerup after leaving');
     const armed = await page.evaluate(() => !!window.OSCILLA.app.synth.armed);
-    await page.keyboard.up('Enter');
     await page.keyboard.press('Escape');
     const after = await releasedAll(page, 'Escape after leaving stops the armed Synth');
     return { ok: armed, detail: armed ? undefined : 'the Synth stays armed after leaving (Q114)',
-      left: { ...c, rmsDb: Number(q.rmsDb.toFixed(1)) }, after };
+      keyLeft, keyUp, pointerLeft, pointerUp, after };
   });
 
   def('x-release-owner', async ({ page }) => {
