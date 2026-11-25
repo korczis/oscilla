@@ -96,18 +96,23 @@ export const OUTPUT_OWNER_TABLE = Object.freeze([
 ]);
 
 /**
- * What leaving a workspace does to each owner (C053): one table, applied by the bus on every
- * workspace change (bus.leave, main.js's one watcher) in the same event. A row:
+ * What leaving a workspace does to each owner (C053, revised by U133 under the owner's Q114 of
+ * 2026-11-24, "Sound survives": "Whatever plays keeps playing across places; the strip always
+ * shows it and stops it. Measurement still stops when leaving Měření, to protect run
+ * integrity."). One table, applied by the bus on every workspace change (bus.leave, main.js's
+ * one watcher) in the same event. A row:
  *   owner     who it concerns (the table's owners, the Synth's Arm, the lab microphone of C040)
- *   effect    'keep' (it sounds on), 'stop' or 'disarm'
+ *   effect    'keep' (it sounds on) or 'stop'
  *   applies(from, to)   whether this change concerns it
  *   sounding(cmp, bus)  whether it sounds (or is armed) now
  *   act(cmp, from, to)  what the bus does (none for 'keep')
  *   sentence  what the status bar says when the row met a sounding owner
- * The rows keep what the app did before C053, now stated: a measurement does not run unseen
- * (it stops whenever the workspace is not MEASURE), held keys are released, an armed-only Synth
- * run is disarmed, the instrument, the sequence and a PLAYed Studio run sound on (Esc stops
- * them), and the lab microphone stays on until C040 decides otherwise.
+ * Only a measurement stops (and a microphone level-reference capture, part of a MEASURE run):
+ * it does not run unseen (ADR 0063, rule no-fake-science), so it stops whenever the workspace
+ * is not MEASURE. Everything else sounds on across places: the instrument's tone, a riff
+ * audition, the sequence, the Studio transport (PLAYed or armed by the keys), the Synth's Arm,
+ * held keyboard and MIDI notes, and the lab microphone (C040). The status bar keeps naming what
+ * sounds (soundingOwner, cmp.playback) and its Stop, like Escape, stops it (bus.stopAll).
  */
 export const LEAVE_POLICY = Object.freeze([
   Object.freeze({ owner: 'measurement', effect: 'stop', applies: (from, to) => to !== 'measure',
@@ -127,24 +132,18 @@ export const LEAVE_POLICY = Object.freeze([
   Object.freeze({ owner: 'sequencer', effect: 'keep', applies: () => true,
     sounding: (cmp, bus) => bus.sequencerPlaying(), act: null,
     sentence: 'Sekvence hraje dál; zastavíte ji klávesou Esc.' }),
-  // Leaving a workspace whose keys play the Studio document (every workspace but the Synth,
-  // K247): its live notes off and an armed-only run disarmed (the key route's own leave,
-  // midi/routes.js, run by midi/ui.js midiRouteLeave; studio-sink.js, K176); a run the user
-  // started with PLAY sounds on.
-  Object.freeze({ owner: 'studio', effect: 'disarm', applies: (from) => from !== 'synth',
-    sounding: (cmp) => call(cmp, 'studioOwnsOutput'),
-    act: (cmp, from) => call(cmp, 'midiRouteLeave', from),
-    sentence: 'Klávesy přestaly hrát Studio; přehrávání spuštěné tlačítkem hraje dál.' }),
-  // Leaving any workspace: the Synth panel's armed-only run ends, whether the Synth's own keys
-  // armed it or the keys of another workspace did (midi/ui.js falls back to it, K247).
-  Object.freeze({ owner: 'synth', effect: 'disarm', applies: () => true,
-    sounding: (cmp) => !!(cmp.synth && cmp.synth.armed),
-    act: (cmp) => call(cmp, 'synthLeave'),
-    sentence: 'Syntezátor se vypnul: jeho klávesy po odchodu nehrají.' }),
-  Object.freeze({ owner: 'notes', effect: 'stop', applies: () => true,
-    sounding: (cmp) => !!cmp.notesSounding,
-    act: (cmp) => call(cmp, 'kbdReleaseAll'),
-    sentence: 'Držené noty se uvolnily.' }),
+  // The Studio transport, PLAYed or armed by the keys of any workspace (K247); an Arm of the
+  // Synth panel is the synth row's to name, so the bar says it once.
+  Object.freeze({ owner: 'studio', effect: 'keep', applies: () => true,
+    sounding: (cmp) => !!call(cmp, 'studioOwnsOutput') && !(cmp.synth && cmp.synth.armed),
+    act: null,
+    sentence: 'Studio hraje dál; zastavíte ho klávesou Esc.' }),
+  Object.freeze({ owner: 'synth', effect: 'keep', applies: () => true,
+    sounding: (cmp) => !!(cmp.synth && cmp.synth.armed), act: null,
+    sentence: 'Syntezátor zůstává připravený a klávesy ho hrají dál; vypnete ho klávesou Esc.' }),
+  Object.freeze({ owner: 'notes', effect: 'keep', applies: () => true,
+    sounding: (cmp) => !!cmp.notesSounding, act: null,
+    sentence: 'Držené noty znějí dál; uvolníte je klávesou Esc.' }),
   Object.freeze({ owner: 'lab-microphone', effect: 'keep', applies: () => true,
     sounding: (cmp) => !!cmp.micActive, act: null,
     sentence: 'Mikrofon laboratoře zůstává zapnutý.' }),

@@ -81,7 +81,7 @@
 //              the cable removed there: the EG 2 normal is back at 3.5 and the knob reads 3.50.
 //              Fails on 3c22d01a (the receiver brings it back at its declared 2)
 //   s-studio   Open in Studio: #m=studio, the panel's nodes selected, the same revision
-//   s-escape   Escape releases a held note; leaving the workspace disarms: runtime census 0
+//   s-escape   Escape releases a held note and disarms: the Studio then runs nothing (census 0)
 //   s-connect-escape K236 (329 R6): a pending connect from MG CV, its connection list shown,
 //              then Escape: the list is hidden with no Patch button left, and Enter on LPF
 //              Cutoff starts a new connect from there instead of patching MG into it.
@@ -90,14 +90,17 @@
 //   s-armstop  the Arm button follows the transport (review S1): Arm, then a transport Stop
 //              made outside the Synth while it is shown (page hide; before any Studio visit):
 //              the button reads Arm and Arm arms; Arm, the Studio and its Stop, back to the
-//              Synth: it reads Arm, Arm arms and a key sounds. Fails on 9cf786ac (Disarm stays)
+//              Synth: still armed (U133, Q114; K104 STOP keeps it armed), it reads Disarm;
+//              Escape in the Studio, back to the Synth: it reads Arm, Arm arms and a key
+//              sounds. Fails on 9cf786ac (Disarm stays)
 //   s-armed    K104 (desktop and phone): Arm by pointer (a tap on the phone) stops a playing
 //              Playground voice and checks the role=switch; Enter and Space on it disarm and
 //              arm, Escape disarms; armed and stopped, QWERTY A is held on the running Keys
-//              node and sounds. Desktop: leaving the Synth disarms (census 0); in the Studio a
-//              key arms it and the transport bar's armed indicator shows, PLAY plays, and STOP
-//              leaves the keys armed (indicator and Synth state) with A still sounding (the
-//              owner's 'STOP keeps it armed', 2026-11-03); leaving the Studio disarms it
+//              node and sounds. Desktop: leaving the Synth keeps it armed (U133, Q114); in the
+//              Studio a key plays it and the transport bar's armed indicator shows, PLAY plays,
+//              and STOP leaves the keys armed (indicator and Synth state) with A still sounding
+//              (the owner's 'STOP keeps it armed', 2026-11-03); back in the Synth it is still
+//              armed and its switch disarms it (census 0)
 //   s-svs      K226: a step-voltage sequencer on the panel's Keys Gate, row A into VCO 1's pitch;
 //              while the Studio plays, the Inspector's Krok button by pointer (tap on the phone)
 //              and keyboard steps it: each press says its step (Krok 1, 2, 3; a lost or refused
@@ -225,6 +228,14 @@
 //              chip brings the cards back (aria-pressed) and hides the bay, a section chip
 //              brings the cards back and lands its plate's heading below the sticky chip bar,
 //              the docked keys are visible and a tap on them sounds
+//   s-tabs     the tablist (axe 4.14 on #m=synth): axe finds no aria-required-parent,
+//              aria-required-children or listitem violation; the tabs (the panel's tabs from the
+//              source, in order) are the tablist's children, the selected one the only Tab stop,
+//              each controlling the tabpanel; from Panel, ArrowRight selects Engines (focus,
+//              aria-selected, yt=engines in the Synth's link, its engine chips shown),
+//              ArrowLeft goes back and then wraps to the last tab, ArrowRight wraps to the
+//              first, End and Home select the last and first. Fails on c3b15610 (each tab
+//              inside an <li>)
 //   s-xlfaces  V636 at 1536 x 1024: the cards and the bay side by side, each hit where drawn;
 //              no chip nav on the Panel tab, no Panel chip on the Engines tab, whose Patch bay
 //              chip hides no card
@@ -250,6 +261,9 @@ const DIST = path.join(ROOT, 'dist', 'index.html');
 const panelJacks = () => import(pathToFileURL(path.join(ROOT, 'src', 'js', 'synth', 'panels',
   'semi-mono.js')).href).then(({ default: p }) => p.modules
   .reduce((n, m) => n + p.jacksOf(m.id).length, 0));
+/** The panel's tabs in order (its declaration's tabs), read from the source, not the page. */
+const panelTabs = () => import(pathToFileURL(path.join(ROOT, 'src', 'js', 'synth', 'panels',
+  'semi-mono.js')).href).then(({ default: p }) => p.tabs.map((t) => t.id));
 /** What the panel's Insert says when it takes Master Output (synth/insert.js SYNTH_TEXT.took), up
  *  to the names it takes it from: read from the source, not copied, whatever its language. */
 const tookPrefix = () => import(pathToFileURL(path.join(ROOT, 'src', 'js', 'synth', 'insert.js'))
@@ -1670,15 +1684,27 @@ function defineChecks() {
     await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
     await readsArm(page, 'a transport Stop made outside the Synth reads Arm');
     await armedNow(page, 'Arm arms after a Stop made outside the Synth');
-    // The review's path: to the Studio, its Stop, back to the Synth.
-    await page.locator('[data-osc="nav.studio"]').click();
-    await until(() => page.evaluate(() => window.OSCILLA.app.workspace === 'studio'),
-      { ms: 10000, what: 'the Studio opens' });
+    // The review's path: to the Studio, its Stop, back to the Synth. Since U133 (the owner's
+    // Q114, 'Sound survives') leaving keeps the Synth armed, and the Studio's STOP keeps an
+    // armed run armed (K104, 'STOP keeps it armed'): the button still reads Disarm.
+    const to = async (ws) => {
+      await page.locator(`[data-osc="nav.${ws}"]`).click();
+      await until(() => page.evaluate((w) => window.OSCILLA.app.workspace === w, ws),
+        { ms: 10000, what: `the ${ws} workspace opens` });
+    };
+    await to('studio');
     await page.locator('[data-osc="studio.stop"]').click();
-    await page.locator('[data-osc="nav.synth"]').click();
-    await until(() => page.evaluate(() => window.OSCILLA.app.workspace === 'synth'),
-      { ms: 10000, what: 'back in the Synth' });
-    await readsArm(page, 'after the Studio and its Stop the button reads Arm');
+    await to('synth');
+    await until(async () => (await dbg(page)).armed && (await armText(page)) === 'Odpojit',
+      { ms: 10000, what: 'after the Studio and its Stop the keys stay armed: Disarm' });
+    // A Stop that disarms, made in the Studio (Escape: stop everything), read back here.
+    await to('studio');
+    await page.evaluate(() => document.activeElement && document.activeElement.blur());
+    await page.keyboard.press('Escape');
+    await until(() => page.evaluate(() => !window.OSCILLA.studio.transport.armed),
+      { ms: 10000, what: 'Escape in the Studio disarms the transport' });
+    await to('synth');
+    await readsArm(page, 'after Escape in the Studio the button reads Arm');
     await armedNow(page, 'Arm arms again after the Studio Stop');
     await hold(page, 'KeyA');
     const on = await sound(page, (q) => q.rmsDb > -40, 'the re-armed panel sounds');
@@ -1723,12 +1749,13 @@ function defineChecks() {
     await page.keyboard.up('KeyA');
     await silent(page, 'the key up releases it');
     if (size === 'phone') return { ok: role === 'switch', role, on: on.rmsDb };
-    // Linked: leaving the Synth disarms; in the Studio a key arms it, PLAY plays the document,
-    // and STOP stops the timeline while the keys stay armed: the transport bar's indicator and
-    // the Synth's own state both say armed, and a key still sounds.
+    // Linked: leaving the Synth keeps it armed (U133, the owner's Q114 'Sound survives'); in
+    // the Studio a key plays it and the transport bar shows armed, PLAY plays the document, and
+    // STOP stops the timeline while the keys stay armed: the transport bar's indicator and the
+    // Synth's own state both say armed, and a key still sounds.
     await page.locator('[data-osc="nav.studio"]').click();
-    await until(async () => (await counts(page)).runtimeNodes === 0 && !(await dbg(page)).armed,
-      { ms: 10000, what: 'leaving the Synth disarms: runtime census 0' });
+    await until(async () => (await counts(page)).runtimeNodes > 0 && (await dbg(page)).armed,
+      { ms: 10000, what: 'leaving the Synth keeps it armed: the runtime runs' });
     const badge = page.locator('[data-osc="studio.armed"]');
     await page.evaluate(() => {
       if (document.activeElement && document.activeElement !== document.body) {
@@ -1752,9 +1779,13 @@ function defineChecks() {
     const after = await sound(page, (q) => q.rmsDb > -40, 'a key after STOP still sounds');
     await page.keyboard.up('KeyA');
     await page.locator('[data-osc="nav.synth"]').click();
+    await until(async () => (await counts(page)).runtimeNodes > 0 && (await dbg(page)).armed
+      && (await sw.getAttribute('aria-checked')) === 'true',
+    { ms: 10000, what: 'leaving the Studio keeps it armed: the switch checked (U133)' });
+    await sw.click();
     await until(async () => (await counts(page)).runtimeNodes === 0 && !(await dbg(page)).armed
       && (await sw.getAttribute('aria-checked')) === 'false',
-    { ms: 10000, what: 'leaving the Studio disarms it: census 0, the switch unchecked' });
+    { ms: 10000, what: 'the switch disarms it: census 0, the switch unchecked' });
     return { ok: role === 'switch', role, on: on.rmsDb, after: after.rmsDb };
   });
 
@@ -2119,9 +2150,11 @@ function defineChecks() {
     await page.keyboard.press('Escape');
     const q = await silent(page, 'Escape releases it');
     await page.keyboard.up('KeyA');
+    // Escape is stop-all: it disarmed the Synth, so the Studio finds nothing running (leaving
+    // itself no longer disarms, U133, the owner's Q114 'Sound survives').
     await page.locator('[data-osc="nav.studio"]').click();
     await until(async () => (await counts(page)).runtimeNodes === 0,
-      { ms: 10000, what: 'leaving the Synth disarms: runtime census 0' });
+      { ms: 10000, what: 'after Escape nothing runs in the Studio: runtime census 0' });
     return { ok: !(await dbg(page)).armed, off: q.rmsDb, counts: await counts(page) };
   });
 
@@ -3007,6 +3040,79 @@ function defineChecks() {
     return { ok: m.scroll <= m.inner && m.small.length === 0 && m.tiny.length === 0
       && m.kb.bottom <= m.kb.h
       && m.kb.top > 0, ...m, bay, back, reach, chip, rmsDb: p.rmsDb };
+  });
+
+  // The Synth tablist (axe on #m=synth, 2026-11-24): each tab sat in an <li> under
+  // ul[role=tablist] (aria-required-parent x4, aria-required-children, listitem x4), every tab
+  // was a Tab stop and the arrows did nothing. The tabs are now the shared roving tablist of
+  // ui/app.js rovingKeydown (synthTabBind, as tab()): one Tab stop, the arrows select and wrap.
+  def('s-tabs', async ({ page }) => {
+    const ids = await panelTabs();
+    const n = ids.length;
+    const state = () => page.evaluate(() => {
+      const tabs = [...document.querySelectorAll('[role="tablist"] > [data-osc="synth.tab"]')];
+      const host = document.querySelector('[data-osc="synth.panel"]');
+      return { tabs: tabs.map((b) => b.dataset.value),
+        stops: tabs.filter((b) => b.tabIndex === 0).map((b) => b.dataset.value),
+        selected: tabs.filter((b) => b.getAttribute('aria-selected') === 'true')
+          .map((b) => b.dataset.value),
+        controls: [...new Set(tabs.map((b) => b.getAttribute('aria-controls')))],
+        focus: document.activeElement && document.activeElement.dataset
+          ? document.activeElement.dataset.value || null : null,
+        tab: window.OSCILLA.app.synthDebug().tab, link: window.OSCILLA.app.synthDebug().link,
+        hash: window.location.hash,
+        labelledBy: host.getAttribute('aria-labelledby'), hostId: host.id,
+        hostRole: host.getAttribute('role'),
+        engineChips: host.querySelectorAll('[data-engine]').length };
+    });
+    // The Synth's address is its link (Copy link writes it, docs/synth.md; the page's own
+    // location keeps #m=synth while the tabs change, as it did for a click before this check):
+    // it names the selected tab as yt= (Panel, the default, as no yt).
+    const yt = (h) => new URLSearchParams(h.replace(/^#/, '')).get('yt');
+    /** Tab `id` is selected, focused, the one Tab stop, in the Synth's link and shown. */
+    const isOn = (s, id) => s.tab === id && s.focus === id && s.selected.join() === id
+      && s.stops.join() === id && yt(s.link) === (id === 'panel' ? null : id)
+      && s.labelledBy === `osc-synth-tab-${id}`
+      && (id === 'engines' ? s.engineChips > 0 : id === 'panel' ? s.engineChips === 0 : true);
+    const log = [];
+    const press = async (key, id) => {
+      await page.keyboard.press(key);
+      let last = null;
+      await until(async () => {
+        last = await state();
+        return isOn(last, id);
+      }, { ms: 10000, what: `${key} selects the ${id} tab (focus, aria-selected, one Tab stop, `
+        + `yt= in the Synth's link, the panel)` }).catch((e) => {
+        throw new Error(`${e.message}; read ${JSON.stringify(last)}`);
+      });
+      log.push(`${key}->${id}`);
+    };
+
+    const axeRules = ['aria-required-parent', 'aria-required-children', 'listitem'];
+    await page.addScriptTag({ content: fs.readFileSync(require.resolve('axe-core/axe.min.js'),
+      'utf8') });
+    const axe = await page.evaluate(async (rules) => {
+      const r = await window.axe.run(document, { runOnly: { type: 'rule', values: rules } });
+      return { violations: r.violations.map((v) => `${v.id}: ${v.nodes.length}`),
+        passes: r.passes.map((v) => `${v.id}: ${v.nodes.length}`) };
+    }, axeRules);
+    const s0 = await state();
+    if (s0.tabs.join() !== ids.join() || axe.violations.length) {
+      return { ok: false, detail: 'the panel\'s tabs are the children of the tablist and axe '
+        + 'finds none of its three rules', ids, s0, axe };
+    }
+    if (s0.stops.join() !== 'panel' || s0.controls.join() !== s0.hostId
+      || s0.hostRole !== 'tabpanel') {
+      return { ok: false, detail: 'one Tab stop (Panel) and every tab controls the tabpanel', s0 };
+    }
+    await page.locator('#osc-synth-tab-panel').focus();
+    await press('ArrowRight', ids[1]);
+    await press('ArrowLeft', ids[0]);
+    await press('ArrowLeft', ids[n - 1]); // wraps to the last
+    await press('ArrowRight', ids[0]); // and back round to the first
+    await press('End', ids[n - 1]);
+    await press('Home', ids[0]);
+    return { ok: true, ids, log, axe };
   });
 
   // V636's xl negative case, rendered at 1536 x 1024 (not read from class names): both faces
