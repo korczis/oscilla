@@ -465,10 +465,18 @@ async function sameActionJourney(browser, engine, device, phone, check) {
         lift: () => page.keyboard.up('Space'),
       },
     };
+    // The control's name follows the page's status, which the context's statechange event sets
+    // ('Čeká na zvuk' while SUSPENDED). WebKit on linux CI reads ctx.state 'running' a task
+    // before that event: the name read in the poll that first saw the sources was still the
+    // waiting one. It is read once the page reports the sound too; a status that never leaves
+    // SUSPENDED still fails here, by this poll's deadline.
+    const heard = async () => ({ ...(await sounding(page)),
+      status: await page.evaluate(() => window.OSCILLA.app.status) });
+    const named = (v) => isSounding(v) && v.status !== 'SUSPENDED';
     const seen = {};
     for (const [way, w] of Object.entries(ways)) {
       await w.press();
-      const on = await pollFor(() => sounding(page), isSounding, `iphone: hold by ${way} sounds`);
+      const on = await pollFor(heard, named, `iphone: hold by ${way} sounds`);
       const said = await announced(page, '#osc-hold-play');
       await w.lift();
       const off = await pollFor(() => sounding(page), idle, `iphone: hold by ${way} stops`,
