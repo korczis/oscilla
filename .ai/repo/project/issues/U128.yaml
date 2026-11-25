@@ -1,0 +1,21 @@
+id: U128
+milestone: M124
+serves:
+  - "one-instrument#registry-owns-composition"
+title: "A DOM geometry census of every panel and in-panel link per place, viewport and engine"
+slug: "dom-geometry-census"
+priority: p1
+profile: implementation
+objective: "The membership refactor (U129) needs an oracle; live canvases never diff to zero. The census records computed display and rect of every data-osc-panel and in-panel link for every workspace at 1536x1024, 1280x800, 1024x768, 768x1024, 390x844 and 320x740 in three engines, as a committed baseline a later change must match or update with a reason."
+why: "Product reconstruction audit of 2026-11-24 (docs/reconstruction/), target architecture 07, owner decision Q114."
+scope:
+  - "tests/browser/"
+  - "tests/unit/"
+depends_on: []
+acceptance_criteria:
+  - "The census suite runs through tests/browser/lib/suite.cjs and fails when a panel's display or rect changes beyond a stated tolerance without a baseline update."
+validation:
+  - "npm run test:browser"
+evidence_required:
+  - "verified"
+created_at: 2026-11-24

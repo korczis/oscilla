@@ -28,7 +28,7 @@ import { scopeWindow } from './p5-views.js';
 import { OUTPUT_OWNER_NAMES, outputOwnerOf } from '../visualization/output-owner.js';
 import { OSCILLA_VERSION } from './version.js';
 import { formatHz } from '../charts/axes.js';
-import { rovingKeydown } from './app.js';
+import { TABS_PART } from './tabs-part.js';
 import { LABS_INCLUDED_TEXT, SEQUENCE_NOT_INCLUDED_TEXT, labSectionsText } from './lab-state.js';
 import {
   LAB_HASH_KEY, LAB_PARAM_MAX, decodeLabParam, encodeLabParam,
@@ -87,7 +87,7 @@ export function createWorkbench(svc) {
   return {
     OSCILLA_VERSION,
     SWEEP_FORM,
-    rovingKeydown,
+    ...TABS_PART,
     timeWindowMs: 5,
     announceText: '',
     // The playback bus's one playing state (C051, core/output-bus.js publishes it here in the
@@ -137,9 +137,9 @@ export function createWorkbench(svc) {
       return Number.isFinite(db) ? `${db.toFixed(1)} dB` : '-∞ dB';
     },
     get gainFill() { return `${this.gainPct}%`; },
-    // The instrument's own Play (ADR 0050): the status Play button triggers, latches or stops the
-    // instrument and the Pattern Sequencer, never the Studio, so it reflects only them.
-    get isSounding() { return this.playing || this.seqPlaying; },
+    // The status Play (ADR 0050), never Studio PLAY's: held notes sound on in every place
+    // (U133, Q114), so it stops them too.
+    get isSounding() { return this.playing || this.seqPlaying || this.notesSounding; },
     /**
      * Whether the status bar's Play shows at desktop width too (C030): in the instrument
      * workspaces that lay out no Hold or Trigger (ui/shortcuts.js STATUS_PLAY_WORKSPACES).
