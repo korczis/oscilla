@@ -25,7 +25,7 @@
     }
   },
   "caps": {
-    "src/index.html": 317000,
+    "src/index.html": 322000,
     "src/js/audio/audio-engine.js": 73000,
     "src/js/core/instrument.js": 64000,
     "src/js/experiments/validate.js": 64000,
@@ -288,6 +288,12 @@
       "cap": 317000,
       "pr": 625,
       "reason": "U120 (oscilla-c3's option B, 2026-11-18): the header brand's description 'Otevřít Playground' as a hidden span outside the lang='en' link, read through aria-describedby, for its English title; measured 315962 -> 316037 B over main f282bd7c, next 1 000 above"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 322000,
+      "pr": 647,
+      "reason": "Sonda (U126): the status bar's Sonda button and the observed-lens sheet's markup take src/index.html past 317 000; its class lists are the Flowbite Pro drawer's, the logic lives in src/js/ui/lens.js"
     }
   ]
 }
