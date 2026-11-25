@@ -11,7 +11,7 @@ export default [
       sites: ['src/js/labs/mic-analyzer.js'] },
     kind: 'switch',
     label: 'Zmrazit, Průměr, Držet špičky',
-    docs: 'Holds, averages or keeps the peaks of the microphone spectrum on screen.',
+    docs: 'Zmrazí spektrum mikrofonu na obrazovce, zprůměruje ho, nebo podrží jeho špičky.',
     state: 'ui.micCompare',
   }),
 ];
