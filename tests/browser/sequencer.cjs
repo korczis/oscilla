@@ -44,6 +44,10 @@
 //   (h) seq-loop-seams (C055): a looped sequence in the built app, woken by the engine's one
 //       transport clock, plays three passes back to back, each starting where the one before
 //       ended within one sample at the context's own rate.
+//   (i) seq-keys-over-sequence (U139): in the built app a looping sequence plays on in the
+//       Playground while a held on-screen key (a pointer) and the computer key A sound over it
+//       (the engine analyser at the note's fundamental); the release leaves the sequence
+//       playing and named in the status bar; Escape stops the sequence and the note.
 // Exit code 0 only when every check passes in every browser.
 'use strict';
 
@@ -984,6 +988,134 @@ async function checkLoopSeams(engine, browser) {
   }
 }
 
+// ---------------------------------------------------------------- keys over a sequence (U139)
+
+/**
+ * (i) seq-keys-over-sequence (U139, journey J8; the owner's Q114): in the built app (file://,
+ * 1536x1024) a looping 3 kHz sine sequence started with #osc-seq-play plays on in the
+ * Playground; a pointer held on the on-screen C4 there sounds the note (the engine analyser's
+ * level at the note's fundamental, from the page's own A4 and sample rate, rises by more than
+ * 30 dB) while the sequence keeps playing (the editor plays, app.seqPlaying, the output's owner
+ * and the status bar name the sequence, its 3 kHz is still heard, no refusal is said); the
+ * pointer up takes the note away and leaves the sequence untouched; the computer key A (C4)
+ * held over it sounds too, and Escape stops both: the sequence, the note and the keys' run.
+ * Every wait is a condition poll with a named deadline.
+ */
+async function checkKeysOverSequence(engine, browser) {
+  const name = 'seq-keys-over-sequence';
+  const SEQ_HZ = 3000;
+  const RISE_DB = 30; // the note's fundamental over the level there before the key
+  const GONE_DB = 30; // and its fall once released
+  const context = await browser.newContext({ viewport: { width: 1536, height: 1024 } });
+  const errors = [];
+  try {
+    await context.addInitScript(() => {
+      try {
+        sessionStorage.setItem('oscilla.safetyNoticeCollapsed', '1');
+      } catch (e) {
+        /* storage blocked: the notice stays, the keys are still reachable */
+      }
+    });
+    const page = await context.newPage();
+    page.on('pageerror', (e) => errors.push(String(e)));
+    await page.goto(pathToFileURL(DIST).href, { waitUntil: 'load' });
+    await until(() => page.evaluate(() => document.documentElement.dataset.ready === 'true'),
+      { ms: 30000, what: `${name}: the app is ready` });
+    await page.mouse.click(5, 5); // the first gesture creates the AudioContext
+    // The level (dBFS) of the engine analyser around `hz` (+-2 bins), and the page's state.
+    const read = () => page.evaluate((seqHz) => {
+      const o = window.OSCILLA;
+      const an = o.engine.analyser;
+      const sr = o.engine.ctx ? o.engine.ctx.sampleRate : 0;
+      const noteHz = (o.app.a4 > 0 ? o.app.a4 : 440) * 2 ** ((60 - 69) / 12); // C4
+      const level = (hz) => {
+        if (!an || !sr) return -Infinity;
+        const d = new Float32Array(an.frequencyBinCount);
+        an.getFloatFrequencyData(d);
+        const k = Math.round(hz / (sr / an.fftSize));
+        let m = -Infinity;
+        for (let i = Math.max(0, k - 2); i <= Math.min(d.length - 1, k + 2); i++) {
+          m = Math.max(m, d[i]);
+        }
+        return m;
+      };
+      const t = o.studio && o.studio.transport;
+      return { note: level(noteHz), seq: level(seqHz), noteHz, sr,
+        playing: o.labs.sequencer.editor.playing, seqPlaying: o.app.seqPlaying,
+        owner: o.app.playback ? o.app.playback.owner : null, held: o.app.kbdHeld,
+        instrument: !!(t && t.playing), workspace: o.app.workspace,
+        status: document.querySelector('[data-osc="status.frequency"]').textContent.trim(),
+        refusals: [...document.querySelectorAll('[data-osc="alerts"] .osc-toast')]
+          .map((el) => el.textContent.replace(/\s+/g, ' ').trim())
+          .filter((x) => /nehrají/.test(x)) };
+    }, SEQ_HZ);
+    const sequenceOn = (v) => v.playing && v.seqPlaying && v.owner === 'sequencer'
+      && v.status === 'sekvence' && v.seq > -60 && v.refusals.length === 0;
+
+    await openWorkspace(page, 'sequencer', name);
+    await page.evaluate((hz) => {
+      const lab = window.OSCILLA.labs.sequencer;
+      lab.editor.load({ tempoBpm: 120, loop: true, waveform: 'sine',
+        blocks: [{ id: 'k', type: 'tone', durationMs: 1000, params: { freq: hz } }] });
+      lab.render();
+    }, SEQ_HZ);
+    await page.click('#osc-seq-play');
+    const seq = await settle(read, sequenceOn, 6000, `${name}: the sequence sounds`);
+    await openWorkspace(page, 'playground', name); // Q114: the sequence plays on there
+    const base = await settle(read, (v) => sequenceOn(v) && v.held === '', 6000,
+      `${name}: the sequence plays on in the Playground`);
+    check(engine, `${name}: the looping sequence plays on in the Playground, no key held`,
+      seq.ok && base.ok, JSON.stringify(base.value));
+
+    // A pointer held on the on-screen C4 (3 octaves from C3, 2 from C4 on a narrow canvas;
+    // white keys only, near the bottom where no black key covers it).
+    const canvas = page.locator('[data-osc="keyboard.keys"]');
+    await canvas.scrollIntoViewIfNeeded();
+    const box = await canvas.boundingBox();
+    const at = await page.evaluate((w) => {
+      const octaves = w < 560 ? 2 : 3;
+      const first = octaves === 3 ? 48 : 60;
+      const whites = [];
+      for (let n = first; n <= first + 12 * octaves; n++) {
+        if (![1, 3, 6, 8, 10].includes(n % 12)) whites.push(n);
+      }
+      return { x: (whites.indexOf(60) + 0.5) * (w / whites.length), y: 120 };
+    }, box.width);
+    const floor = base.value.note;
+    const sounding = (v) => v.held === 'C4' && v.note > floor + RISE_DB && v.note > -70;
+    await page.mouse.move(box.x + at.x, box.y + at.y);
+    await page.mouse.down();
+    const held = await settle(read, (v) => sounding(v) && sequenceOn(v), 6000,
+      `${name}: the held key sounds over the sequence`);
+    check(engine, `${name}: a held on-screen key sounds (its fundamental rises > ${RISE_DB} dB) `
+      + 'while the sequence plays on, owns the output and is what the status bar names, with '
+      + 'no refusal said', held.ok, JSON.stringify({ floor, ...held.value }));
+    await page.mouse.up();
+    const peak = held.value.note;
+    const released = await settle(read, (v) => v.held === '' && v.note < peak - GONE_DB
+      && sequenceOn(v), 6000, `${name}: the released key is gone, the sequence plays on`);
+    check(engine, `${name}: releasing the key takes the note away (> ${GONE_DB} dB) and leaves `
+      + 'the sequence playing', released.ok, JSON.stringify({ peak, ...released.value }));
+
+    // The computer keyboard's A (C4) over the sequence, then Escape stops everything.
+    await page.locator('[data-osc="keyboard.readout"]').click(); // the focus leaves the buttons
+    await page.keyboard.down('KeyA');
+    const typed = await settle(read, (v) => sounding(v) && sequenceOn(v), 6000,
+      `${name}: the computer key A sounds over the sequence`);
+    await page.keyboard.press('Escape');
+    const stopped = await settle(read, (v) => !v.playing && !v.seqPlaying && v.owner === null
+      && v.held === '' && !v.instrument && v.note < typed.value.note - GONE_DB
+      && v.seq < seq.value.seq - GONE_DB, 6000, `${name}: Escape stops the sequence and the note`);
+    await page.keyboard.up('KeyA');
+    check(engine, `${name}: the computer key A sounds over the sequence too, and Escape stops `
+      + 'both: the sequence, the note and the keys\' run', typed.ok && stopped.ok,
+    JSON.stringify({ typed: typed.value, stopped: stopped.value }));
+    check(engine, `${name}: no page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
+  } finally {
+    await context.close();
+  }
+}
+
 async function runEngine(engine, bundle) {
   console.log(`\n${engine}`);
   const launch = {
@@ -1208,6 +1340,11 @@ async function runEngine(engine, bundle) {
       await checkLoopSeams(engine, browser);
     } catch (e) {
       check(engine, 'seq-loop-seams', false, String(e && e.message ? e.message : e));
+    }
+    try {
+      await checkKeysOverSequence(engine, browser);
+    } catch (e) {
+      check(engine, 'seq-keys-over-sequence', false, String(e && e.message ? e.message : e));
     }
   } finally {
     await browser.close();

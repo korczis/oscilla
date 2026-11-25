@@ -124,16 +124,17 @@ change.
   another window has it; ADR 0062), when the page is hidden, on Escape, when a measurement or the
   Studio takes the output, and when the sequencer starts.
 - **The output.** A note and a Playground tone never sound together: whichever starts fades the
-  other out first. A note and the sequencer do not sound together either: starting a sequence
-  stops the notes, which fade within 8 ms as the sequence begins, and while it plays notes are
-  refused. While a measurement runs, a level reference is being captured from the microphone
+  other out first. Starting a sequence stops the notes, which fade within 8 ms as the sequence
+  begins; once it plays, notes sound over it (U139: playing over a running pattern is the
+  instrument's basic case). A held note leaves the sequence playing, its release leaves the
+  sequence untouched, the status bar goes on naming the sequence, and Escape stops both.
+  While a measurement runs, a level reference is being captured from the microphone
   or the Studio is playing, notes are refused too (a loopback reference capture records the
   output itself, so there notes play, as the Playground tone does). These rules, and the
   sentences below, are rows of the one output-owner table (`src/js/ui/output-owner.js`, plan
   issue C036). OSCILLA says so once per run of refused notes, with one of these sentences:
   - "MIDI noty nehrají, dokud výstup patří měření: nejdřív ho zastavte (Esc)."
   - "MIDI noty nehrají, dokud se z mikrofonu snímá referenční úroveň."
-  - "MIDI noty nehrají, dokud hraje sekvencer: nejdřív ho zastavte (Esc)."
   - "MIDI noty nehrají, dokud hraje Studio: nejdřív ho zastavte."
 
 `tests/unit/midi/notes.test.mjs` proves this on a fake audio context; `tests/browser/midi.cjs`
