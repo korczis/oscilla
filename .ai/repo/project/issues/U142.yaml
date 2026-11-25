@@ -1,0 +1,22 @@
+id: U142
+milestone: M124
+serves:
+  - "one-instrument#see-what-sounds"
+title: "The XY pad keeps its note across a place change, as the keys do (Q114)"
+slug: "xy-pad-note-survives-place-change"
+priority: p2
+profile: implementation
+objective: "After U133 a held key sounds on across places, but the XY pad still ends its note when its page is left (tests/browser/xy-pad.cjs x-release-leave). Q114 chose \"Sound survives\": the pad follows the same rule; its pointer release (captured pointerup) still ends it."
+why: "Coordinator reviews of PRs #651 (U133) and #647 (U126), 2026-11-24."
+scope:
+  - "src/js/ui/kinds/xy-pad.js"
+  - "src/js/synth/"
+  - "tests/"
+depends_on: []
+acceptance_criteria:
+  - "A browser check in three engines: a held XY pad note keeps sounding after switching place (engine analyser) and ends on the pointer release; x-release-leave is updated citing Q114."
+validation:
+  - "node tests/browser/xy-pad.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-11-24

@@ -1,0 +1,21 @@
+id: E080
+milestone: M046
+serves:
+  - "engineering-integrity#browser-suites-harnessed"
+title: "The Synth knob pointer-drag checks s-feel and s-mg time out in CI's WebKit leg"
+slug: "synth-knob-drag-checks-webkit-ci"
+priority: p2
+profile: implementation
+objective: "tests/browser/synth.cjs s-feel ('the notch lands (the knob moves) before the drag') and s-mg ('a pointer drag turns Morph up from 0') failed on CI Browser leg 1 (webkit) for PR #645 (run 45481221172) and PR #647 (run 45532779383), neither of which touches the knobs, with the Synth suite taking about 400 s against about 65 s locally; a re-run of #645's job passed. Find why a pointer drag on a knob does not register within 5 s on the slow WebKit runner (the wait's deadline, the drag's event sequence, or a missed frame), and fix the cause, not the deadline alone (rule project.bounded-test-timing)."
+why: "Two red WebKit legs on unrelated reconstruction PRs on 2026-11-24/25, each cleared only by a re-run (coordinator oscilla-60)."
+scope:
+  - "tests/browser/synth.cjs"
+  - "src/js/ui/synth/knob.js"
+depends_on: []
+acceptance_criteria:
+  - "s-feel and s-mg pass in 20 consecutive WebKit runs under the CI load emulation the repo uses (or on CI), and the cause is named in the fix."
+validation:
+  - "node tests/browser/synth.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-11-25

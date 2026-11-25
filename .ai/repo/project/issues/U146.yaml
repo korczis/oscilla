@@ -1,0 +1,26 @@
+id: U146
+milestone: M124
+serves:
+  - "one-instrument#see-what-sounds"
+title: "Sonda never removes a visible view, never covers the keys, and Escape closes it first"
+slug: "sonda-adds-never-removes"
+priority: p0
+profile: implementation
+objective: "The interim review (docs/reconstruction/10-interim-review.md, problem 4 and regressions) found that Sonda, opened in a place that already shows the analysis panel (Playground, Analyzátor, Syntéza), moves its chart into the sheet and leaves a placeholder, and while idle the user sees no view at all; the desktop sheet covers about 420 px of content without reflow; on a phone the sheet covers the keys, so one cannot play and observe at once, and it is two taps away; after a navigation click the first Escape collapses a sidebar group instead of closing the open sheet."
+why: "Independent interim product review of 2026-11-25 (docs/reconstruction/10-interim-review.md)."
+scope:
+  - "src/js/ui/lens.js"
+  - "src/index.html"
+  - "src/js/ui/"
+  - "tests/"
+depends_on: []
+acceptance_criteria:
+  - "In a place whose own analysis panel is shown, opening Sonda leaves that panel's chart where it is (it brings the panel into view, or the place offers no sheet), checked in a browser in three engines."
+  - "On a phone the open sheet ends above the keys and every white key stays a 44 px target; the keys play while the sheet shows the spectrum (engine analyser)."
+  - "At 1536x1024 the open sheet reflows the place content (no control under the sheet), measured with elementFromPoint."
+  - "With the sheet open, Escape closes it first wherever focus is (the sidebar included), and the next Escape keeps its meaning."
+validation:
+  - "node tests/browser/journeys.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-11-25

@@ -45,4 +45,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-28
-updated_at: 2026-10-28
+updated_at: 2026-11-25T01:50:13Z
+started_at: 2026-11-25T01:49:12Z
+started_event: sha256:555b9b676e7c6ef807366014b7fea29b9d2f62cd4444efb113a13480dabd6640
+verified_at: 2026-11-25T01:49:44Z
+verified_event: sha256:52017641153e8b07f7290be63e91870ecf8b981caa817011e38c3e60e0df0f7b
+completed_at: 2026-11-25T01:50:13Z
+completed_event: sha256:e692f699981b59a8e387690e008aef4574b079e1cc63d2de3e50d7722c154af1
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "Main checks on origin/main d7ae25d8 (run 45516970667): browser gate chromium, firefox and webkit (npm run test:browser, which runs tests/browser/ui-flowbite-pro.cjs, navigation.cjs and layout.cjs), unit, build and artifact rules (npm test, incl. tests/unit/ui-flowbite-pro.test.mjs)"
+    result: "All green. The Pro admin shell F002 describes is on main since #386 (bc4b1545) and #601 (d0c5d871): the fixed navbar with logo, workspace search, theme toggle and help; the sidebar with the collapsible Analýza and Syntéza groups, collapsible to icons and persisted (oscilla.v2.sidebar), a backdrop drawer on phones, written in OSCILLA's own Alpine code (src/js/ui/shell.js); the page header with breadcrumb and Related links; the deep-link inventory tests/browser/ui-flowbite-pro.cjs passing in three engines from file:// and the sub-path. Recorded by the reconstruction coordinator (oscilla-60, session 40c3f589) to unblock U129; its successor shell is ADR 0089 (M124)."
+    artifact: "https://github.com/korczis/oscilla/actions/runs/45516970667"
+    commit: d7ae25d8dcf45181196d6196e7852d0456d8bf69
+    recorded_at: 2026-11-25T01:50:03Z

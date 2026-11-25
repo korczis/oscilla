@@ -8,7 +8,7 @@ experience reconstruction".
 
 **Base.** `main` at `c3b15610`.
 
-**Plan.** Intent `one-instrument`, milestone M124, issues U123 to U140, owner decision Q114 and
+**Plan.** Intent `one-instrument`, milestone M124, issues U123 to U144, owner decision Q114 and
 ADR 0089.
 
 These are developer documents, so they are written in English (rule `project.czech-prose`).
@@ -23,6 +23,9 @@ The owner-facing summary is a Czech page published separately.
 | [05 Accessibility audit](05-accessibility-audit.md) | axe and keyboard audit, the accessibility model |
 | [07 Target architecture](07-target-architecture.md) | competing architectures, target architecture, visual system, desktop and phone composition, migration strategy |
 | [08 Owner decision Q114](08-owner-decision-q114.md) | the owner's answers, verbatim |
+| [09 U131/U135 design](09-u131-u135-design.md) | title bar, instrument strip, phone keys: the approved design (Q115) |
+| [10 Interim review](10-interim-review.md) | independent product review of main + Sonda, 2026-11-25 |
+| [11 U132 design](11-u132-design.md) | places, rail, phone bottom bar, route aliases: the approved design (Q116) |
 | [evidence/](evidence/) | layout metrics for 3 engines × 6 viewports × 13 workspaces |
 
 ## Method
@@ -63,3 +66,10 @@ Measure with `majordomus plan status`; this table is not the record.
 | Reload restores work | U138 | Q114 |
 | Keys over a running sequence | U139 | — |
 | No silent document rewrite by a key | U140 | — |
+| Synth leave code without callers | U141 | guarded verdict |
+| XY pad note survives a place change | U142 | — |
+| Keyboard help names the sounding octave | U143 | — |
+| A place change announces only a change | U144 | — |
+| UI catalogue speaks Czech | U145 | — |
+| Sonda adds, never removes; Escape closes it first | U146 | #647 |
+| Studio from scratch | U147 | guarded verdict |
