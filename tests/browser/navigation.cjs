@@ -444,9 +444,14 @@ function defineChecks() {
       noteHz, peakHz: inSynth.peak.hz, bin: inSynth.peak.bin, octave };
     await forget();
     await nav('analyzer');
+    // The same note in the Analyzer: its pitch class, as synthPitch reads it. Since U140 the panel
+    // goes in at this visit to the Synth, just before the key, and the voice's filter envelope may
+    // make the second harmonic the analyser's peak at the first reading and the fundamental later
+    // (webkit, 262 then 131 Hz), so the octave of the peak is not the note's.
+    const sameNote = (hz) => Math.abs(hz - noteHz * 2 ** Math.round(Math.log2(hz / noteHz)))
+      <= inSynth.peak.bin;
     res.synthKeeps = await settle((s) => s.ws === 'analyzer' && s.armed && s.kbd
-      && s.studioHeld > 0 && s.peak.db > SOUNDING_DB
-      && Math.abs(s.peak.hz - inSynth.peak.hz) <= s.peak.bin
+      && s.studioHeld > 0 && s.peak.db > SOUNDING_DB && sameNote(s.peak.hz)
       && s.said.includes(sentence('synth')) && s.said.includes(sentence('notes')),
     'in the Analyzer the armed Synth\'s held note sounds on: the analyser reads its peak and the '
       + 'status bar says why');
