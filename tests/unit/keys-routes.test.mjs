@@ -13,12 +13,14 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const mod = await import('../../src/js/midi/routes.js').catch(() => ({}));
 
-test('one table: each workspace names its sink, its first arm state and its leave', () => {
+// U133 (Q114, 'Sound survives'): a workspace has no leave of its own any more; the keys' run
+// sounds on across places, so the rows name no leave method.
+test('one table: each workspace names its sink and its first arm state', () => {
   assert.equal(typeof mod.routeOf, 'function');
   assert.deepEqual(Object.keys(mod.KEY_ROUTES).sort(), ['playground', 'studio', 'synth']);
   // U100: the Synth keeps its chips and three rows below the page header on a short phone.
   assert.deepEqual(JSON.parse(JSON.stringify(mod.KEY_ROUTES.synth)),
-    { plays: 'synthSink', armed: true, leave: null, editors: null, yieldsTo: 'xy-pad',
+    { plays: 'synthSink', armed: true, editors: null, yieldsTo: 'xy-pad',
       keepsRoom: { toolbar: '[data-osc="page.header"]', editorMin: mod.SYNTH_CONTENT_MIN_PX,
         stackedBelow: 0, keptBy: '[data-osc="synth.panel"][data-keeps-dock]' } });
   assert.equal(mod.SYNTH_CONTENT_MIN_PX, 192);
@@ -37,7 +39,7 @@ test('one table: each workspace names its sink, its first arm state and its leav
   assert.equal(mod.ROOM_EVENT, 'osc:room');
   // The Studio's graph and timeline keep their letter shortcuts while they have the focus.
   assert.deepEqual(JSON.parse(JSON.stringify(mod.KEY_ROUTES.studio)),
-    { plays: 'keysInstrument', armed: true, leave: 'leave',
+    { plays: 'keysInstrument', armed: true,
       editors: '[data-osc="studio.graph.viewport"], [data-osc="studio.timeline"]',
       yieldsTo: null,
       keepsRoom: { toolbar: '[data-osc="studio.bar"]', editorMin: mod.STUDIO_EDITOR_MIN_PX,
@@ -46,9 +48,9 @@ test('one table: each workspace names its sink, its first arm state and its leav
   // unlisted workspace play the Studio document's note target (midi/ui.js centralSink falls back
   // to the Synth panel), never a voice of their own; an unlisted page starts with the dock folded.
   assert.deepEqual(JSON.parse(JSON.stringify(mod.KEY_ROUTES.playground)),
-    { plays: 'keysInstrument', armed: true, leave: 'leave', editors: null, yieldsTo: null });
+    { plays: 'keysInstrument', armed: true, editors: null, yieldsTo: null });
   assert.deepEqual(JSON.parse(JSON.stringify(mod.DEFAULT_ROUTE)),
-    { plays: 'keysInstrument', armed: true, leave: 'leave', editors: null, yieldsTo: null,
+    { plays: 'keysInstrument', armed: true, editors: null, yieldsTo: null,
       folded: true });
   assert.equal(mod.routeOf('measure'), mod.DEFAULT_ROUTE, 'an unlisted workspace');
   assert.equal(mod.dockState({ route: mod.DEFAULT_ROUTE }), 'collapsed');
@@ -78,7 +80,8 @@ test('no other module keeps its own workspace -> sink or arm map', () => {
   assert.deepEqual(bad, [], 'a second owner of the routes');
   const ui = readFileSync(path.join(ROOT, 'src/js/midi/ui.js'), 'utf8');
   assert.match(ui, /routeOf\(cmp\.workspace\)\.plays/, 'the note route reads the table');
-  assert.match(ui, /routeOf\(old\)/, 'leaving a workspace reads the table');
+  // U133 (Q114 'Sound survives'): leaving a workspace runs no key route's leave any more.
+  assert.doesNotMatch(ui, /routeOf\(old\)|midiRouteLeave/, 'no leave of the keys\' own');
   assert.match(readFileSync(path.join(ROOT, 'src/js/midi/keyboard-ui.js'), 'utf8'),
     /kbdArmed: armedDefaults\(\)/, 'the arm switch starts from the table');
 });

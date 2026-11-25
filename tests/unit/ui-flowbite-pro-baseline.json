@@ -74,6 +74,7 @@
       "shell:main"
     ],
     "migrated": [
+      "card#osc-lens",
       "page#osc-view-about",
       "page#osc-view-experiments",
       "page#osc-view-learn",

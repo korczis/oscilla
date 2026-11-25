@@ -62,8 +62,9 @@
 //   x-release-stop   (K167) a held pad is released by the Studio transport's Stop: silent
 //              (below -70 dB rel), runtime census 0, no held note, the pad's gate closed, and
 //              the next press sounds again
-//   x-release-leave  (K167) a held pad is released by leaving the Synth workspace (the
-//              workspace switch itself, no focus move): silent, census 0, gate closed
+//   x-release-leave  (K167, U133) a held pad is released by leaving the Synth workspace (the
+//              workspace switch itself, no focus move): silent, gate closed, nothing held; the
+//              Synth stays armed (Q114) and Escape then brings the runtime census to 0
 //   x-release-owner  (K167) a held pad is released when another workspace's player (the
 //              Pattern Sequencer) takes the audio owner: gate closed, no held note, the
 //              transport stopped; once that player stops, silent and census 0
@@ -733,12 +734,26 @@ function defineChecks() {
     return { ok: true, after };
   });
 
+  // Under the owner's Q114 (U133, 'Sound survives') the Synth stays armed across places, so its
+  // runtime outlives the switch; the pad's own note is still released by leaving (U142 may let it
+  // sound on too). Escape then stops everything, as before.
   def('x-release-leave', async ({ page }) => {
     await holdEnter(page, 'leave');
     await page.evaluate(() => window.OSCILLA.app.setWorkspace('studio'));
-    const after = await releasedAll(page, 'leaving the Synth releases the held pad');
+    let c = null;
+    await until(async () => {
+      c = await census(page);
+      // The armed Synth's transport runs on (playing, its runtime alive) but sounds nothing.
+      return c.pressed === 'false' && c.held === 0;
+    }, { ms: SOUND_MS, what: 'leaving the Synth releases the held pad: gate closed, nothing held' })
+      .catch((e) => { throw new Error(`${e.message}; census ${JSON.stringify(c)}`); });
+    const q = await silent(page, 'leaving the Synth releases the held pad: silent');
+    const armed = await page.evaluate(() => !!window.OSCILLA.app.synth.armed);
     await page.keyboard.up('Enter');
-    return { ok: true, after };
+    await page.keyboard.press('Escape');
+    const after = await releasedAll(page, 'Escape after leaving stops the armed Synth');
+    return { ok: armed, detail: armed ? undefined : 'the Synth stays armed after leaving (Q114)',
+      left: { ...c, rmsDb: Number(q.rmsDb.toFixed(1)) }, after };
   });
 
   def('x-release-owner', async ({ page }) => {

@@ -25,11 +25,11 @@
     }
   },
   "caps": {
-    "src/index.html": 318000,
+    "src/index.html": 323000,
     "src/js/audio/audio-engine.js": 73000,
     "src/js/core/instrument.js": 64000,
     "src/js/experiments/validate.js": 64000,
-    "src/js/main.js": 52000,
+    "src/js/main.js": 53000,
     "src/js/measurement/capture.js": 55000,
     "src/js/measurement/engine.js": 79000,
     "src/js/measurement/quality.js": 73000,
@@ -292,6 +292,12 @@
     },
     {
       "file": "src/index.html",
+      "cap": 322000,
+      "pr": 647,
+      "reason": "Sonda (U126): the status bar's Sonda button and the observed-lens sheet's markup take src/index.html past 317 000; its class lists are the Flowbite Pro drawer's, the logic lives in src/js/ui/lens.js"
+    },
+    {
+      "file": "src/index.html",
       "cap": 318000,
       "pr": 657,
       "reason": "U138 (journey J9, owner decision Q114): the reload's recovery notice, a dismissible Pro info alert with role=status, Začít znovu and Zavřít, bound to ui/session-draft.js; measured 316537 -> 317171 B over main 35f002cd, next 1 000 above"
@@ -301,6 +307,18 @@
       "cap": 45000,
       "pr": 657,
       "reason": "U138 (journey J9): the session draft reads the Synth patch as its link (synthLinkHash) and applies it quietly (synthApplyLinkHash quiet), so a reload does not say 'Synth otevřen z odkazu'; measured 39974 -> 40115 B, past 40 000 for the first time, first cap at its headroom ceiling"
+    },
+    {
+      "file": "src/js/main.js",
+      "cap": 53000,
+      "pr": 657,
+      "reason": "U138 (journey J9, owner decision Q114): the composition root composes the session-draft part (ui/session-draft.js) beside Sonda's lens part; with #647 it passes 52 000 by 136 bytes"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 323000,
+      "pr": 657,
+      "reason": "U138 merged with #647 (Sonda): the recovery notice and the Sonda markup together measure 322 633 B, past #647's 322 000; next 1 000 above"
     }
   ]
 }

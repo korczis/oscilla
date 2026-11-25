@@ -486,9 +486,10 @@ test(`E054's weights: every leg within the budget, the slowest one by one within
   + `and its estimate within ${BALANCE_PCT} % of an even split; longest first misses both`, () => {
   assert.deepEqual(balanceProblems(deal, E054), []);
   assert.deepEqual(balanceProblems(dealLongestFirst, E054), [
-    'webkit: 2879 / 3356 s, over the 3300 s budget',
-    'webkit: 2879 / 3356 s, 7.7 % above even',
-  ], 'the longest-first plan E054 failed on (on the T5 suites: K206 added knob.cjs to test:synth)');
+    'webkit: 2871 / 3440 s, over the 3300 s budget',
+    'webkit: 2871 / 3440 s, 9.0 % above even',
+  ], 'the longest-first plan E054 failed on (on the T5 suites: K206 added knob.cjs to test:synth, '
+    + 'U128 geometry-census.cjs to test:browser)');
   // and on the repository's own weights
   assert.deepEqual(balanceProblems(deal, WEIGHTS), []);
 });
