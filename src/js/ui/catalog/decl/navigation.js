@@ -14,7 +14,7 @@ export default [
       sites: ['src/index.html', 'src/js/ui/app.js', 'src/js/ui/shell.js'] },
     kind: 'open',
     label: 'Analýza, Syntéza',
-    docs: 'Opens the menu of workspaces grouped under one navigation entry.',
+    docs: 'Otevře nabídku pracovních ploch seskupených pod jednou položkou navigace.',
     state: 'ui.navExpanded',
     in: 'sidebar',
   }),
@@ -22,10 +22,11 @@ export default [
     id: 'nav.workspaces',
     pattern: { template: 'nav.{key}', keys: [...WORKSPACE_IDS], sites: ['src/index.html'] },
     kind: 'open',
-    label: 'Workspace entry',
-    docs: 'Opens its workspace from the sidebar, or from the phone drawer, which then closes.',
+    label: 'Položka pracovní plochy',
+    docs: 'Otevře svou pracovní plochu z postranního panelu, nebo z nabídky na telefonu, která '
+      + 'se pak zavře.',
     state: 'ui.workspace',
-    effect: { route: 'the workspace of the entry' },
+    effect: { route: 'pracovní plocha dané položky' },
     in: 'sidebar',
   }),
 ];

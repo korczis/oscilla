@@ -34,6 +34,22 @@ unchanged, so every instrument reaches the one Master Output.
 trigger that opens and closes envelopes (the Keys gate). **Ring modulation**: the product of two
 audio signals, giving their sum and difference frequencies.
 
+**Czech terms, one per concept.** The Czech interface (Q104, `project.czech-prose`) names each
+of these concepts with one word. The reconstruction audit found several names for each
+(`docs/reconstruction/04-interaction-audit.md`, problem 10):
+
+- gate is *brána* (not Hradlo, not Gate): the trigger that opens an envelope, as in "otevřená
+  brána" and "délka brány";
+- gain is *zesílení* (not Gain), the word that the Playground's Zesílení field and the status
+  bar already show;
+- velocity is *úhoz* (not Síla úhozu, not Velocity), the word that the docked keys' Úhoz − and
+  Úhoz + buttons show.
+
+The UI catalogue (`src/js/ui/catalog/decl/`) uses only these words, and
+`tests/unit/ui-catalog-czech.test.mjs` reads the list above. The places that still show a
+rejected word follow when their files are translated: the Studio port and parameter labels,
+the timeline's gate lane, the XY pad's light, the Keys readout and the Playground lab fields.
+
 **Arm keys / armed.** Whether the computer keyboard plays notes in a workspace: armed, its letter
 keys play the keyboard's notes (docs/midi.md "The computer and on-screen keyboard"); disarmed,
 they keep their workspace meanings. The Playground and the Studio start disarmed, the Synth armed.
