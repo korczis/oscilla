@@ -44,8 +44,8 @@
 //                         independent census of every started source of the page's realtime
 //                         AudioContext); hand-overs between owners
 //   journey-5-persist:*   save, restore and compare through the config link (URL), a custom
-//                         preset, the config file, a Studio project in the library, and a saved
-//                         experiment
+//                         preset, the config file, a Studio project in the library, a saved
+//                         experiment, and the session draft a reload restores (U138, J9)
 //   journey-6-refusals:*  invalid input and invalid transitions are refused with a message that
 //                         names the field or the reason, and the model is left unchanged
 //
@@ -1009,6 +1009,137 @@ function defineChecks() {
         env: s.envelope } });
       return { ok: true };
     } finally { await b.context.close(); }
+  });
+
+  // U138 (J9): a reload gives back the session's instrument, lab settings, Synth patch and
+  // sequence from the session draft, names them in a dismissible notice and plays nothing.
+  const DRAFT_KEY = 'oscilla.sessionDraft';
+  const NOTICE = '[data-osc="draft.notice"]';
+  const draftOf = (page) => page.evaluate((k) => {
+    const raw = sessionStorage.getItem(k);
+    return raw ? JSON.parse(raw) : null;
+  }, DRAFT_KEY);
+  /** The J9 edit through the controls: saw at 220 Hz, the filter at 400 Hz, the Synth's Bas
+   *  preset and one more sequence block; resolves once the draft holds all four. */
+  async function draftEdit(page) {
+    await act.click(page, '#osc-wave-sawtooth');
+    await act.click(page, '#osc-step-oct-down');
+    await setSwitch(page, '#osc-filter-enable', true);
+    await typeField(page, '#osc-filter-cutoff-value', '400');
+    await op.navTo(page, 'synth');
+    await page.selectOption('#osc-synth-preset', 'bass');
+    await until(() => page.evaluate(() => window.OSCILLA.app.synth.preset === 'bass'),
+      { ms: STEP_MS, what: 'the Synth takes the Bas preset' });
+    await op.navTo(page, 'sequencer');
+    const n = (await snap(page)).seq.ids.length;
+    await page.click('#osc-seq-add');
+    await page.click('[data-osc="seq.addType"][data-value="tone"]');
+    const s = await waitSnap(page, (x) => x.seq.ids.length === n + 1, 'a tone block is added');
+    must(s.app.waveform === 'sawtooth' && s.app.frequency === 220
+      && near(s.filter.frequency, 400, 1), 'the edit reaches the instrument and the filter', s.app);
+    // the save seam: the draft written after the edit, with every domain (a debounced save)
+    await until(async () => {
+      const d = await draftOf(page);
+      return d && ['instrument', 'labs', 'synth', 'sequence'].every((k) => d.domains[k]) ? d : null;
+    }, { ms: STEP_MS, what: 'the session draft holds the instrument, labs, Synth and sequence' });
+    return s;
+  }
+  /** Reload as a user does; an unsaved-work question (the sequence, ADR 0045) is accepted. */
+  async function reloadPage(page) {
+    page.removeAllListeners('dialog');
+    page.on('dialog', (d) => (d.type() === 'beforeunload' ? d.accept() : d.dismiss())
+      .catch(() => {}));
+    await page.reload({ waitUntil: 'load', timeout: op.OPEN_MS });
+    await page.waitForSelector('html[data-ready="true"]', { timeout: op.OPEN_MS });
+  }
+  /** Nothing sounds: no voice, no source beyond the idle chain, a silent analyser window. */
+  async function silentNow(page, what) {
+    await op.startAudio(page); // a running context, so silence is measured, not assumed
+    const s = await snap(page);
+    must(!s.app.playing && !s.app.seqPlaying && !s.engine.voice && s.engine.sources === 0,
+      `${what}: nothing plays`, { app: s.app.playing, seq: s.app.seqPlaying, src: s.engine.sources });
+    const t = await page.evaluate(() => {
+      const e = window.OSCILLA.engine;
+      return e.ctx.currentTime + e.analyser.fftSize / e.ctx.sampleRate;
+    });
+    await until(() => page.evaluate((x) => window.OSCILLA.engine.ctx.currentTime > x, t),
+      { ms: STEP_MS, what: `${what}: one analyser window passes` });
+    const out = await op.output(page);
+    must(out.peak < 1e-4, `${what}: the engine's analyser is silent`, out);
+  }
+
+  def('journey-5-persist:reload-draft', async ({ page }) => {
+    const a = await snap(page);
+    const synthInit = await page.evaluate(() => window.OSCILLA.app.synth.preset);
+    const edited = await draftEdit(page);
+    await reloadPage(page);
+    const s = await waitSnap(page, (x) => x.app.waveform === 'sawtooth' && x.app.frequency === 220
+      && near(x.filter.frequency, 400, 1) && x.filter.enabled
+      && JSON.stringify(x.seq.ids) === JSON.stringify(edited.seq.ids),
+    'the reload restores the instrument, the filter and the sequence');
+    must(await page.evaluate(() => window.OSCILLA.app.synth.preset) === 'bass',
+      'the reload restores the Synth preset');
+    const notice = await page.evaluate((sel) => {
+      const el = document.querySelector(sel);
+      const box = el && el.firstElementChild;
+      return el ? { role: el.getAttribute('role'), shown: !!(box && box.offsetParent !== null),
+        text: el.textContent.replace(/\s+/g, ' ').trim() } : null;
+    }, NOTICE);
+    must(notice && notice.role === 'status' && notice.shown, 'a recovery notice is shown', notice);
+    for (const part of ['nástroj (Pila, 220 Hz)', 'filtr', 'Synth (předvolba Bas)', 'sekvence']) {
+      must(notice.text.includes(part), `the notice names ${part}`, notice.text);
+    }
+    await silentNow(page, 'after the reload');
+    // Close keeps the restored work, so the next reload restores it again
+    await page.click('[data-osc="draft.close"]');
+    await until(() => page.evaluate((sel) => document.querySelector(sel).firstElementChild
+      .offsetParent === null, NOTICE), { ms: STEP_MS, what: 'Zavřít hides the notice' });
+    must((await snap(page)).app.frequency === 220, 'Zavřít keeps the restored work');
+    await reloadPage(page);
+    await waitSnap(page, (x) => x.app.frequency === 220, 'a second reload restores it again');
+    await page.locator('[data-osc="draft.reset"]').waitFor({ state: 'visible', timeout: STEP_MS });
+    // Začít znovu: what the page opened with, and no draft any more
+    const t0 = await page.evaluate(() => window.OSCILLA.app.draft.savedAt);
+    await page.click('[data-osc="draft.reset"]');
+    const r = await waitSnap(page, (x) => x.app.waveform === a.app.waveform
+      && x.app.frequency === a.app.frequency && near(x.filter.frequency, a.filter.frequency, 1)
+      && x.filter.enabled === a.filter.enabled
+      && JSON.stringify(x.seq.ids) === JSON.stringify(a.seq.ids),
+    'Začít znovu puts the instrument, the filter and the sequence back');
+    must(await page.evaluate(() => window.OSCILLA.app.synth.preset) === synthInit,
+      'Začít znovu puts the Synth preset back', synthInit);
+    // the reset click's own debounced save runs and finds nothing to keep
+    await until(() => page.evaluate((t) => window.OSCILLA.app.draft.savedAt > t, t0),
+      { ms: STEP_MS, what: 'the save after Začít znovu runs' });
+    must(await draftOf(page) === null, 'Začít znovu clears the draft', await draftOf(page));
+    await reloadPage(page);
+    const d = await snap(page);
+    must(d.app.frequency === a.app.frequency && !(await page.evaluate((sel) => document
+      .querySelector(sel).firstElementChild.offsetParent !== null, NOTICE)),
+    'after Začít znovu a reload restores nothing and says nothing', d.app);
+    return { restored: notice.text.slice(0, 160), reset: r.app.frequency };
+  });
+
+  def('journey-5-persist:reload-link-wins', async ({ page }) => {
+    await draftEdit(page);
+    // a link opened in this tab (a new document of the same page): its state, not the draft
+    const url = `${page.url().split('#')[0].split('?')[0]}?u138=link#m=playground&v=1&w=square`
+      + '&f=1000';
+    page.removeAllListeners('dialog');
+    page.on('dialog', (x) => (x.type() === 'beforeunload' ? x.accept() : x.dismiss())
+      .catch(() => {}));
+    await page.goto(url, { waitUntil: 'load', timeout: op.OPEN_MS });
+    await page.waitForSelector('html[data-ready="true"]', { timeout: op.OPEN_MS });
+    const s = await waitSnap(page, (x) => x.app.waveform === 'square' && x.app.frequency === 1000,
+      'the link restores its own instrument');
+    must(!s.filter.enabled, 'the draft\'s filter is not restored over a link', s.filter);
+    must(await page.evaluate(() => window.OSCILLA.app.synth.preset) !== 'bass',
+      'the draft\'s Synth preset is not restored over a link');
+    must(!(await page.evaluate((sel) => document.querySelector(sel).firstElementChild
+      .offsetParent !== null, NOTICE)), 'no recovery notice over a link');
+    must(await draftOf(page) === null, 'the link forgets the old draft');
+    await silentNow(page, 'after the link');
+    return { wave: s.app.waveform, f: s.app.frequency };
   });
 
   def('journey-5-persist:preset', async ({ page, context }) => {

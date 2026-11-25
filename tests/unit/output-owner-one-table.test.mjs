@@ -229,10 +229,10 @@ test('C036: the notes follow the same rows: a loopback reference lets them play'
   assert.equal(oo.notesRefusalOf(probes({ capturing: true, reference: true })), 'reference');
   assert.equal(oo.notesRefusalOf(probes({ measuring: true, reference: true, studio: true }), seq),
     'measurement');
-  assert.equal(oo.notesRefusalOf(probes({ studio: true }), seq), 'sequencer',
-    'the table order: the sequencer row before the Studio row');
+  // U139: the sequencer row admits the notes, so a running sequence refuses none
+  assert.equal(oo.notesRefusalOf(probes({ studio: true }), seq), 'studio');
   assert.equal(oo.notesRefusalOf(probes({ studio: true })), 'studio');
-  assert.equal(oo.notesRefusalOf(probes(), seq), 'sequencer');
+  assert.equal(oo.notesRefusalOf(probes(), seq), null);
   // and the claim of the instrument is refused by the same reference row
   const { owner } = component({ reference: true });
   assert.equal(owner.claimOutput('instrument'), oo.REFERENCE_REFUSAL);
@@ -327,8 +327,8 @@ test('C036 N1 mutation: each kind of re-added local table is found', () => {
     'a SPACE_OWNER of literals': "export const SPACE_OWNER = Object.freeze({ a: 'instrument' });",
     'an ownedBy of literals': "ownedBy: () => { if (x) return 'measurement'; return null; },",
     'an owner mark': "const AUDITION = { owner: 'audition' };",
-    'a copied refusal sentence': "const T = 'MIDI noty nehrají, dokud hraje sekvencer: '\n"
-      + "  + 'nejdřív ho zastavte (Esc).';",
+    'a copied refusal sentence': "const T = 'MIDI noty nehrají, dokud hraje Studio: '\n"
+      + "  + 'nejdřív ho zastavte.';",
   };
   for (const [kind, src] of Object.entries(cases)) {
     assert.deepEqual(secondTables(src), [kind], kind);

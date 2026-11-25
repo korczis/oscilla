@@ -89,6 +89,7 @@ import {
   buildConfigExport, parseConfigImport, CONFIG_FILE_VERSION, limitedValues,
 } from './ui/config-file.js';
 import { applyLabRecord, applyLabSections, labImportLimits, snapshotLabs } from './ui/lab-state.js';
+import { createSessionDraftUi } from './ui/session-draft.js';
 import { renderPlanToWav, renderSequenceToWav, screenshotCanvases } from './ui/exporters.js';
 import { BUILD } from './core/build-info.js';
 import { aboutPart } from './ui/about.js';
@@ -617,9 +618,9 @@ function mountLabs(root) {
   // The status bar's sequence length follows the sounding pass and the edited sequence (C006).
   if (labs.sequencer) labs.sequencer.onPassChange(() => { if (app) app.labRev += 1; });
   if (labs.sequencer) {
-    // MIDI notes and a sequence never sound together (V502): the sequence plays into the
-    // master outside the engine's voices, so its start stops every note first (they fade within
-    // ESCAPE_RELEASE_S) and the MIDI part refuses notes while it plays (sequencerPlaying).
+    // A sequence's start stops every held note first (V502; they fade within
+    // ESCAPE_RELEASE_S); once it plays, the keys and MIDI play over it (U139: the sequencer row
+    // of the one output table admits the notes, and the sequence keeps the output).
     const editor = labs.sequencer.editor;
     const playSequence = editor.play;
     editor.play = function playAfterMidi(...args) {
@@ -861,6 +862,7 @@ function integrationInit() {
       // Every sequence change bumps cmp.seqRev, which its readouts read (C004).
       followSequenceEdits(cmp, labs.sequencer.editor);
     }
+    cmp.draftBoot(); // U138: the reload's session draft, once every domain is mounted
     setAnalysisTab(cmp.tabs.analysis);
     if (cmp.debug) setInterval(() => cmp.refreshDebug(), 250);
     cmp.initialized = true;
@@ -932,7 +934,8 @@ function createOscillaComponent(ui) {
   const cmp = compose(instrument, ui, workbench, measure, experiments, findings, connections,
     studio, navigation, midi, createCrossLinksUi(), provenancePart(), aboutPart(), proClassesPart(),
     createLensPart({ relayout: () => { if (host) host.resize(); repairCharts(); } }),
-    TEMPLATE_HELPERS, { busArmed: (owner, on) => bus.armed(owner, on) });
+    TEMPLATE_HELPERS, createSessionDraftUi({ sequencer: () => labs.sequencer }),
+    { busArmed: (owner, on) => bus.armed(owner, on) });
   cmp.dismissAlert = focusSafeDismiss(cmp.dismissAlert);
   const baseRefreshDebug = cmp.refreshDebug;
   Object.defineProperty(cmp, 'refreshDebug', {

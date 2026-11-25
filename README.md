@@ -1330,6 +1330,7 @@ Browser storage holds only these keys and one database, `oscilla-experiments` (v
 | localStorage | `oscilla.v2.analysisTab` | The last analysis tab |
 | sessionStorage | `oscilla.history` | Recently played configurations with the lab settings they were played with (this tab only) |
 | sessionStorage | `oscilla.safetyNoticeCollapsed` | Whether the safety notice was collapsed |
+| sessionStorage | `oscilla.sessionDraft` | The session draft a reload restores (this tab only): the instrument as its link, the lab settings as `lab=`, the Synth patch as its link and the sequence as in the config file, each only when it differs from what the page opened with; never a playing state or a measurement |
 | IndexedDB | `oscilla-experiments`, object store `experiments` | Your saved experiments, in the exported file form |
 | IndexedDB | `oscilla-experiments`, object store `summaries` | One small row per experiment for the list (name, date, schema and product version, quality status, result hash, size, its definition version, and the repeat, duplicate and Studio hashes it stores) |
 | IndexedDB | `oscilla-experiments`, object store `studio` | Your saved Studio projects and patches (name, save time, studioHash and the document) |

@@ -109,7 +109,8 @@ test('V502: main.js hands the engine to the MIDI part, and taking the output sto
     assert.match(owner, /\[OWNER\.notes\]: \{ forced: true,[\s\S]*?cmp\.midiAllOff\(\)/);
   });
 
-test('V502: the sequencer and MIDI notes never sound together (review of #261, P2-1)', () => {
+test('V502: a sequence\'s start stops the MIDI notes (review of #261, P2-1; U139: notes then '
+  + 'play over it)', () => {
   const main = code(read('src/js/main.js'));
   // The live state of the editor, not the 150 ms seqPlaying copy.
   // (C002: the one output owner reads the editor itself; main.js takes sequencerPlaying from it.)
@@ -126,7 +127,8 @@ test('V502: the sequencer and MIDI notes never sound together (review of #261, P
     && body.indexOf('app.midiAllOff()') < body.indexOf('playSequence.apply(this, args)'),
   'the notes stop before the sequence is scheduled');
   const ui = code(read('src/js/midi/ui.js'));
-  // C036: the sequencer row of the one table refuses notes, probed by the editor's own flag.
+  // C036: the rows of the one table that refuse notes, a sequencer row probed by the editor's
+  // own flag (U139: the sequencer row admits the notes instead of refusing them).
   assert.match(ui, /ownedBy: \(\) => notesRefusalOf\(cmp, \{ sequencerPlaying \}\)/);
 });
 
@@ -134,7 +136,7 @@ test('docs/midi.md quotes every sentence that refuses a MIDI note', async () => 
   const { MIDI_REFUSED } = await import(new URL('src/js/midi/ui.js', root).href);
   const doc = read('docs/midi.md');
   assert.deepEqual(Object.keys(MIDI_REFUSED).sort(),
-    ['measurement', 'reference', 'sequencer', 'studio']);
+    ['measurement', 'reference', 'studio']); // U139: a running sequence refuses no note
   for (const [by, sentence] of Object.entries(MIDI_REFUSED)) {
     assert.ok(doc.includes(`"${sentence}"`), `docs/midi.md quotes the ${by} refusal`);
   }
