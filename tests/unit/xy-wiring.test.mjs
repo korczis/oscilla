@@ -1,10 +1,11 @@
 // K167: the XY pad's one shared mount (src/js/synth/view/xy-wiring.js mountSynthXy). It wires
 // the xy-pad node as the XY tab did (the Y target, the presets: one BATCH and one undo entry
-// each), and it releases a held gate, with the notes the router holds, on transport Stop, on a
-// workspace leave, on the audio owner moving away and on page hide, through studio/live-notes.js
-// (transport.live off and all-off). destroy() releases and leaves no listener; a second destroy
-// is a no-op; a Stop with nothing held changes nothing. No file but xy-wiring.js builds the
-// pad's cables (a grep of src/js), xy.js xyInsertAction aside. The pad kind is the real
+// each), and it releases a held gate, with the notes the router holds, on transport Stop, on the
+// audio owner moving away and on page hide, through studio/live-notes.js (transport.live off and
+// all-off); a workspace leave releases nothing (U142, the owner's Q114 "Sound survives").
+// destroy() releases and leaves no listener; a second destroy is a no-op; a Stop with nothing
+// held changes nothing. No file but xy-wiring.js builds the pad's cables (a grep of src/js),
+// xy.js xyInsertAction aside. The pad kind is the real
 // createXyModel behind a DOM-free mount seam; the transport is the real one on the fake audio
 // environment of the sequencer tests.
 // K183 (option B): the pad is one more note input of the keys: a touch is notes.noteOn(scale
@@ -328,17 +329,26 @@ test('negative: a notification that moves no owner releases nothing (the C051 bu
   stopNow(r);
 });
 
-test('a workspace leave releases through the router before the Synth disarms', () => {
+// U142, the owner's Q114 "Sound survives": the pad's held note sounds on across places, as a
+// held key does (U133); its own release still ends it, through the router as before.
+test('a workspace leave keeps the held pad sounding; its release ends it (U142, Q114)', () => {
   const r = rig();
   const m = r.mount();
   hold(r, m);
   r.calls.length = 0;
-  r.app.leave('synth'); // the same workspace: nothing
-  assert.equal(m.view.model.gated, true);
-  r.app.leave('studio');
+  const offs = () => r.noted.filter((c) => c[0] === 'off').length;
+  const before = offs();
+  for (const to of ['synth', 'studio', 'analyzer', 'measure']) r.app.leave(to);
+  assert.equal(m.view.model.gated, true, 'the gate stays open in another place');
+  assert.deepEqual(released(r, ['off', 'all-off']), [], 'no note-off, no all-off');
+  assert.equal(offs(), before, 'the keys\' layer keeps the note');
+  assert.ok(r.real.heldNotes().length > 0, 'the Keys node still holds the pad note');
+  assert.equal(r.real.playing, true, 'the transport sounds on');
+  m.view.model.up(1); // the pointer's own release
   assert.equal(m.view.model.gated, false);
-  letGo(r, 'leave');
-  assert.deepEqual(released(r, ['off', 'all-off']).map((c) => c[1]), ['off', 'all-off']);
+  letGo(r, 'the release after leaving');
+  assert.deepEqual(released(r, ['off', 'all-off']).map((c) => c[1]), ['off'],
+    'the plain release: its note-off, as in the place it was pressed');
   m.destroy();
   stopNow(r);
 });
@@ -444,7 +454,6 @@ test('destroy() releases and leaves no listener; a second destroy is a no-op', (
   const m = r.mount();
   hold(r, m);
   const controls = r.host.querySelector('[data-xy-controls]');
-  assert.ok(r.app.$root.listeners() >= 1, 'the leave listener');
   assert.ok(controls.querySelector('[data-osc="synth.xy.target"]').listeners() >= 1);
   m.destroy();
   letGo(r, 'destroy');

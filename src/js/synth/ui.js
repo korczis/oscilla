@@ -6,8 +6,9 @@
 //
 // Audio: keyboard, on-screen keys and MIDI play the panel through synthSink() (midi/notes.js
 // route): the first note arms the transport, transport.live drives the Keys node; the Studio's
-// keys take studioSink() (studio-sink.js), one path on any document. Leave, Esc,
-// page hide and STOP disarm; a measurement owning the output refuses it.
+// keys take studioSink() (studio-sink.js), one path on any document. Esc, page hide
+// and STOP disarm; leaving the workspace keeps it armed (U133, the owner's Q114 "Sound
+// survives"); a measurement owning the output refuses it.
 //
 // Tabs (Q019): Panel holds the mono voice, Engines the poly engines; the keys play Keys
 // or the chosen engine via one sink; a tab change releases held notes.
@@ -789,7 +790,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
         el.addEventListener('keydown', onKeyDown);
       }
       this.$watch('workspace', (ws) => {
-        // Leaving the Synth disarms it through the bus's leave policy (C053: synthLeave).
+        // Leaving the Synth keeps it armed: the bus's leave policy keeps the Synth's row
+        // (C053, U133 under the owner's Q114 "Sound survives").
         if (ws === 'synth') {
           syncArmed();
           strip.sync();
@@ -827,12 +829,6 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       else say(armedText());
       this.synth.armed = !!t.armed;
       return r.ok;
-    },
-
-    /** The bus's leave policy (C053): leaving the Synth ends a pending connect and disarms. */
-    synthLeave() {
-      endPending();
-      disarm(false);
     },
 
     /** The playback bus's stopAll (C050: Escape, a page hide): on the Synth, Arm is off. */

@@ -4,7 +4,8 @@
 // the knob of its parameter does. The surface is role=application inside a role=group with one
 // slider per axis (aria-valuetext in its unit). A drag previews live and ends in one commit;
 // the gate is open while the pad is touched (pointer, or Enter held on the surface) and closes
-// on release, blur, page hide and Escape. A second touch point sets Y only. An integer axis is
+// on release, blur, page hide and Escape; a focus the browser takes from a pad its place hid
+// keeps it (U142, Q114: focusLeaveEnds). A second touch point sets Y only. An integer axis is
 // a row of equal cells (the pad's scale steps). A disabled pad keeps its dashed frame and its
 // grid at reduced contrast and states its reason above its face (K167, S3). No store, no audio,
 // no timer: the consumer's callbacks do the rest.
@@ -27,6 +28,7 @@
 //   createTrail({ ms, max }) -> trail   pure: push(x, y, t), points(t) -> [{ x, y, age 0..1 }]
 //     (the last `ms` before t, at most `max`), clear(), size
 //   cursorPlace(x, y) -> { anchor, dx, dy }   where the readouts sit beside the point (0..1, y up)
+//   focusLeaveEnds({ inside, shown }) -> whether a focus leaving the pad's group ends its gate
 //   mountXyPad(host, { label, description, cells, disabled, describedBy, readout,
 //     ...model options }) -> view: view.model, view.update(), view.destroy(), view.trail;
 //     cells: [{ label, root }] drawn along X; describedBy: ids of the consumer's own lines that
@@ -166,6 +168,16 @@ export function cursorPlace(x, y) {
     dy: y > 0.7 ? 36 : -40 };
 }
 
+/**
+ * Whether a focus leaving the pad's group ends its gate (U142, the owner's Q114 "Sound
+ * survives"). A move inside the group (`inside`) never does. A focus the browser takes from a
+ * surface that has no box any more (not `shown`: its place was left and hid it, the focus
+ * fixup) is no user's move: the held note sounds on across places as a held key does, until
+ * its own release (the captured pointerup, the Enter keyup, Escape, page hide). Any other
+ * focus move ends it ('blur').
+ */
+export const focusLeaveEnds = ({ inside, shown }) => !inside && shown;
+
 const SLIDER = 'flex h-11 items-center justify-between gap-2 rounded-lg border border-solid '
   + 'border-gray-300 bg-gray-50 px-3 text-xs text-gray-900 focus:outline-none focus-visible:ring-2 '
   + 'focus-visible:ring-primary-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white';
@@ -289,6 +301,8 @@ export function mountXyPad(host, opts) {
   let primary = null; // the pointer whose moves set X
   let focused = false; // keyboard focus on the surface
   let pressing = false; // a pointer is focusing the surface: that focus is not the keyboard's
+  let keyGate = false; // Enter on the surface opened the gate
+  let keyUp = null; // the Enter keyup's listener while a hidden pad keeps a keyed gate (U142)
 
   /** The point drawn: the touch point under a pointer, else the value (its cell's centre). */
   const point = () => raw || model.fraction();
@@ -367,6 +381,9 @@ export function mountXyPad(host, opts) {
         tokens: synthTokens(gateEl) });
     }
     if (!model.gated) {
+      keyGate = false;
+      if (keyUp) keyUp();
+      keyUp = null;
       raw = null;
       primary = null;
       trail.clear();
@@ -399,6 +416,12 @@ export function mountXyPad(host, opts) {
     return () => el.removeEventListener(type, fn);
   };
   const hide = () => model.end('hide');
+  /** The surface has a box: it is shown (a hidden place's pad has none). */
+  const boxed = () => {
+    if (typeof surface.getBoundingClientRect !== 'function') return true;
+    const r = surface.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  };
   const focusVisible = () => {
     try { return surface.matches(':focus-visible'); } catch (err) { return false; }
   };
@@ -446,7 +469,7 @@ export function mountXyPad(host, opts) {
       if (e.target === surface) focused = true; // a key on the surface: keyboard focus
       if (e.target === surface && e.key === 'Enter') {
         e.preventDefault();
-        if (!e.repeat) model.gate(true);
+        if (!e.repeat && model.gate(true)) keyGate = true;
       } else if ((axis || e.target === surface) && model.key(e.key, e.shiftKey, axis
         || SURFACE_KEYS[e.key])) {
         e.preventDefault();
@@ -456,7 +479,18 @@ export function mountXyPad(host, opts) {
     on(group, 'keyup', (e) => {
       if (e.key === 'Enter' && e.target === surface) model.gate(false);
     }),
-    on(group, 'focusout', (e) => { if (!group.contains(e.relatedTarget)) model.end('blur'); }),
+    on(group, 'focusout', (e) => {
+      const inside = group.contains(e.relatedTarget);
+      if (focusLeaveEnds({ inside, shown: boxed() })) {
+        model.end('blur');
+      } else if (!inside && model.gated && keyGate && !keyUp) {
+        // The focus went with the pad's place (U142): the key's own release still ends it,
+        // wherever the focus is now.
+        keyUp = on(host.ownerDocument || document, 'keyup', (k) => {
+          if (k.key === 'Enter') model.gate(false);
+        });
+      }
+    }),
     on(window, 'blur', () => model.end('blur')),
     on(window, 'pagehide', hide),
     on(document, 'visibilitychange', () => { if (document.hidden) hide(); }),

@@ -12,7 +12,7 @@
 // call-and-response answer, planned on the audio clock); without it a note plays now.
 //
 //   createStudioSink({ get, setupAudio, ensureAudio, say, registry }) -> { noteOn, noteOff,
-//     allOff, leave(), active() -> this sink | null, heldNotes() -> [{ note, node }] }   get()
+//     allOff, active() -> this sink | null, heldNotes() -> [{ note, node }] }   get()
 //     -> { handle, transport }, as the Synth's; heldNotes is a test and debug read of the held
 //     map: each note still held, on the node it went to, in the order pressed (K175, S18)
 
@@ -87,24 +87,12 @@ export function createStudioSink({ get, setupAudio = () => {}, ensureAudio = () 
     return count;
   }
 
-  /** Leaving the Studio (21's R2): every live note off and an armed-only run disarmed, so the
-   *  transport no longer owns the output; a run the user started with PLAY is left alone. */
-  function leave() {
-    const { t } = parts();
-    // A PLAYed run keeps the held map (98's R2 on #413): a key still down is released on the node
-    // it went to, even after a re-route; only an armed run is ended here (allOff clears it).
-    if (!t || !t.armed) return false;
-    allOff();
-    t.disarm();
-    return true;
-  }
-
   /** A test and debug read (synthDebug().sinkHeld, midi.cjs keyboard-studio-held; not a
-   *  contract): each note still held, on the node it went to, in the order pressed. Empty after
-   *  leaving the Studio (K175, S18). */
+   *  contract): each note still held, on the node it went to, in the order pressed. A key down
+   *  across a place change stays in it until its release (K175, S18; U133). */
   const heldNotes = () => [...held].map(([note, node]) => ({ note, node }));
 
-  const sink = { noteOn, noteOff, allOff, leave, heldNotes };
+  const sink = { noteOn, noteOff, allOff, heldNotes };
   sink.active = () => {
     const { handle } = get();
     return handle && target(handle.getModel()) ? sink : null;

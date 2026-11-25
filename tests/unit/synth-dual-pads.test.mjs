@@ -3,8 +3,9 @@
 // HPF cutoffs (panels/semi-mono.js n25, n26; log): a cable into either jack replaces its normal,
 // and no NODE_PARAM_SET stands in for them. A touch on pad L reaches its node through
 // transport.live and plays no note; its release puts X and Y back at rest. Pad R is the panel's
-// XY pad through the XY tab's shared mount. Stop and leaving the workspace release both (the
-// shared release paths, xy-wiring.js padReleasePaths). One pad implementation serves both.
+// XY pad through the XY tab's shared mount. Stop releases both (the shared release paths,
+// xy-wiring.js padReleasePaths); leaving the workspace releases neither (U142, the owner's Q114
+// "Sound survives"). One pad implementation serves both.
 // Negative cases: off the Panel tab the card is not drawn; a document without pad L offers to
 // add it; a refused arm moves nothing.
 // On the merge base there is no second pad: PANEL.module('xyl') and view/pads.js are missing.
@@ -183,9 +184,14 @@ test('negative: a refused arm moves nothing on pad L and says why', () => {
 
 // ---------------------------------------------------------------- the release paths
 
-test('Stop and leaving the workspace release pad L and pad R alike', () => {
+test('Stop releases pad L and pad R alike; leaving the workspace keeps both (U142)', () => {
   for (const [what, end] of [['stop', (r) => r.real.stop({ fast: true })],
-    ['leave', (r) => r.app.leave('studio')]]) {
+    ['leave', (r) => {
+      r.app.leave('studio');
+      assert.ok(r.l.view.model.gated && r.p.view.model.gated, 'leave: both pads sound on (Q114)');
+      r.l.view.model.up(1); // then each pad's own release
+      r.p.view.model.up(2);
+    }]]) {
     const r = rig();
     const l = pads.mountPadL(fakeEl(), { store: r.st, transport: r.transport, panel: PANEL,
       app: r.app, mountPad });
@@ -194,6 +200,7 @@ test('Stop and leaving the workspace release pad L and pad R alike', () => {
     l.view.model.down(1, 0.4, 0.6);
     p.view.model.down(2, 0.5, 0.5);
     assert.ok(l.view.model.gated && p.view.model.gated, `${what}: both pads touched`);
+    Object.assign(r, { l, p });
     end(r);
     assert.equal(l.view.model.gated, false, `${what}: pad L released`);
     assert.equal(p.view.model.gated, false, `${what}: pad R released`);
@@ -210,10 +217,14 @@ test('destroy removes every listener pad L added; a second destroy changes nothi
   const before = r.app.$root.listeners();
   const m = pads.mountPadL(fakeEl(), { store: r.st, transport: r.transport, panel: PANEL,
     app: r.app, mountPad });
-  assert.equal(r.app.$root.listeners(), before + 1, 'the leave listener');
+  assert.equal(r.app.$root.listeners(), before, 'no leave listener (U142, Q114)');
+  m.view.model.down(1, 0.4, 0.6);
   m.destroy();
   m.destroy();
   assert.equal(r.app.$root.listeners(), before);
+  r.calls.length = 0;
+  r.real.stop({ fast: true });
+  assert.deepEqual(r.calls, [], 'a destroyed pad L hears no Stop');
 });
 
 // ---------------------------------------------------------------- the card
