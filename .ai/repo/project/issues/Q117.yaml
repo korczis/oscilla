@@ -1,0 +1,24 @@
+id: Q117
+milestone: M124
+serves:
+  - "one-instrument#owner-chose-the-model"
+title: "Owner decision: the Synth panel is part of the default Studio project, and a visit to the Synth never inserts it"
+slug: "owner-decision-synth-panel-in-default-project"
+priority: p0
+profile: routine
+owner: "repository owner"
+objective: "Record the owner's answer of 2026-11-25 to the question U140's builder left open (PR #661): a first visit to the Synth inserts the Synth panel into the Studio document by itself, silences the Studio's Play and leaves the document clean. The owner chose 'Panel in default project (Recommended)': a new project already holds the panel mixed beside the template's own sound, opening the Synth changes nothing, and an older project without the panel offers Vložit on first use."
+why: "Every other remedy contradicts an earlier answer (Q105: letters play in every workspace without Arm; Q114 (4): letter keys play in the instrument places) or keeps a silent edit of the project; v4-one-studio-store forbids a performance voice outside the document."
+current_state: "Decided by the owner on 2026-11-25 shortly before 09:40Z in Claude Code session 40c3f589-de0d-4e90-ba18-aee761b5273a (coordinator oscilla-60) through AskUserQuestion; question, four options and answer quoted verbatim in docs/reconstruction/12-owner-decision-q117.md. U148 implements it. Evidence is stamped against main once this record lands."
+scope:
+  - ".ai/repo/project/issues/Q117.yaml"
+  - "docs/reconstruction/12-owner-decision-q117.md"
+depends_on: ["Q114"]
+acceptance_criteria:
+  - "The question, its four options and the owner's answer are quoted verbatim in docs/reconstruction/12-owner-decision-q117.md with the session id and time."
+  - "U148 cites Q117 and states testable criteria against it."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-11-25

@@ -1,0 +1,32 @@
+id: U148
+milestone: M124
+serves:
+  - "one-instrument#keys-mean-one-thing"
+title: "The default Studio project holds the Synth panel beside its own sound, and a visit to the Synth never edits the project"
+slug: "synth-panel-in-default-project"
+priority: p0
+profile: implementation
+owner: "reconstruction coordinator (oscilla-60, session 40c3f589)"
+objective: "Implement the owner's Q117 answer: the reference (default) Studio document contains the Synth panel, mixed with the template's own chain into Master Output so the Studio's Play sounds both; the Synth's workspace watcher (synth/ui.js ensurePanel on visit) inserts nothing; a document without the panel shows the existing Vložit sentence (SYNTH_TEXT.notInserted) and the explicit Vložit stays the only insert."
+why: "docs/reconstruction/10-interim-review.md problem 1 (one key turned the Studio from 6 into 28 nodes and silenced its Play); U140 (#661) removed the key's insert, and the visit's insert is what Q117 decided."
+current_state: "Not started. Measured on main's dist by U140's builder: the Synth visit inserts the panel through synth/ui.js $watch('workspace') -> ensurePanel() under synth/insert.js insertDecision(model).auto, leaving 28 nodes and a silent Studio Play before any key. Depends on #661 landing."
+scope:
+  - "src/js/studio/templates/"
+  - "src/js/synth/"
+  - "src/js/ui/studio/"
+  - "tests/unit/"
+  - "tests/browser/"
+  - "docs/"
+depends_on: ["Q117", "U140"]
+acceptance_criteria:
+  - "A fresh page's Studio document holds the Synth panel; Studio Play on a fresh page sounds the template's chain at the level of today's fresh page (within 1 dB, analyser read) and the panel's voice reaches Master Output through a mixer, not by taking its only input."
+  - "Opening the Synth on a fresh page, and on a document without the panel, leaves the model, studioHash, undo history and clean state unchanged (a unit test over the real store, failing on the merge base)."
+  - "On a document without the panel the Synth shows SYNTH_TEXT.notInserted with Vložit; Vložit inserts in one undo step and marks the document unsaved; a key before Vložit inserts nothing."
+  - "A saved project from an earlier release loads unchanged (no panel added on load) and a reload restore (U138) keeps the panel state it saved."
+  - "Browser check in chromium, firefox and webkit: fresh page, visit Synth, play C4 by key, then Studio Play: both sound, the document is clean."
+validation:
+  - "npm test"
+  - "node tests/browser/midi.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-11-25
