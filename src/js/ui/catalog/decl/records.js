@@ -10,8 +10,8 @@ export default [
     id: 'records.rows',
     pattern: { template: '{key}.row', keys: ['def', 'fnd'], sites: ['src/js/ui/connections.js'] },
     kind: 'readout',
-    label: 'Definition row, Finding row',
-    docs: 'Lists one stored experiment definition or finding with its own actions.',
-    state: { none: 'a row shows a stored record and edits nothing itself' },
+    label: 'Řádek definice, Řádek zjištění',
+    docs: 'Vypíše jednu uloženou definici experimentu nebo zjištění s jeho vlastními akcemi.',
+    state: { none: 'řádek ukazuje uložený záznam a sám nic neupravuje' },
   }),
 ];

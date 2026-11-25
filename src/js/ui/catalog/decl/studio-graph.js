@@ -11,8 +11,8 @@ export default [
       keys: ['minimapToggle', 'zoomOut', 'zoomIn', 'frameAll', 'frameSelection'],
       sites: ['src/js/ui/studio/graph-editor.js'] },
     kind: 'action',
-    label: 'Minimap, Zoom out, Zoom in, Frame all, Frame selection',
-    docs: 'Pans and zooms the Studio graph, or shows its minimap.',
+    label: 'Minimapa, Oddálit, Přiblížit, Ukázat vše, Ukázat výběr',
+    docs: 'Posouvá a zvětšuje graf Studia, nebo ukáže jeho minimapu.',
     state: 'studio.view',
   }),
 ];

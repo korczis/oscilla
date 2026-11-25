@@ -897,8 +897,9 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       return hash;
     },
 
-    /** The hash dispatcher's Synth domain (ui/navigation.js): null, true or false (refused). */
-    synthApplyLinkHash(hash) {
+    /** The hash dispatcher's Synth domain (ui/navigation.js): null, true or false (refused);
+     *  quiet: no notice (U138's draft names it). */
+    synthApplyLinkHash(hash, quiet) {
       const r = decodeSynthLink(hash, panel, PRESETS);
       if (!r) return null;
       if (!r.ok) {
@@ -907,10 +908,12 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       }
       const ok = applyLink(r.link);
       const p = ok && presetOf(r.link.preset); // a link is answered (surface-census routes)
-      if (ok && this.notify) notice.after(() => this.notify('info', 'Synth otevřen z odkazu',
+      if (ok && this.notify && !quiet) notice.after(() => this.notify('info', 'Synth otevřen z odkazu',
         `${p ? p.title : this.synth.title}. Nic nehraje, dokud nezahrajete notu.`));
       return ok;
     },
+
+    synthLinkHash: () => (present() ? linkNow() : null), // U138's draft
 
     /** Test and debug reads (window.OSCILLA.app.synthDebug(); not a contract). */
     synthDebug() {

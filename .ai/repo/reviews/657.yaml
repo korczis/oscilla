@@ -1,0 +1,84 @@
+# Review verdict for pull request #657 (feat/reload-restores-work): a reload restores the
+# instrument, the labs, the Synth patch and the sequence (U138, journey J9). Built by oscilla-60's
+# builder agent; judged at 1caf2eb8 (merge of origin/main) on base origin/main 68759f50,
+# 2026-11-25, in the reviewer's own worktree ~/dev/oscilla-wt/review/pr657.
+#
+# Reviewer: dev-7c (claude-code ee0b8288), a separate top-level session working in ~/dev, asked by
+# oscilla-60 (session 40c3f589) because no other OSCILLA session was running. dev-7c took no part
+# in U138's design or build: `git log origin/main..1caf2eb8` holds 0f46eb3e, 3e335d5c and one
+# merge, none made by this session.
+#
+# The digest: origin/main's scripts/review-verdict.mjs (extracted from origin/main; identical to
+# the head's copy and scripts/lib) --content --list --head origin/feat/reload-restores-work
+# --base-branch origin/main: 17db3ffe... over 2 guarded paths, src/js/core/storage.js and
+# src/js/synth/ui.js. ui/session-draft.js, main.js, the markup and the tests are not guarded.
+#
+# What the guarded change does:
+# - storage.js: SESSION_DRAFT_KEY oscilla.sessionDraft in sessionStore (sessionStorage, per tab,
+#   gone with the tab), checkSessionDraft (version, at, hash, the three string domains and an
+#   object sequence; saved filtered to kept domains), persistSessionDraft dropping the largest
+#   domain until the JSON is within SESSION_DRAFT_MAX = 65536 UTF-16 units (an empty draft
+#   removes the key), clearSessionDraft.
+# - synth/ui.js: synthApplyLinkHash(hash, quiet) skips only its 'Synth otevřen z odkazu' notice
+#   when quiet; synthLinkHash() returns linkNow() when the panel is present, else null. Minimal:
+#   the apply path (decodeSynthLink, applyLink, linkPlan) is the deep link's, unchanged.
+#
+# How it was judged, measured by the reviewer at 1caf2eb8 (Node 22.20.0):
+# - npm ci, npm run verify: exit 0 (6094 tests, 6092 pass, 0 fail, 2 skipped; build:check,
+#   verify-dist, majordomus doctor 0 failures).
+# - node --test tests/unit/session-draft.test.mjs: 16/16.
+# - OSC_LOAD_MAX=60 tests/browser/journeys.cjs --only journey-5-persist:reload-draft,
+#   journey-5-persist:reload-link-wins: chromium, firefox and webkit 2/2 each (load 8.2-11.3).
+# - Mutations against session-draft + storage-inventory, each restored:
+#   M1 restore on any navigation type (deep link opened fresh)   -> caught (2 fail)
+#   M2 the address no longer wins for the domains it carries      -> caught (2 fail)
+#   M2b the address always wins (same-address draft ignored)      -> caught (1 fail)
+#   M3 no size bound                                              -> caught (1 fail)
+#   M3b the smallest domain dropped instead of the largest        -> caught (1 fail)
+#   M4 the Synth restore not quiet                                -> caught (1 fail)
+#   M5 localStorage instead of sessionStorage                     -> survives the unit tests;
+#      caught by journey-5-persist:reload-draft on a rebuilt dist (chromium, fail: draft null)
+#   M6 the draft kept on a fresh navigation                       -> caught (1 fail)
+#   M7 the saved flag inverted                                    -> caught (1 fail)
+#   M8 the restored sequence starts playing                       -> caught (1 fail)
+#   M9 untouched domains saved too                                -> caught (2 fail)
+#   M10 no save on pagehide                                       -> caught (1 fail)
+# - Read for no-fake-science and a-phone-sounds: no domain carries a playing or measuring state
+#   (the instrument hash drops `m`; serializeHash holds no play flag; a measurement is never read),
+#   restoreFromHashOn and editor.load (parseSequence, never throws) start nothing, the Synth path
+#   is the deep link's, and the continuous-repeat permission stays per page view (config.js drops
+#   it with its own notice, ADR 0004/0005). A link's gain above the default is capped on restore,
+#   as for every link.
+#
+# Findings:
+# - R1 (P3, open, a note): the per-tab property is pinned only in a browser. M5 (localStorage)
+#   passes every unit test; only journey-5-persist:reload-draft, which reads sessionStorage,
+#   refuses it. A unit assertion that sessionStore is the sessionStorage wrapper would make it a
+#   unit check.
+# - R2 (P3, open, a note): APPLY.instrument suppresses restoreFromHashOn's last notice by position
+#   (notices.slice(0, -1) when nothing was refused). That notice also carries the "Not restored:"
+#   summary; today every drop also says itself in its own notice (continuous repeat), so nothing
+#   is lost, but a reorder of restoreFromHashOn's notices would silence the wrong one. Selecting
+#   the notice by its title, or a flag from restoreFromHashOn, would be sturdier.
+# - R3 (P3, open, a note): APPLY.sequence ignores editor.load's issues; a draft the parser
+#   normalised comes back without saying what was replaced. The draft is the page's own
+#   serialisation, so this needs a model change between write and reload.
+# - R4 (P3, open, a note): a raised gain comes back at the default after a reload (the link's
+#   cap, with its English 'Gain kept at the default' notice). That is the safety rule working,
+#   but the recovery notice names the instrument as restored; the gain notice beside it says the
+#   rest.
+#
+# Verdict: merge. The guarded change is small and does what U138 states: per-tab sessionStorage,
+# a 64 Ki bound that drops the largest domain, a fresh deep link that forgets the draft, and a
+# quiet Synth apply through the existing link path; nothing restored plays or measures.
+
+schema: review-verdict/v1
+pr: 657
+verdict: merge
+reviewer: dev-7c (claude-code ee0b8288, a separate top-level session; took no part in U138's design or build)
+content: 17db3ffe481cbeeb0f9a6aebde9d75c6821c4700a5a219025757a44322d142c2
+findings:
+  - { id: R1, severity: P3, status: open, title: "the per-tab (sessionStorage) property is pinned only by the browser journey; a localStorage mutation passes every unit test" }
+  - { id: R2, severity: P3, status: open, title: "APPLY.instrument drops restoreFromHashOn's last notice by position; a reorder would silence the wrong one" }
+  - { id: R3, severity: P3, status: open, title: "APPLY.sequence ignores editor.load's issues; a normalised draft is restored without naming what was replaced" }
+  - { id: R4, severity: P3, status: open, title: "a raised gain returns at the default after a reload (the link cap); the recovery notice still names the instrument as restored" }
