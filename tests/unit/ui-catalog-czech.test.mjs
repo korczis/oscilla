@@ -30,7 +30,7 @@ const NAMES = new Set(['oscilla', 'studio', 'synth', 'q', 'bay', 'pad', 'l', 'r'
 const CZECH_PLAIN = new Set(`
   akce banka enginy exportovat filtru hledat hodiny hraje kabely knihovna knihovny krok
   mikrofon monitor na nahradit noty odkaz panel parametr patche podrobnosti popis poslech pady
-  povolit propojit smazat sonda stav studia synthu transport transportu typ vymazat vzoru zastavit
+  pohled povolit propojit smazat sonda sondy stav studia synthu transport transportu typ vymazat vzoru zastavit
 `.split(/\s+/).filter(Boolean));
 
 const measuresEnglish = (text) => isShortEnglish(text) || isEnglishProse(text);
