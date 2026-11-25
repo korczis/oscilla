@@ -1,0 +1,23 @@
+id: Q116
+milestone: M124
+serves:
+  - "one-instrument#one-instrument-places"
+title: "LLM decision: the U132 places, rail, phone bottom bar and route aliases as designed (docs/reconstruction/11-u132-design.md)"
+slug: "llm-decision-u132-design"
+priority: p1
+profile: routine
+owner: "reconstruction coordinator (oscilla-60, session 40c3f589)"
+objective: "Record the coordinator's twelve rulings on the U132 design: (1) rail order Generátor, Studio, Synth, Měření, Analýza, Experimenty, Výuka, keeping the owner's Q019 (Synth right after Studio) over ADR 0089's listing; (2) the phone bar holds Generátor, Studio, Synth, Měření and Více; (3) Analyzátor is relabelled Analýza and Playground is labelled Generátor, ids unchanged; (4) #m=generator is kept as typed, not rewritten; (5) Více exists on desktop too, a second press for non-place pages, not a retirement under Q090; (6) the rail keeps 256 and 64 px; (7) an icon rail from 768 to 1023 px; (8) the place h1 id is per place (osc-title-<id>), amending design 09 PR-D; (9) one polite announcement Místo: <label>, its wording U136's to tune; (10) the bottom bar PR lands after U131 PR-E; (11) the inventory's #m= rows are frozen as a literal list; (12) when P012 lands the landing becomes the first place, not a bar slot."
+why: "The U132 architect's design of 2026-11-25 named these as the coordinator's to rule; none contradicts an owner answer (Q114 supersedes Q033's separate entry, Q019's order is kept, Q089's landing is future work, no page is retired so Q090 is not triggered)."
+scope:
+  - ".ai/repo/project/issues/Q116.yaml"
+  - "docs/reconstruction/11-u132-design.md"
+depends_on: ["Q114", "Q115"]
+acceptance_criteria:
+  - "The twelve rulings are recorded as evidence on this issue (covers verified) with the deciding session and date."
+  - "U132 and U131 cite Q116 where they apply these rulings."
+validation:
+  - "manual"
+evidence_required:
+  - "verified"
+created_at: 2026-11-25
