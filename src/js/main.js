@@ -68,7 +68,9 @@ import { createKeyRegistry } from './ui/keys/registry.js';
 import { createKeyDispatcher } from './ui/keys/dispatcher.js';
 import { bindPageKeys, pageKeyContext } from './ui/keys/clients.js';
 import { createWorkbench, followSequenceEdits } from './ui/workbench.js';
-import { createOutputBus, OWNER, outputRefusalOf, playOwnerOf } from './core/output-bus.js';
+import {
+  createOutputBus, OWNER, outputRefusalOf, playOwnerOf, soundingOwner,
+} from './core/output-bus.js';
 import { createTrace } from './core/trace.js';
 import { createNavigation, v1ModeFor } from './ui/navigation.js';
 import { createUnsavedGuard } from './ui/unsaved.js';
@@ -91,6 +93,7 @@ import { renderPlanToWav, renderSequenceToWav, screenshotCanvases } from './ui/e
 import { BUILD } from './core/build-info.js';
 import { aboutPart } from './ui/about.js';
 import { proClassesPart } from './ui/pro-classes.js';
+import { bindLensKeys, createLensPart, lensMarkerShown } from './ui/lens.js';
 import { armAudioUnlock } from './ui/audio-unlock.js';
 
 import { mount as mountAnalysis } from './labs/analysis.js';
@@ -542,7 +545,10 @@ function syncSequencerIcon(root) {
 
 function mountLabs(root) {
   const list = [
-    ['analysis', mountAnalysis], ['spectrogram', mountSpectrogram], ['device', mountDevice],
+    // In Sonda the marker shows only for an owner whose frequency is known (ui/lens.js).
+    ['analysis', mountAnalysis, { requestedShown: () => !app || !app.lensOpen
+      || lensMarkerShown(soundingOwner(app)) }],
+    ['spectrogram', mountSpectrogram], ['device', mountDevice],
     ['mic', mountMic], ['filter', mountFilter], ['envelope', mountEnvelope],
     ['additive', mountAdditive], ['phase', mountPhase],
     ['bio', mountBio, { onSelectRange: onBioRange }], ['sequencer', mountSequencer],
@@ -698,6 +704,7 @@ function integrationInit() {
   // bound through the one key registry and its one dispatcher (ui/keys/, K153).
   const keys = createKeyRegistry();
   bindPageKeys({ keys, cmp, stopSequencer, stopAll: bus.stopAll }); // Escape (C050)
+  bindLensKeys({ keys, cmp }); // an open Sonda takes Escape first
   createKeyDispatcher({ registry: keys, context: () => pageKeyContext(cmp) }).attach();
   cmp.keys = keys;
   window.addEventListener('blur', () => cmp.releaseHold());
@@ -764,7 +771,10 @@ function integrationInit() {
       cmp.experimentsRefreshCharts();
     });
   });
-  cmp.$watch('tabs.analysis', (tab) => setAnalysisTab(tab));
+  cmp.$watch('tabs.analysis', (tab) => {
+    setAnalysisTab(tab);
+    cmp.lensFollowTab(tab); // a computed tab takes the view back
+  });
   const loadExperiments = (ws) => {
     // Every entry reads the list again: another tab may have changed what is stored, and a
     // detail or comparison left open must show the stored record (ui/experiments.js syncViews).
@@ -921,6 +931,7 @@ function createOscillaComponent(ui) {
   const midi = createMidiUi({ engine, sequencerPlaying, bus, sequencerTransport });
   const cmp = compose(instrument, ui, workbench, measure, experiments, findings, connections,
     studio, navigation, midi, createCrossLinksUi(), provenancePart(), aboutPart(), proClassesPart(),
+    createLensPart({ relayout: () => { if (host) host.resize(); repairCharts(); } }),
     TEMPLATE_HELPERS, { busArmed: (owner, on) => bus.armed(owner, on) });
   cmp.dismissAlert = focusSafeDismiss(cmp.dismissAlert);
   const baseRefreshDebug = cmp.refreshDebug;
