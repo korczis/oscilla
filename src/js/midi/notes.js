@@ -3,9 +3,10 @@
 // Since K247 (ADR 0058, its K247 note) every note of the keys and of MIDI goes to the one
 // instrument that route() gives (midi/ui.js centralSink: the Studio document's note target, else
 // the Synth panel); the engine voices below play a note only where the page has no instrument
-// (a document of the user's that plays no notes and that the panel may not rewire, a unit rig). The owner table still refuses a note while a measurement, a level reference
-// capture or the sequencer owns the output; the Studio row does not, the Studio being the
-// instrument.
+// (a document of the user's that plays no notes and that the panel may not rewire, a unit rig).
+// The owner table still refuses a note while a measurement or a level reference capture owns
+// the output; the Studio row does not, the Studio being the instrument, and a running sequence
+// admits the notes over it (U139).
 //
 // A message from an input becomes a note event, and a note event becomes a note voice of the
 // one engine (engine.noteOn / noteOff / notesOff): no second graph, no synth of its own. What
@@ -34,8 +35,8 @@
 // listened-to input is lost (every note, not only that input's), the access is withdrawn or
 // replaced, the window loses the focus, the page is hidden, Escape is pressed, Measure or
 // Studio PLAY takes the output, or the sequencer starts. A note is refused
-// while a measurement, a level reference capture, the Studio transport or the sequencer owns
-// the output (ownedBy, src/js/midi/ui.js MIDI_REFUSED).
+// while a measurement, a level reference capture or the Studio transport owns the output
+// (ownedBy, src/js/midi/ui.js MIDI_REFUSED); while a sequence plays it sounds over it (U139).
 // The Labs stages that play() adds (filter, ADSR, additive) do not apply to notes.
 
 import { forcedOff } from '../audio/gate.js';
@@ -81,8 +82,8 @@ export function parseMidiMessage(data) {
  * once for each note that starts on the Playground's voices, it answers { ok } or
  * { ok: false, by } with the owner that refuses it; `release()` tells the bus the last held
  * note is gone; `noted(on, note, source)` tells it each note that starts or ends (its trace,
- * C050). Without a claim, `ownedBy()` names who owns the output ('measurement',
- * 'reference', 'studio', 'sequencer') or returns null, as before the bus. `refused(by)`
+ * C050). Without a claim, `ownedBy()` names who refuses the notes ('measurement',
+ * 'reference', 'studio') or returns null, as before the bus. `refused(by)`
  * is told once per run of refused notes, with the refused note's source (the caller says so to
  * the user; V503's answer says its own refusal, midi/response-mode.js).
  * The MIDI inputs and the on-screen and computer keyboard (K026, src/js/midi/keyboard.js) play
@@ -136,7 +137,8 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
     // refuse what only a player may do (V503: an answer never inserts the Synth panel).
     const sink = route(source);
     // The instrument is the Studio document, so the Studio row of the owner table never refuses
-    // its keys; a measurement, a level reference capture and the sequencer still do (C036).
+    // its keys; a measurement and a level reference capture still do (C036), a running sequence
+    // never does (U139).
     if (sink) {
       const by = ownedBy();
       if (by && by !== 'studio') {

@@ -94,9 +94,10 @@ export function inputRow(name) {
 
 /**
  * `engine`: the AudioEngine the notes sound through. `sequencerPlaying()`: whether the
- * sequencer is playing now (main.js reads the editor itself, not the 150 ms `seqPlaying` copy);
- * the sequencer plays into the engine's master outside its voices, so notes and a sequence are
- * kept apart here: a note is refused while it plays, and main.js stops the notes when it starts.
+ * sequencer is playing now (main.js reads the editor itself, not the 150 ms `seqPlaying` copy).
+ * The keys and MIDI play over a running sequence (U139: the sequencer row of the one table
+ * admits the notes, and the sequence keeps the output); main.js stops the notes when a sequence
+ * starts.
  */
 export function createMidiUi({ win = window, engine = null, sequencerPlaying = () => false,
   bus = null, sequencerTransport = null, now = perf } = {}) {
@@ -135,7 +136,8 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
           continuous: cmp.continuousAllowed }),
         // Who refuses a note now: the rows of the one output-owner table that refuse notes
         // (C036): the measurement, a microphone level-reference capture (the loopback's
-        // reference is the output itself, as for every other claim), the Studio, the sequencer.
+        // reference is the output itself, as for every other claim), the Studio; never a
+        // running sequence, which the notes play over (U139).
         ownedBy: () => notesRefusalOf(cmp, { sequencerPlaying }),
         // The playback bus (C037, main.js): each note that starts on the Playground's voices
         // claims the output as the notes, and the last released note gives it back.
@@ -385,6 +387,15 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
     midiResponseToggle(on = !this.midiResponse) {
       this.midiResponse = response ? response.setOn(on) : false;
       return this.midiResponse;
+    },
+
+    /**
+     * True while a key or MIDI note is being taken by the one instrument (K247): the claim the
+     * instrument's arm makes then is the notes' (the notes row's `arming` in the one table), so
+     * a running sequence admits it and plays on (U139).
+     */
+    midiArming() {
+      return arming > 0;
     },
 
     midiAllOff() {

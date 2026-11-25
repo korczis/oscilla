@@ -15,8 +15,8 @@
 //   limit (a held note is exempt, ADR 0062), and every way the notes stop leave zero engine
 //   nodes and zero live sources.
 // - support.js listens to each connected input and says when one goes away.
-// - A note is refused, said once per owner, while a measurement, a level reference capture,
-//   the Studio or the sequencer owns the output.
+// - A note is refused, said once per owner, while a measurement, a level reference capture or
+//   the Studio owns the output; a running sequence refuses none (U139).
 //
 //   node --test 'tests/unit/midi/*.test.mjs'
 import test from 'node:test';
@@ -552,7 +552,16 @@ test('the component part: Playground settings per note, a refusal said, every st
   assert.ok(allGone(r));
   cmp.meas.levelForm.capturing = false;
   cmp.meas.loopback = false;
-  refusedBy(() => { sequencing = true; }, () => { sequencing = false; }, 'sequencer');
+  // U139: a running sequence refuses no note; the keys play over it.
+  notices.length = 0;
+  sequencing = true;
+  port.send([0x90, 60, 100]);
+  assert.equal(r.engine.noteCount, 1, 'a note sounds over a running sequence');
+  assert.deepEqual(notices, []);
+  cmp.midiAllOff();
+  r.fake.advance(1);
+  assert.ok(allGone(r));
+  sequencing = false;
   notices.length = 0;
   port.send([0x90, 60, 100]);
   assert.equal(r.engine.noteCount, 1, 'with nobody owning the output a note sounds again');
@@ -671,8 +680,8 @@ test('all-off and silence release a note held on the sink a switch left behind',
   }
 });
 
-test('K247: the one instrument is refused by a measurement, a reference or the sequencer, never '
-  + 'by the Studio it is', () => {
+test('K247: the one instrument is refused by a measurement or a reference, never by the Studio '
+  + 'it is (U139: nor by a running sequence, which ownedBy no longer names)', () => {
   const played = [];
   const said = [];
   let owner = null;
@@ -682,12 +691,12 @@ test('K247: the one instrument is refused by a measurement, a reference or the s
     refused: (by) => said.push(by) });
   owner = 'studio'; // the keys' own armed run, or PLAY: the instrument plays on
   assert.equal(notes.noteOn(60, 100, 1).ok, true);
-  for (const by of ['sequencer', 'measurement', 'reference']) {
+  for (const by of ['measurement', 'reference']) {
     owner = by;
     assert.deepEqual(notes.noteOn(62, 100, 1), { ok: false, reason: by });
     assert.deepEqual(notes.noteOn(64, 100, 1), { ok: false, reason: by });
   }
-  assert.deepEqual(said, ['sequencer', 'measurement', 'reference'], 'said once per run');
+  assert.deepEqual(said, ['measurement', 'reference'], 'said once per run');
   owner = null;
   assert.equal(notes.noteOn(65, 100, 1).ok, true, 'once the owner is gone it sounds again');
   assert.deepEqual(played, [60, 65]);
