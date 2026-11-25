@@ -35,6 +35,10 @@ function jsFiles(dir = path.join(ROOT, 'src', 'js')) {
 
 /** The page-level listeners that stop nothing, or stop what the bus cannot, with the reason. */
 const ALLOW = [
+  { file: 'src/js/ui/session-draft.js', event: 'pagehide',
+    reason: 'writes the session draft a reload restores (U138); stops nothing, the bus stops' },
+  { file: 'src/js/ui/session-draft.js', event: 'visibilitychange',
+    reason: 'writes the session draft when the page hides (U138); stops nothing, the bus stops' },
   { file: 'src/js/ui/experiments.js', event: 'visibilitychange',
     reason: 'refreshes the saved-experiments list when the page shows again; stops nothing' },
   { file: 'src/js/ui/app.js', event: 'keydown',

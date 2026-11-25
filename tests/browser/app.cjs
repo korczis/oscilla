@@ -1321,6 +1321,14 @@ function defineChecks() {
       timeout: 5000 }).catch(() => {});
     await collect();
     await page.click('[data-osc="presets.tab"][data-value="reference"]');
+    // U138: the recovery notice exists only after a reload restored work; the audit shows it
+    // here and hides it again (journeys.cjs journey-5-persist:reload-draft reaches it by reload).
+    await page.evaluate(() => { window.OSCILLA.app.draft.text = 'Obnoveno.';
+      window.OSCILLA.app.draft.shown = true; });
+    await page.waitForSelector('[data-osc="draft.reset"]', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await collect();
+    await page.evaluate(() => { window.OSCILLA.app.draft.shown = false; });
     // K171: on the Synth's XY tab the pad owns the notes and the docked keyboard folds to its
     // handle, the one state that shows keyboard.handle.
     await H.workspace(page, 'synth');
