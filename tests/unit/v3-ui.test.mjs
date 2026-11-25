@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import { WORKSPACES, NAV_GROUPS, navGroupOf } from '../../src/js/ui/app.js';
-import { NAV_TREE, WORKSPACE_REGISTRY } from '../../src/js/ui/shell.js';
+import { modesOf, NAV_TREE, WORKSPACE_REGISTRY } from '../../src/js/ui/shell.js';
 import {
   experimentFromResult, experimentTestContext, DEFAULT_EXPERIMENT_NAME,
 } from '../../src/js/ui/measure-experiment.js';
@@ -61,10 +61,15 @@ test('the top level is §73 plus Studio (§198) and About; groups hold the V2 wo
 
 test('the workspaces are full-width views keyed on `workspace`, with their own panels', () => {
   // The Playground shows MEASURE's guided flow as its measurement row (P002, Q004 option A),
-  // so the view is shown there too; its other panels stay MEASURE's (instrument.css,
-  // tests/unit/first-screen-layout.test.mjs, tests/browser/first-screen.cjs check layout).
-  assert.match(measureView, /:hidden="workspace !== 'measure' && workspace !== 'playground'"/);
-  assert.match(experimentsView, /:hidden="workspace !== 'experiments'"/);
+  // so the view is shown there too; its other panels stay MEASURE's. The shell registry says
+  // so (ui/shell.js WORKSPACE_REGISTRY `panels`, U129; tests/unit/first-screen-layout.test.mjs
+  // and tests/browser/first-screen.cjs check layout).
+  assert.deepEqual(modesOf('measure-view'), ['measure', 'playground']);
+  assert.deepEqual(modesOf('measure-flow'), ['measure', 'playground']);
+  assert.deepEqual(modesOf('measure-result'), ['measure']);
+  assert.deepEqual(modesOf('experiments-view'), ['experiments']);
+  assert.match(measureView, /data-osc-modes="measure playground"/);
+  assert.match(experimentsView, /data-osc-modes="experiments" hidden/);
   assert.equal((measureView.match(/<section class="osc-panel /g) || []).length, 7);
   // Definitions (ADR 0043), saved experiments, findings (ADR 0046), detail, compare.
   assert.equal((experimentsView.match(/<section class="osc-panel /g) || []).length, 5);

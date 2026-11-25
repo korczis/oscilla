@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { WORKSPACES, workspaceTitle } from '../../src/js/ui/app.js';
-import { NAV_TREE } from '../../src/js/ui/shell.js';
+import { modesOf, NAV_TREE } from '../../src/js/ui/shell.js';
 import { expandStations } from '../../scripts/about-stations.mjs';
 
 // The About stations are data the build renders (R032): the tests read what it renders.
@@ -50,7 +50,10 @@ test('About is the last workspace and the last primary navigation item', () => {
 });
 
 test('the About view is a full-width view keyed on the workspace, not the V1 mode', () => {
-  assert.match(aboutView, /:hidden="workspace !== 'about'"/);
+  // The shell registry shows it on its own workspace (ui/shell.js, U129), not the V1 mode.
+  assert.deepEqual(modesOf('about-view'), ['about']);
+  assert.match(aboutView,
+    /^id="osc-view-about" data-osc="about-view"\s+data-osc-modes="about" hidden\s/);
   assert.match(aboutView, /aria-labelledby="osc-about-title"/);
   assert.equal((aboutView.match(/<h2\b/g) || []).length, 1, 'one primary heading');
   assert.ok(!html.includes('osc-dlg-about'), 'the modal About dialog is retired');

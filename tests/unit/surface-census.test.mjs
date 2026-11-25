@@ -42,6 +42,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { WORKSPACES } from '../../src/js/ui/app.js';
+import { modesOf as registryModesOf } from '../../src/js/ui/shell.js';
 import { HASH_DOMAINS, INSTRUMENT_HASH_KEYS, routeOfHash } from '../../src/js/ui/navigation.js';
 import { MEASURE_RESULT_TABS } from '../../src/js/ui/measure.js';
 import { PRESET_CATEGORIES } from '../../src/js/data/presets.js';
@@ -129,8 +130,15 @@ export function deriveShell(rawHtml) {
   const spans = tags.filter((t) => attrOf(t.tag, 'data-osc-modes') !== null)
     .map((t) => ({ ...t, end: elementEnd(html, t.at, t.name),
       modes: attrOf(t.tag, 'data-osc-modes').split(/\s+/).filter(Boolean) }));
+  // A card of a view (data-osc-card, the Measure view's) shows where the shell registry shows
+  // it (src/js/ui/shell.js), which may be fewer workspaces than its view: what it holds is
+  // reached from those.
+  const cards = tags.filter((t) => attrOf(t.tag, 'data-osc-card') !== null)
+    .map((t) => ({ ...t, end: elementEnd(html, t.at, t.name),
+      modes: registryModesOf(attrOf(t.tag, 'data-osc-card')) }));
   const modesAt = (at) => {
-    const own = spans.filter((s) => s.at <= at && at < s.end).sort((a, b) => b.at - a.at)[0];
+    const own = [...spans, ...cards].filter((s) => s.at <= at && at < s.end)
+      .sort((a, b) => b.at - a.at)[0];
     return own ? own.modes : [];
   };
   const panels = [];

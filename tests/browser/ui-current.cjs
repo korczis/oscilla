@@ -25,9 +25,11 @@
 //   dismissed this session (a first-visit notice, at most 44 px on a phone):
 //     share    its own work covers at least WORK_SHARE of the viewport height on the first
 //              screen: the union of the visible elements that list the workspace in
-//              data-osc-modes (on the Playground, the panels that list it and the measurement
-//              row; elsewhere without Source & Pattern and Signal analysis, the Playground's
-//              panels), gaps of up to WORK_GAP px between them bridged, clipped to the viewport;
+//              data-osc-modes, the shell registry's membership (src/js/ui/shell.js, held equal
+//              by tests/unit/panel-membership.test.mjs; on the Playground the measurement row
+//              is the Measure view it lists; elsewhere without Source & Pattern and Signal
+//              analysis, the Playground's panels), gaps of up to WORK_GAP px between them
+//              bridged, clipped to the viewport;
 //     covered  no interactive element is covered: scrolled to the centre of the view,
 //              elementFromPoint at its centre hits it, a descendant, or its wrapping label
 //              (unrendered elements, checkVisibility() false, and a centre still outside a
@@ -268,9 +270,8 @@ function phoneWhole({ ws, gap, touchMin }) {
   const PLAYGROUND_PANELS = '.osc-p-source, .osc-p-analysis';
   const listed = [...document.querySelectorAll('[data-osc-modes]')]
     .filter((el) => el.dataset.oscModes.split(/\s+/).includes(ws));
-  const own = (ws === 'playground'
-    ? [...listed, document.getElementById('osc-view-measure')]
-    : listed.filter((el) => !el.matches(PLAYGROUND_PANELS))).filter((el) => el && shown(el));
+  const own = (ws === 'playground' ? listed : listed.filter((el) => !el.matches(PLAYGROUND_PANELS)))
+    .filter((el) => el && shown(el));
   const spans = own.map((el) => el.getBoundingClientRect())
     .map((r) => [Math.max(0, r.top), Math.min(vh, r.bottom)]).filter(([a, b]) => b > a)
     .sort((a, b) => a[0] - b[0]);

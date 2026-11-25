@@ -267,7 +267,9 @@ test('#330 F4: a drawer entry hands focus to the workspace heading within the pr
       setAttribute(k, v) { this.attrs[k] = v; },
       focus() { focused.push(this.id); active = this; } };
     let active = null;
-    const view = { dataset: { oscModes: 'about' }, classList: { contains: (c) => c === 'osc-view',
+    // Its hooks as src/index.html has them: the registry knows the view by its data-osc.
+    const view = { dataset: { oscModes: 'about', osc: 'about-view' },
+      classList: { contains: (c) => c === 'osc-view',
       toggle() {} },
       getClientRects: () => [{}], getAttribute: (k) => (k === 'aria-labelledby'
         ? 'osc-about-title' : null), querySelector: () => null, matches: () => false };

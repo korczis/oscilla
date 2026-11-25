@@ -16,7 +16,10 @@
 //                     opens that workspace
 //   panels            on each of those pages, at 1536x1024, every data-osc-modes element shown
 //                     has an id and a contract, and every contracted panel is shown in each
-//                     workspace its reachedFrom names; each panel's deep link shows it
+//                     workspace its reachedFrom names where the shell registry shows it from
+//                     1536 px (src/js/ui/shell.js memberBands, band `wide`: the Playground
+//                     leaves its lab panels to their workspaces there); each panel's deep link
+//                     shows it
 //   tabs              every role=tab the visited pages hold is keyed by data-osc and data-value
 //                     and is a subview of the contract, and every contracted tab was found
 //   view-switches     the regions shown by a view switch (x-show="exps.panel === '<v>'") are the
@@ -58,6 +61,14 @@ const JSON_OUT = arg('json', '');
 const CENSUS = JSON.parse(fs.readFileSync(path.join(ROOT, 'tests', 'unit',
   'surface-census.json'), 'utf8'));
 const OF = (kind) => CENSUS.surfaces.filter((e) => e.kind === kind);
+/** src/js/ui/shell.js, the one membership registry, loaded once RUN is ready. */
+let SHELL = null;
+/** The registry key of a contracted panel: `osc-panel-<key>`, or `osc-view-<ws>` -> `<ws>-view`. */
+const panelKey = (id) => (id.startsWith('osc-view-') ? `${id.slice('osc-view-'.length)}-view`
+  : id.replace(/^osc-panel-/, ''));
+/** Is contracted panel `p` on workspace `ws`'s page at 1536x1024 (DESKTOP)? */
+const shownAtDesktop = (ws, p) => p.reachedFrom.includes(ws)
+  && SHELL.memberBands(ws, panelKey(p.id)).includes('wide');
 const VIEW_SWITCHES = ['exps.panel'];
 const NOT_STORED = 'u063-not-stored';
 const DESKTOP = { width: 1536, height: 1024 };
@@ -164,7 +175,7 @@ function defineChecks() {
     let nav = null;
     for (const ws of OF('workspace')) {
       const page = await openPage(ctx, ws.deepLink);
-      const want = OF('panel').filter((p) => p.reachedFrom.includes(ws.id)).map((p) => p.id);
+      const want = OF('panel').filter((p) => shownAtDesktop(ws.id, p)).map((p) => p.id);
       const r = await settle(page, (s) => s.workspace === ws.id
         && want.every((id) => s.panels.includes(id)),
       `${ws.deepLink} opens ${ws.id} with its panels`);
@@ -188,7 +199,7 @@ function defineChecks() {
     const unknown = minus(Object.values(ctx.shown).flat(), contract);
     const notReached = [];
     for (const p of OF('panel')) {
-      for (const ws of p.reachedFrom) {
+      for (const ws of p.reachedFrom.filter((w) => shownAtDesktop(w, p))) {
         if (!(ctx.shown[ws] || []).includes(p.id)) notReached.push(`${p.id} in ${ws}`);
       }
     }
@@ -340,6 +351,7 @@ async function runOne(browserName, origin, baseUrl) {
 
 (async () => {
   await RUN.ready();
+  SHELL = await import(pathToFileURL(path.join(ROOT, 'src', 'js', 'ui', 'shell.js')).href);
   if (!fs.existsSync(DIST)) {
     console.error(`missing ${DIST}: run npm run build`);
     process.exit(2);

@@ -1,0 +1,5 @@
+{
+  "rule": "U129: the shell registry owns which panels a place shows",
+  "note": "The second-mechanism census of plan issue U129, judged by tests/unit/panel-membership.test.mjs: every way of deciding which panels a workspace shows other than its row of the shell registry (src/js/ui/shell.js WORKSPACE_REGISTRY panels, applied by ui/app.js markWorkspacePanels) that the tree still holds, one finding per entry without its line: a stylesheet rule that hides a membership element by default or keyed on the workspace, or shows one keyed on it with a display but contents; a stylesheet list of workspaces (data-osc-modes~=); an Alpine :hidden, x-show or x-if over workspace or the V1 mode on a membership element, or its :class over them adding a hiding class; a read of data-osc-modes in src/js. The tree must hold exactly these findings, so the list only shrinks: a new finding fails, a finding no longer found must be removed. U129 removed all of them (21 stylesheet selectors, the :hidden bindings of seven views, the Synth's four :class hides), so the list is empty and stays empty.",
+  "mechanisms": []
+}

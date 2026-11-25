@@ -467,7 +467,7 @@
 /* ---------- Desktop workspace focus layouts ----------
  * Playground = the integrated reference grid. Every other workspace re-flows the same panels
  * (wrappers become display: contents) into a 12-column grid that enlarges the panels the
- * workspace is about; panels it does not list are hidden.
+ * workspace is about. Which panels it shows is the shell registry's (ui/shell.js).
  */
 @media (min-width: 1536px) {
   .osc-app:is([data-mode="sequencer"], [data-mode="analyzer"], [data-mode="filter"],
@@ -491,14 +491,6 @@
     grid-column: span 12;
     height: auto;
     min-height: 0;
-  }
-
-  .osc-app[data-mode="sequencer"] .osc-panel:not([data-osc-modes~="sequencer"]),
-  .osc-app[data-mode="analyzer"] .osc-panel:not([data-osc-modes~="analyzer"]),
-  .osc-app[data-mode="filter"] .osc-panel:not([data-osc-modes~="filter"]),
-  .osc-app[data-mode="synthesis"] .osc-panel:not([data-osc-modes~="synthesis"]),
-  .osc-app[data-mode="compare"] .osc-panel:not([data-osc-modes~="compare"]) {
-    display: none;
   }
 
   /* Sequencer: source left, the sequencer large on the right. */

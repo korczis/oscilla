@@ -15,7 +15,7 @@
     "selectors": 1189,
     "domainViewSelectors": 438
   },
-  "debt": 3587,
+  "debt": 3567,
   "surfaces": {
     "pending": [
       "card#osc-exp-compare",
@@ -346,7 +346,7 @@
     "osc-p-source": 3,
     "osc-p-spectrogram": 1,
     "osc-p-studio": 1,
-    "osc-panel": 35,
+    "osc-panel": 33,
     "osc-panel-fs": 2,
     "osc-panel-header": 28,
     "osc-panel-title": 29,
@@ -849,24 +849,24 @@
       "declarations": 488
     },
     "src/styles/instrument.css": {
-      "selectors": 243,
-      "declarations": 625
+      "selectors": 238,
+      "declarations": 618
     },
     "src/styles/integration.css": {
-      "selectors": 170,
-      "declarations": 336
+      "selectors": 165,
+      "declarations": 335
     },
     "src/styles/main.css": {
       "selectors": 0,
       "declarations": 0
     },
     "src/styles/measure.css": {
-      "selectors": 258,
-      "declarations": 618
+      "selectors": 257,
+      "declarations": 617
     },
     "src/styles/responsive.css": {
-      "selectors": 155,
-      "declarations": 181
+      "selectors": 148,
+      "declarations": 176
     }
   },
   "domainViews": {
@@ -879,8 +879,8 @@
       "declarations": 490
     },
     "src/styles/studio.css": {
-      "selectors": 273,
-      "declarations": 771
+      "selectors": 270,
+      "declarations": 767
     },
     "src/styles/tokens.css": {
       "selectors": 4,

@@ -9,14 +9,16 @@
 //   var(--osc-fs-floor)), and every Tailwind text-[<n>px] under 12 px in src/index.html and
 //   src/js is listed debt (SMALL_FONT_DEBT, SMALL_TEXT_CLASS_DEBT: each entry names its owner,
 //   is still small, and the lists only shrink).
-// - Own panels first (responsive.css, below 1536 px): a workspace other than the Playground
-//   shows only the panels it lists in data-osc-modes, each lab workspace of src/index.html is
-//   in the rule that shows them, and Source & Pattern and Signal analysis are ordered after
-//   every other panel there; no rule shows them in every workspace.
+// - Own panels first (below 1536 px): a workspace other than the Playground shows only the
+//   panels its shell registry row lists (src/js/ui/shell.js WORKSPACE_REGISTRY `panels`,
+//   applied by ui/app.js markWorkspacePanels; no rule of responsive.css hides a panel by
+//   workspace, U129), and Source & Pattern and Signal analysis are ordered after every other
+//   panel there (responsive.css); no rule shows them in every workspace.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { memberBands, MEMBERSHIP_CLASSES, WORKSPACE_REGISTRY } from '../../src/js/ui/shell.js';
 
 const ROOT = new URL('../../', import.meta.url).pathname;
 const read = (rel) => readFileSync(join(ROOT, rel), 'utf8');
@@ -188,58 +190,81 @@ const responsive = stripComments(read('src/styles/responsive.css'));
 const below1536 = rules(mediaBlock(responsive, '(max-width: 1535.98px)'));
 const PLAYGROUND_PANELS = ['.osc-p-source', '.osc-p-analysis'];
 
-/** The lab workspaces: the data-osc-modes of the panels of src/index.html, but the Playground. */
-function labWorkspaces() {
+/** The grid panels of src/index.html: their class, registry key and document position. */
+function gridPanels() {
   const html = read('src/index.html');
-  const modes = new Set();
-  for (const m of html.matchAll(/<section class="osc-panel[^"]*"[^>]*?data-osc-modes="([^"]+)"/g)) {
-    for (const w of m[1].split(/\s+/)) if (w !== 'playground') modes.add(w);
-  }
-  return [...modes].sort();
+  return [...html.matchAll(
+    /<section class="osc-panel (osc-p-[\w-]+)[^"]*"[^>]*?data-osc-panel="([\w-]+)"/g)]
+    .map((m, i) => ({ c: m[1], key: m[2], dom: i }));
 }
 
-test('below 1536 px a workspace but the Playground shows only its marked panels, no list', () => {
-  const hide = below1536.find((r) => r.decls.display === 'none' && r.selectors.includes(
-    '.osc-app:not([data-mode="playground"]) .osc-panel[data-osc-modes]:not(.is-focused)'));
-  assert.ok(hide, 'no rule hides the unmarked panels outside the Playground below 1536 px');
-  // No hand-kept copy of the workspace list: no rule names a lab workspace's data-osc-modes.
-  const named = [...responsive.matchAll(/data-osc-modes~="([\w-]+)"/g)].map((m) => m[1])
-    .filter((w) => w !== 'playground');
-  assert.deepEqual(named, [], 'a rule keyed on a workspace list; key it on the mark');
-  assert.ok(labWorkspaces().length >= 5, labWorkspaces().join());
-});
+/** The lab workspaces: those whose registry row lists a grid panel, but the Playground. */
+function labWorkspaces() {
+  const keys = new Set(gridPanels().map((p) => p.key));
+  return WORKSPACE_REGISTRY.filter((w) => w.id !== 'playground'
+    && w.panels.some((e) => keys.has(e.id))).map((w) => w.id).sort();
+}
 
-/** A fake panel: its data-osc-modes and a class list. */
-function fakePanel(modes, classes = ['osc-panel']) {
+test('below 1536 px a workspace but the Playground shows only its registry panels, no list',
+  () => {
+    // No rule of responsive.css hides a panel by workspace: the registry row does (U129).
+    const all = rules(responsive.replace(/@media[^{]*\{/g, ''));
+    const keyed = all.filter((r) => r.decls.display === 'none')
+      .flatMap((r) => r.selectors).filter((s) => /data-mode|data-osc-modes|is-focused/.test(s));
+    assert.deepEqual(keyed, [], 'a rule hides a panel by workspace; list it in the registry');
+    // No hand-kept copy of the workspace list: no rule names a lab workspace's data-osc-modes.
+    const named = [...responsive.matchAll(/data-osc-modes~="([\w-]+)"/g)].map((m) => m[1]);
+    assert.deepEqual(named, [], 'a rule keyed on a workspace list; key it on the registry');
+    assert.ok(labWorkspaces().length >= 5, labWorkspaces().join());
+    for (const w of labWorkspaces()) {
+      const shown = gridPanels().filter((p) => memberBands(w, p.key).includes('tablet'));
+      assert.ok(shown.length > 0 && shown.length < gridPanels().length, `${w}: ${shown.length}`);
+    }
+  });
+
+/** A fake element: its data hooks (data-osc-panel, data-osc-card, data-osc) and classes. */
+function fakePanel(dataset, classes = ['osc-panel']) {
   const set = new Set(classes);
   return {
-    dataset: { oscModes: modes },
+    dataset,
+    hidden: true,
     classList: {
       contains: (c) => set.has(c),
       toggle: (c, on) => { if (on) set.add(c); else set.delete(c); return on; },
     },
     has: (c) => set.has(c),
+    classes: () => [...set].filter((c) => MEMBERSHIP_CLASSES.includes(c)),
   };
 }
 
 test('markWorkspacePanels marks exactly the panels a workspace lists, none on the Playground',
   async () => {
     const { markWorkspacePanels } = await import('../../src/js/ui/app.js');
-    const source = fakePanel('playground sequencer synthesis');
-    const mic = fakePanel('analyzer compare');
-    const filter = fakePanel('filter');
-    const view = fakePanel('measure', ['osc-view']);
-    const all = [source, mic, filter, view];
+    const source = fakePanel({ oscPanel: 'source' });
+    const mic = fakePanel({ oscPanel: 'mic' });
+    const filter = fakePanel({ oscPanel: 'filter' });
+    const view = fakePanel({ osc: 'measure-view' }, ['osc-view']);
+    const card = fakePanel({ oscCard: 'measure-result' });
+    const all = [source, mic, filter, view, card];
     markWorkspacePanels(all, 'compare');
-    assert.deepEqual(all.map((p) => p.has('is-focused')), [false, true, false, false]);
+    assert.deepEqual(all.map((p) => p.has('is-focused')), [false, true, false, false, false]);
+    assert.deepEqual(all.map((p) => p.classes()), [['!hidden'], [], ['!hidden'], [], ['!hidden']]);
+    assert.equal(view.hidden, true, 'the Measure view is not Compare\'s');
     markWorkspacePanels(all, 'sequencer');
-    assert.deepEqual(all.map((p) => p.has('is-focused')), [true, false, false, false]);
+    assert.deepEqual(all.map((p) => p.has('is-focused')), [true, false, false, false, false]);
     markWorkspacePanels(all, 'measure');
-    assert.deepEqual(all.map((p) => p.has('is-focused')), [false, false, false, false],
-      'a view is never marked');
+    assert.deepEqual(all.map((p) => p.has('is-focused')), [false, false, false, false, false],
+      'a view and its cards are never marked');
+    assert.equal(view.hidden, false);
+    assert.deepEqual(card.classes(), []);
     markWorkspacePanels(all, 'filter');
     markWorkspacePanels(all, 'playground');
-    assert.deepEqual(all.map((p) => p.has('is-focused')), [false, false, false, false]);
+    assert.deepEqual(all.map((p) => p.has('is-focused')), [false, false, false, false, false]);
+    // The Playground's own composition by width: the microphone from 768 px, the filter at
+    // 768-1535 px only, the guided flow without the Measure view's other cards.
+    assert.deepEqual(all.map((p) => p.classes()),
+      [[], ['max-md:!hidden'], ['max-md:!hidden', '2xl:!hidden'], [], ['!hidden']]);
+    assert.equal(view.hidden, false);
   });
 
 test('a deep link\'s load marks the panels in the step that sets the workspace', () => {
@@ -284,10 +309,7 @@ function applies(selector, w, c) {
 }
 
 test('768-1535 px: no lab workspace leaves a half-width panel alone in its row', () => {
-  const html = read('src/index.html');
-  const panels = [...html.matchAll(
-    /<section class="osc-panel (osc-p-[\w-]+)[^"]*"[^>]*?data-osc-modes="([^"]+)"/g)]
-    .map((m, i) => ({ c: m[1], modes: m[2].split(/\s+/), dom: i }));
+  const panels = gridPanels();
   const sheet = [...below1536, ...mediaRules(stripComments(read('src/styles/studio.css')),
     '(max-width: 1535.98px)')];
   const last = (w, c, prop) => {
@@ -301,7 +323,7 @@ test('768-1535 px: no lab workspace leaves a half-width panel alone in its row',
   };
   const alone = [];
   for (const w of labWorkspaces()) {
-    const shown = panels.filter((p) => p.modes.includes(w))
+    const shown = panels.filter((p) => memberBands(w, p.key).includes('tablet'))
       .map((p) => ({ ...p, order: Number(last(w, p.c, 'order') || 0),
         full: (last(w, p.c, 'grid-column') || '').replace(/\s+/g, '') === '1/-1' }))
       .sort((a, b) => a.order - b.order || a.dom - b.dom);

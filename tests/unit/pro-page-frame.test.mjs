@@ -8,7 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { mainFrameOf, ownsViewOf, WORKSPACE_IDS } from '../../src/js/ui/shell.js';
+import { mainFrameOf, modesOf, ownsViewOf, WORKSPACE_IDS } from '../../src/js/ui/shell.js';
 import { PRO } from '../../src/js/ui/pro-classes.js';
 import {
   boundProClasses, openingTags, PRO_STRUCTURE,
@@ -148,14 +148,16 @@ test('no legacy stylesheet keeps a frame of its own for <main> or a view', () =>
 });
 
 test('the measure view, shown on the Playground too, drops its frame there', () => {
-  // Its :hidden lets it show on another workspace; there it stands in <main>'s frame.
+  // The registry shows it on the Playground too (its guided flow, ui/shell.js
+  // WORKSPACE_REGISTRY); there it stands in <main>'s frame.
   const tag = VIEWS.get('measure');
-  assert.match(tag, /:hidden="workspace !== 'measure' && workspace !== 'playground'"/);
+  assert.deepEqual(modesOf('measure-view'), ['measure', 'playground']);
   assert.match(tag, /:class="\[PRO\.pageView, workspace !== 'measure' && '!p-0'\]"/);
   for (const [id, t] of VIEWS) {
+    assert.doesNotMatch(t, /\s:hidden=/,
+      `#osc-view-${id}: the registry shows it (ui/app.js markWorkspacePanels), no binding`);
     if (id === 'measure') continue;
-    const hidden = (t.match(/:hidden="([^"]*)"/) || [])[1] || '';
-    assert.match(hidden, new RegExp(`^(workspace|mode) !== '${id}'$`),
+    assert.deepEqual(modesOf(`${id}-view`), [id],
       `#osc-view-${id} shows on its own workspace only`);
   }
 });

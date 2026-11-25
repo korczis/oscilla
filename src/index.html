@@ -481,13 +481,13 @@
       akustická laboratoř v prohlížeči bez instalace: generujte, měřte a opakujte zvukové
       experimenty a zjistěte, nakolik lze kterému výsledku věřit.</h1>
 
-    <div class="osc-top" :class="workspace === 'synth' && 'hidden'">
+    <div class="osc-top" data-osc-row="top">
       <div class="osc-top-left">
         <div class="osc-row1-left">
 
           <!-- ---------- Source & Pattern ---------- -->
           <section class="osc-panel osc-p-source" id="osc-panel-source" data-osc-panel="source"
-            data-osc-modes="playground sequencer synthesis" aria-labelledby="osc-source-title">
+            data-osc-modes="playground synthesis sequencer" aria-labelledby="osc-source-title">
             <div class="osc-panel-header">
               <h2 class="osc-panel-title" id="osc-source-title">Zdroj a vzor</h2>
               <span class="osc-spacer"></span>
@@ -793,8 +793,8 @@
         </div>
 
         <!-- ---------- Spectrogram ---------- -->
-        <section class="osc-panel osc-p-spectrogram" id="osc-panel-spectrogram"
-          data-osc-panel="spectrogram" data-osc-modes="analyzer" aria-labelledby="osc-spg-title">
+        <section class="osc-panel osc-p-spectrogram max-md:!hidden 2xl:!hidden" id="osc-panel-spectrogram"
+          data-osc-panel="spectrogram" data-osc-modes="analyzer playground" aria-labelledby="osc-spg-title">
           <div class="osc-panel-header">
             <h2 class="osc-panel-title" id="osc-spg-title">Spektrogram</h2>
             <span class="osc-spacer"></span>
@@ -842,8 +842,8 @@
         <div class="osc-row1-right">
 
           <!-- ---------- Microphone analyzer ---------- -->
-          <section class="osc-panel osc-p-mic" id="osc-panel-mic" data-osc-panel="mic"
-            data-osc-modes="analyzer compare" aria-labelledby="osc-mic-title">
+          <section class="osc-panel osc-p-mic max-md:!hidden" id="osc-panel-mic" data-osc-panel="mic"
+            data-osc-modes="analyzer playground compare" aria-labelledby="osc-mic-title">
             <div class="osc-panel-header osc-mic-head">
               <h2 class="osc-panel-title" id="osc-mic-title">Analyzátor mikrofonu</h2>
               <span class="osc-spacer"></span>
@@ -895,8 +895,8 @@
           </section>
 
           <!-- ---------- Device & Limits ---------- -->
-          <section class="osc-panel osc-p-device" id="osc-panel-device" data-osc-panel="device"
-            data-osc-modes="analyzer" aria-labelledby="osc-dev-title">
+          <section class="osc-panel osc-p-device max-md:!hidden" id="osc-panel-device" data-osc-panel="device"
+            data-osc-modes="analyzer playground" aria-labelledby="osc-dev-title">
             <div class="osc-panel-header">
               <h2 class="osc-panel-title" id="osc-dev-title">Zařízení a limity</h2>
               <span class="osc-spacer"></span>
@@ -968,8 +968,7 @@
          (measureRunPrimary opens MEASURE first). It stands between the Playground's rows, so
          reading and Tab order follow them. -->
     <section class="osc-view osc-view--measure" id="osc-view-measure" data-osc="measure-view"
-      data-osc-modes="measure" hidden
-      :hidden="workspace !== 'measure' && workspace !== 'playground'"
+      data-osc-modes="measure playground"
       :class="[PRO.pageView, workspace !== 'measure' && '!p-0']"
       aria-labelledby="osc-measure-title" tabindex="-1">
       <h2 class="osc-sr-only" id="osc-measure-title">Měření</h2>
@@ -980,7 +979,7 @@
       <div class="osc-measure">
 
         <!-- ---------- Guided flow: status, the seven steps, primary action, STOP ---------- -->
-        <section class="osc-panel osc-m-flow" id="osc-measure-flow" aria-labelledby="osc-m-flow-title">
+        <section class="osc-panel osc-m-flow" id="osc-measure-flow" data-osc-card="measure-flow" aria-labelledby="osc-m-flow-title">
           <div class="osc-panel-header osc-m-head">
             <h3 class="osc-panel-title" id="osc-m-flow-title"
               x-text="meas.expert ? 'Měření · expert' : 'Řízené měření'">Řízené měření</h3>
@@ -1049,7 +1048,7 @@
         </section>
 
         <!-- ---------- Stimulus ---------- -->
-        <section class="osc-panel osc-m-stimulus" id="osc-measure-stimulus" aria-labelledby="osc-m-stim-title">
+        <section class="osc-panel osc-m-stimulus !hidden" id="osc-measure-stimulus" data-osc-card="measure-stimulus" aria-labelledby="osc-m-stim-title">
           <div class="osc-panel-header"><h3 class="osc-panel-title" id="osc-m-stim-title">Stimul</h3></div>
           <p class="osc-m-big osc-num" data-osc="measure.stimulusText" x-text="meas.stimulusText"></p>
           <dl class="osc-m-rows">
@@ -1080,7 +1079,7 @@
         </section>
 
         <!-- ---------- Live input ---------- -->
-        <section class="osc-panel osc-m-input" id="osc-measure-input" aria-labelledby="osc-m-input-title">
+        <section class="osc-panel osc-m-input !hidden" id="osc-measure-input" data-osc-card="measure-input" aria-labelledby="osc-m-input-title">
           <div class="osc-panel-header">
             <h3 class="osc-panel-title" id="osc-m-input-title">Živý vstup</h3>
             <span class="osc-spacer"></span>
@@ -1112,7 +1111,7 @@
         </section>
 
         <!-- ---------- Quality: live checks, then the assessment with its reasons ---------- -->
-        <section class="osc-panel osc-m-quality" id="osc-measure-quality" aria-labelledby="osc-m-q-title">
+        <section class="osc-panel osc-m-quality !hidden" id="osc-measure-quality" data-osc-card="measure-quality" aria-labelledby="osc-m-q-title">
           <div class="osc-panel-header">
             <h3 class="osc-panel-title" id="osc-m-q-title">Kvalita</h3>
             <span class="osc-spacer"></span>
@@ -1146,7 +1145,7 @@
         </section>
 
         <!-- ---------- Measurement result: frequency response, impulse response, RTA ---------- -->
-        <section class="osc-panel osc-m-result" id="osc-measure-result" aria-labelledby="osc-m-result-title">
+        <section class="osc-panel osc-m-result !hidden" id="osc-measure-result" data-osc-card="measure-result" aria-labelledby="osc-m-result-title">
           <div class="osc-panel-header osc-m-result-head">
             <h3 class="osc-panel-title" id="osc-m-result-title">Výsledek měření</h3>
             <span class="osc-m-chip" data-osc="measure.shown" x-text="measureShown(meas.shownTitle || 'NOT MEASURED')"></span>
@@ -1314,7 +1313,7 @@
         </section>
 
         <!-- ---------- Measurement setup: recipe fields (progressive disclosure), calibration ---------- -->
-        <section class="osc-panel osc-m-setup" id="osc-measure-setup" aria-labelledby="osc-m-setup-title">
+        <section class="osc-panel osc-m-setup !hidden" id="osc-measure-setup" data-osc-card="measure-setup" aria-labelledby="osc-m-setup-title">
           <div class="osc-panel-header">
             <h3 class="osc-panel-title" id="osc-m-setup-title">Nastavení měření</h3>
             <span class="osc-spacer"></span>
@@ -1416,7 +1415,7 @@
         </section>
 
         <!-- ---------- Experiment: name, notes, save, repeat ---------- -->
-        <section class="osc-panel osc-m-experiment" id="osc-measure-experiment" aria-labelledby="osc-m-exp-title">
+        <section class="osc-panel osc-m-experiment !hidden" id="osc-measure-experiment" data-osc-card="measure-experiment" aria-labelledby="osc-m-exp-title">
           <div class="osc-panel-header"><h3 class="osc-panel-title" id="osc-m-exp-title">Experiment</h3>
             <span class="osc-m-unsaved" data-osc="measure.unsaved"
               x-show="measureUnsaved || measureMetadataPending" style="display: none"
@@ -1465,11 +1464,11 @@
          The Playground's last row is the Pattern Sequencer with the compact Studio beside it;
          the panels after them belong to their own workspaces (Filter Lab, Synthesis, Compare),
          which the Playground leaves to them at 1280 px and wider (instrument.css). -->
-    <div class="osc-row3" :class="workspace === 'synth' && 'hidden'">
+    <div class="osc-row3" data-osc-row="lab">
 
       <!-- ---------- Pattern sequencer ---------- -->
-      <section class="osc-panel osc-p-sequencer" id="osc-panel-sequencer"
-        data-osc-panel="sequencer" data-osc-modes="sequencer" aria-labelledby="osc-seq-title">
+      <section class="osc-panel osc-p-sequencer max-md:!hidden" id="osc-panel-sequencer"
+        data-osc-panel="sequencer" data-osc-modes="sequencer playground" aria-labelledby="osc-seq-title">
         <div class="osc-panel-header osc-seq-head h-auto min-h-8">
           <h2 class="osc-panel-title" id="osc-seq-title">Pattern Sequencer</h2>
           <div class="osc-transport" role="group" aria-label="Sequencer transport">
@@ -1638,11 +1637,11 @@
       <!-- ---------- Compact Studio (V3.1, spec §127-§130): a projection of the ONE Studio store
            (src/js/ui/studio/compact.js renders it); EXPAND STUDIO opens the full workspace. -->
       <section class="osc-panel osc-p-studio" id="osc-panel-studio" data-osc="studio.compact"
-        data-osc-panel="studio" data-osc-modes="playground sequencer" :class="workspace === 'synth' && 'hidden'"></section>
+        data-osc-panel="studio" data-osc-modes="playground sequencer"></section>
 
       <!-- ---------- Filter Lab ---------- -->
-      <section class="osc-panel osc-p-filter" id="osc-panel-filter" data-osc-panel="filter"
-        data-osc-modes="filter" aria-labelledby="osc-filter-title">
+      <section class="osc-panel osc-p-filter max-md:!hidden 2xl:!hidden" id="osc-panel-filter" data-osc-panel="filter"
+        data-osc-modes="filter playground" aria-labelledby="osc-filter-title">
         <div class="osc-panel-header max-md:flex-wrap">
           <h2 class="osc-panel-title" id="osc-filter-title">Filtry</h2>
           <button type="button" class="osc-toggle osc-toggle--lg" role="switch" aria-checked="false"
@@ -1718,8 +1717,8 @@
       </section>
 
       <!-- ---------- Envelope (ADSR) ---------- -->
-      <section class="osc-panel osc-p-envelope" id="osc-panel-envelope" data-osc-panel="envelope"
-        data-osc-modes="synthesis" aria-labelledby="osc-env-title">
+      <section class="osc-panel osc-p-envelope max-md:!hidden 2xl:!hidden" id="osc-panel-envelope" data-osc-panel="envelope"
+        data-osc-modes="synthesis playground" aria-labelledby="osc-env-title">
         <div class="osc-panel-header max-md:flex-wrap">
           <h2 class="osc-panel-title" id="osc-env-title">Envelope (ADSR)<span
             data-osc="envelope.scope" hidden :hidden="workspace !== 'sequencer' && !seqPlaying"
@@ -1780,8 +1779,8 @@
       </section>
 
       <!-- ---------- Additive synthesis ---------- -->
-      <section class="osc-panel osc-p-additive" id="osc-panel-additive" data-osc-panel="additive"
-        data-osc-modes="synthesis" aria-labelledby="osc-add-title">
+      <section class="osc-panel osc-p-additive max-md:!hidden 2xl:!hidden" id="osc-panel-additive" data-osc-panel="additive"
+        data-osc-modes="synthesis playground" aria-labelledby="osc-add-title">
         <div class="osc-panel-header">
           <h2 class="osc-panel-title" id="osc-add-title">Additive Synthesis<span
             data-osc="additive.scope" hidden :hidden="workspace !== 'sequencer' && !seqPlaying"
@@ -1837,8 +1836,8 @@
       </section>
 
       <!-- ---------- Phase & Stereo ---------- -->
-      <section class="osc-panel osc-p-phase" id="osc-panel-phase" data-osc-panel="phase"
-        data-osc-modes="compare synthesis" aria-labelledby="osc-phase-title">
+      <section class="osc-panel osc-p-phase max-md:!hidden 2xl:!hidden" id="osc-panel-phase" data-osc-panel="phase"
+        data-osc-modes="compare playground synthesis" aria-labelledby="osc-phase-title">
         <div class="osc-panel-header">
           <h2 class="osc-panel-title" id="osc-phase-title">Phase &amp; Stereo</h2>
           <span class="osc-spacer"></span>
@@ -1929,8 +1928,8 @@
       </section>
 
       <!-- ---------- Bioacoustics ---------- -->
-      <section class="osc-panel osc-p-bio" id="osc-panel-bio" data-osc-panel="bio"
-        data-osc-modes="compare" aria-labelledby="osc-bio-title">
+      <section class="osc-panel osc-p-bio max-md:!hidden 2xl:!hidden" id="osc-panel-bio" data-osc-panel="bio"
+        data-osc-modes="compare playground" aria-labelledby="osc-bio-title">
         <div class="osc-panel-header">
           <h2 class="osc-panel-title" id="osc-bio-title">Bioacoustics</h2>
           <span class="osc-spacer"></span>
@@ -1967,10 +1966,10 @@
     </div>
 
     <!-- Workspace-only panels (shown by nav focus) -->
-    <div class="osc-workspace" :class="workspace === 'synth' && 'hidden'">
+    <div class="osc-workspace !hidden" data-osc-row="solo">
 
       <!-- ---------- Dual oscillator (Synthesis workspace) ---------- -->
-      <section class="osc-panel osc-p-dual" id="osc-panel-dual" data-osc-panel="dual"
+      <section class="osc-panel osc-p-dual max-md:!hidden" id="osc-panel-dual" data-osc-panel="dual"
         data-osc="dual-panel" data-osc-modes="synthesis" aria-labelledby="osc-dual-title">
         <div class="osc-panel-header max-md:flex-wrap">
           <h2 class="osc-panel-title" id="osc-dual-title">Dual Oscillator</h2>
@@ -2194,7 +2193,7 @@
     <!-- Full-width workspace views -->
     <!-- EXPERIMENTS (V3): local experiment management -->
     <section class="osc-view osc-view--experiments" :class="PRO.pageView" id="osc-view-experiments" data-osc="experiments-view"
-      data-osc-modes="experiments" hidden :hidden="workspace !== 'experiments'"
+      data-osc-modes="experiments" hidden
       aria-labelledby="osc-exp-title" tabindex="-1">
       <h2 class="osc-sr-only" id="osc-exp-title">Experimenty</h2>
       <div class="osc-experiments">
@@ -2584,7 +2583,7 @@
       </div>
     </section>
     <section :class="PRO.pageView" id="osc-view-learn" data-osc="learn-view"
-      data-osc-modes="learn" hidden :hidden="mode !== 'learn'" aria-labelledby="osc-learn-title"
+      data-osc-modes="learn" hidden aria-labelledby="osc-learn-title"
       tabindex="-1">
       <h2 class="sr-only" id="osc-learn-title">Výuka</h2>
       <div data-osc="learn-content">
@@ -2624,7 +2623,7 @@
       </div>
     </section>
     <section :class="PRO.pageView" id="osc-view-presets" data-osc="presets-view"
-      data-osc-modes="presets" hidden :hidden="mode !== 'presets'"
+      data-osc-modes="presets" hidden
       aria-labelledby="osc-presets-title" tabindex="-1">
       <h2 class="sr-only" id="osc-presets-title">Předvolby</h2>
       <div data-osc="presets-content">
@@ -2729,7 +2728,7 @@
          from src/js/synth/panels/semi-mono.js and the registry's node descriptors. The keyboard
          docks at the bottom here and plays the panel. -->
     <section :class="PRO.pageDocked" id="osc-view-synth" data-osc="synth-view"
-      data-osc-modes="synth" hidden :hidden="workspace !== 'synth'"
+      data-osc-modes="synth" hidden
       aria-labelledby="osc-synth-title" tabindex="-1">
       <!-- U108: below md the insert alert comes first (order), clear of the dock. -->
       <div class="flex flex-col md:block">
@@ -2822,7 +2821,7 @@
          the ONE Studio store; the timeline region belongs to src/js/ui/studio/timeline-editor.js
          (spec §131-§136). Below 768 px one of GRAPH / TIMELINE / INSPECTOR is shown at a time. -->
     <section class="osc-view osc-view--studio box-border !pb-[max(0px,calc(var(--osc-dock-h,0px)_-_var(--osc-statusbar-h)))]" :class="PRO.pageEditor" id="osc-view-studio" data-osc="studio-view"
-      data-osc-modes="studio" hidden :hidden="workspace !== 'studio'" :data-subview="studio.subview"
+      data-osc-modes="studio" hidden :data-subview="studio.subview"
       aria-labelledby="osc-studio-title" tabindex="-1">
       <h2 class="osc-sr-only" id="osc-studio-title">Studio</h2>
       <div class="osc-studio">
@@ -2986,7 +2985,7 @@
          Static, semantic copy (no text lives in canvas or script). The provenance times are
          commit timestamps; tests/unit/about-provenance.test.mjs checks them against git. -->
     <section class="osc-view osc-view--about osc-about" :class="PRO.pageView" id="osc-view-about" data-osc="about-view"
-      data-osc-modes="about" hidden :hidden="workspace !== 'about'"
+      data-osc-modes="about" hidden
       aria-labelledby="osc-about-title" tabindex="-1">
 
       <header class="osc-about-hero">

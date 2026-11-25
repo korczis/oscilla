@@ -92,22 +92,9 @@
   column-gap: 10px;
 }
 
-/* From 1536 px of window (1280 px of lab beside the sidebar, F002) the Playground leaves to
-   their workspaces the panels Q004 took off the first screen: the Spectrogram panel (the
-   analysis tab and Analyze > Analyzer keep it) and Filter Lab, Envelope, Additive Synthesis,
-   Phase & Stereo and Bioacoustics (Filter Lab, Synthesis, Compare). Below that every panel
-   stays (responsive.css). */
-@media (min-width: 1536px) {
-  .osc-app[data-mode="playground"] :is(.osc-p-spectrogram,
-    .osc-row3 > .osc-panel:not(.osc-p-sequencer, .osc-p-studio)) {
-    display: none;
-  }
-}
-
-/* MEASURE's view on the Playground shows its guided flow only (the row above). */
-.osc-app[data-mode="playground"] .osc-measure > .osc-panel:not(.osc-m-flow) {
-  display: none;
-}
+/* Which panels and views a workspace shows, the Playground's by width included, is the shell
+   registry's (src/js/ui/shell.js WORKSPACE_REGISTRY `panels`, applied by ui/app.js
+   markWorkspacePanels, plan issue U129); the stylesheets place what it shows. */
 
 /* Below 1536 px of window (1280 px of lab beside the sidebar, F002) panels are ordered
    (responsive.css): the measurement row follows Device & Limits (order 4) and comes before the
@@ -143,22 +130,6 @@
   #osc-panel-source summary {
     line-height: 44px;
   }
-}
-
-/* Workspace-only panels and full-width views stay out of the integrated Playground. */
-.osc-workspace {
-  display: none;
-}
-
-.osc-app[data-mode="synthesis"] .osc-workspace {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 9px;
-}
-
-.osc-app:is([data-mode="learn"], [data-mode="presets"], [data-mode="about"]) :is(.osc-top,
-  .osc-row3) {
-  display: none;
 }
 
 /* Nav focus on desktop: the focused workspace's panels get an accent ring. */

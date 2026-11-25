@@ -24,7 +24,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { WORKSPACES } from '../../src/js/ui/app.js';
 import { LEARN_CARDS } from '../../src/js/data/learn.js';
 import SEMI_MONO from '../../src/js/synth/panels/semi-mono.js';
-import { WORKSPACE_REGISTRY } from '../../src/js/ui/shell.js';
+import { memberBands, WORKSPACE_REGISTRY } from '../../src/js/ui/shell.js';
 import { expandStations } from '../../scripts/about-stations.mjs';
 
 const root = new URL('../../', import.meta.url);
@@ -466,12 +466,12 @@ test('A15: under release:prepare, the roadmap is the plan\'s open milestones', a
 
 // ------------------------------------------------- U085: a workspace says only what it shows
 // Each panel a workspace description names, by one of the phrases below, must be on that
-// workspace's screen at 1536x1024. A focus workspace (Analyzer, Synthesis, ...) shows the panels
-// whose data-osc-modes lists it, and a full-width view (Measure, Learn, Synth, ...) is the
-// section whose data-osc-modes lists it (src/styles/integration.css hides every other panel from
-// 1280 px). The Playground is the integrated grid: from 1280 px it hides the Spectrogram panel
-// and every row-3 panel but the sequencer and the compact Studio (src/styles/instrument.css),
-// and keeps the workspace-only panels (.osc-workspace) out. "the labs" names those row-3 labs.
+// workspace's screen at 1536x1024: the shell registry's membership in its `wide` band
+// (src/js/ui/shell.js WORKSPACE_REGISTRY `panels`, U129), which data-osc-modes is held equal to
+// and ui/app.js markWorkspacePanels applies. The Playground is the integrated grid: from
+// 1536 px it leaves the Spectrogram panel and every row-3 panel but the sequencer and the
+// compact Studio to their workspaces, and the workspace-only panels too. "the labs" names
+// those row-3 labs.
 // Learn names its first and last card and Synth each of its tabs, from their data modules.
 // The descriptions are the registry's summaries (lane A wave 3: shell.js WORKSPACE_REGISTRY,
 // which the page header shows too), judged on the list rendered from them (renderAboutList).
@@ -523,26 +523,17 @@ function tagOf(markup, id) {
   return { tag: markup.slice(from, markup.indexOf('>', at) + 1), at: from };
 }
 
-const modesOf = (tag) => (tag.match(/\bdata-osc-modes="([^"]*)"/)?.[1] ?? '').split(/\s+/);
+/** The registry key of the element `id` (ui/shell.js PANEL_REGISTRY, ui/app.js memberKey). */
+function keyOf(tag, id) {
+  const panel = /\bdata-osc-panel="([^"]+)"/.exec(tag);
+  return panel ? panel[1] : id.replace(/^osc-/, '');
+}
 
 /** Whether the panel `id` is on `workspace`'s screen at 1536x1024 (see the note above). */
 export function shownAt1536(markup, id, workspace) {
   const { tag, at } = tagOf(markup, id);
   if (at < 0) return false;
-  if (workspace === 'playground') {
-    const row3 = markup.indexOf('<div class="osc-row3"');
-    const only = markup.indexOf('<div class="osc-workspace"');
-    const views = markup.indexOf('id="osc-view-experiments"');
-    if (at > only && at < views) return false;
-    if (/\bosc-p-spectrogram\b/.test(tag)) return false;
-    if (at > row3 && at < only) return /\bosc-p-(?:sequencer|studio)\b/.test(tag);
-    if (modesOf(tag).includes('playground') || at < row3) return true;
-    const view = markup.lastIndexOf('<section class="osc-view', at);
-    return view >= 0 && /workspace !== 'playground'/.test(markup.slice(view, at));
-  }
-  if (tag.includes('data-osc-modes=')) return modesOf(tag).includes(workspace);
-  const view = markup.lastIndexOf('<section class="osc-view', at);
-  return view >= 0 && modesOf(markup.slice(view, markup.indexOf('>', view))).includes(workspace);
+  return memberBands(workspace, keyOf(tag, id)).includes('wide');
 }
 
 /** About's workspace descriptions as the page renders them from `rows`: { id: purpose text }. */
@@ -610,11 +601,11 @@ export function workspaceTruthProblems(markup, rows = WORKSPACE_REGISTRY) {
 }
 
 test('U085: each workspace description names only what that workspace shows at 1536 px', () => {
-  // the Playground model is the CSS's: pin the rule it reads
-  const css = read('src/styles/instrument.css');
-  assert.match(css, new RegExp('\\.osc-app\\[data-mode="playground"\\] :is\\(\\.osc-p-spectrogram,'
-    + '\\s*\\.osc-row3 > \\.osc-panel:not\\(\\.osc-p-sequencer, \\.osc-p-studio\\)\\)'));
-  assert.match(css, /\.osc-workspace \{\s*display: none;/);
+  // the Playground's model is the registry's: pin what it leaves to the workspaces from 1536 px
+  assert.deepEqual(['spectrogram', 'filter', 'envelope', 'additive', 'phase', 'bio', 'dual']
+    .filter((id) => memberBands('playground', id).includes('wide')), []);
+  assert.deepEqual(['source', 'analysis', 'mic', 'measure-flow', 'sequencer', 'studio']
+    .filter((id) => !memberBands('playground', id).includes('wide')), []);
   assert.deepEqual(workspaceTruthProblems(html), []);
 });
 

@@ -15,19 +15,6 @@
  */
 
 /* ================= Workspace frame ================= */
-.osc-app[data-mode="studio"] :is(.osc-top, .osc-row3, .osc-workspace) {
-  display: none;
-}
-
-.osc-app[data-mode="studio"] .osc-panel:not(.osc-studio > .osc-panel) {
-  display: none;
-}
-
-.osc-app:is([data-mode="measure"], [data-mode="experiments"], [data-mode="learn"],
-  [data-mode="presets"], [data-mode="about"], [data-mode="studio"]) .osc-p-studio {
-  display: none;
-}
-
 .osc-app[data-mode="studio"] .osc-main {
   grid-template-rows: minmax(0, 1fr);
   grid-template-columns: minmax(0, 1fr);
@@ -1467,7 +1454,6 @@
   /* The compact widget stays in the phone Playground, after the measurement row (order 5,
      instrument.css; the same order and the document order put the measurement first). */
   .osc-app[data-mode="playground"] .osc-panel.osc-p-studio {
-    display: flex;
     order: 5;
   }
 }

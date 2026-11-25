@@ -11,12 +11,7 @@
  * icon whose geometry differs per status, and the V2 toast convention of a 3 px leading edge.
  */
 
-/* ---------- Workspace frame: full-width views keyed on `workspace` ---------- */
-.osc-app:is([data-mode="measure"], [data-mode="experiments"]) :is(.osc-top, .osc-row3,
-  .osc-workspace) {
-  display: none;
-}
-
+/* ---------- Workspace frame: full-width views (the registry shows them, ui/shell.js) ------ */
 .osc-measure,
 .osc-experiments {
   display: grid;

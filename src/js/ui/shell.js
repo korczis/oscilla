@@ -27,6 +27,16 @@
 //   empty    { when, title, body, action: { label, to } }: the page's empty state, shown while
 //            the predicate `when` (registered by its adapter, ui/empty-states.js) is true;
 //            action.to is a registry id.
+//   panels   [id | { id, bands }]: what the workspace shows, in its reading order below 1536 px
+//            (one or two columns; from 1536 px the grid spans of the stylesheets place them).
+//            An id is a row of PANEL_REGISTRY below: a grid panel (data-osc-panel), a view
+//            (`<workspace>-view`) or a card of a view (data-osc-card: the Measure view's
+//            `measure-flow`); a view brings all its cards, a card brings its view. bands limits
+//            the entry to some of BANDS (a phone, 768-1535 px, from 1536 px); without it the
+//            entry shows in all. This is the one declaration of membership: data-osc-modes in
+//            src/index.html is held equal to it (tests/unit/panel-membership.test.mjs),
+//            ui/app.js markWorkspacePanels applies it, and no stylesheet or binding hides a
+//            panel by workspace.
 //   view     true: the workspace stands in a view of its own, the <section> of index.html
 //            whose id ends in the workspace id, which carries the one Pro page frame (PRO.page) itself; without it the
 //            workspace's panels stand in <main>'s grid and <main> carries that frame
@@ -42,9 +52,24 @@
 import { roving } from './keys/roving.js';
 import { PRO } from './pro-classes.js';
 
+/**
+ * The width bands a workspace's membership can differ in, as Tailwind's screens cut them: a
+ * phone (below md, 768 px), the one- and two-column band (768-1535 px, below 2xl) and the
+ * reference grid (from 2xl, 1536 px).
+ */
+export const BANDS = Object.freeze(['phone', 'tablet', 'wide']);
+const TABLET_UP = Object.freeze(['tablet', 'wide']);
+
 /** The workspaces, in navigation order. group: the sidebar group holding it, or none. */
 export const WORKSPACE_REGISTRY = Object.freeze([
   { id: 'playground', label: 'Playground', lang: 'en',
+    // From 1536 px the lab panels leave the first screen to their workspaces (Q004); 768 to
+    // 1535 px shows them all; a phone keeps the instrument, the guided measurement and Studio.
+    panels: ['source', 'analysis', { id: 'mic', bands: TABLET_UP },
+      { id: 'device', bands: TABLET_UP }, { id: 'spectrogram', bands: ['tablet'] }, 'measure-flow',
+      { id: 'sequencer', bands: TABLET_UP }, 'studio',
+      ...['filter', 'envelope', 'additive', 'phase', 'bio']
+        .map((id) => ({ id, bands: ['tablet'] }))],
     words: 'instrument tone oscillator play hold',
     summary: 'Nástroj na jedné obrazovce: generátor, analýza signálu, analyzátor mikrofonu, '
       + 'řízené měření, sekvencer vzorů a kompaktní Studio.',
@@ -54,6 +79,7 @@ export const WORKSPACE_REGISTRY = Object.freeze([
       { id: 'learn', why: 'Karty pojmů, jejichž ukázky hrají tady' },
     ] },
   { id: 'measure', label: 'Měření', view: true,
+    panels: ['measure-view'],
     words: 'measure frequency response sweep impulse room test',
     summary: 'Řízené měření řetězce reproduktoru, místnosti a mikrofonu: frekvenční '
       + 'charakteristika, impulsní odezva a RTA, u každého běhu s hodnocením kvality.',
@@ -64,6 +90,7 @@ export const WORKSPACE_REGISTRY = Object.freeze([
       { id: 'learn', why: 'Vysvětlení logaritmických stupnic a limitů reproduktorů' },
     ] },
   { id: 'experiments', label: 'Experimenty', view: true,
+    panels: ['experiments-view'],
     words: 'saved records findings compare history',
     summary: 'Uložená měření jako experimenty: jejich definice, porovnání s referenčním '
       + 'měřením a zjištění, která se na ně odvolávají.',
@@ -72,6 +99,7 @@ export const WORKSPACE_REGISTRY = Object.freeze([
       { id: 'analyzer', why: 'Živé spektrum mikrofonu ještě před kalibrovaným měřením' },
     ] },
   { id: 'analyzer', label: 'Analyzátor', group: 'analyze',
+    panels: ['mic', 'device', 'spectrogram', 'analysis'],
     words: 'analyzer spectrum microphone fft rta',
     summary: 'Spektrogram výstupu a analyzátor mikrofonu: živé pohledy, nikoli kalibrované '
       + 'měření.',
@@ -81,6 +109,7 @@ export const WORKSPACE_REGISTRY = Object.freeze([
       { id: 'learn', why: 'Vysvětlení harmonických, vzorkování a aliasingu' },
     ] },
   { id: 'filter', label: 'Filtry', group: 'analyze', words: 'filter lab lowpass highpass eq curve',
+    panels: ['filter'],
     summary: 'Bikvadratický filtr a odezva, kterou pro něj spočítá prohlížeč; nastavuje se '
       + 'typem, mezní frekvencí a Q.',
     related: [
@@ -90,6 +119,7 @@ export const WORKSPACE_REGISTRY = Object.freeze([
       { id: 'analyzer', why: 'Spektrum toho, co slyší mikrofon' },
     ] },
   { id: 'compare', label: 'Porovnání', group: 'analyze', words: 'compare phase hearing ranges bio',
+    panels: ['mic', 'phase', 'bio'],
     summary: 'Analyzátor mikrofonu vedle bioakustických rozsahů slyšení a pohledů '
       + 'na fázi a stereo.',
     related: [
@@ -101,6 +131,7 @@ export const WORKSPACE_REGISTRY = Object.freeze([
     // microphone panel's Compare tab (page audit, Compare fix 1).
     enter: { 'mic.tab': 'compare' } },
   { id: 'synthesis', label: 'Syntéza', group: 'synthesis',
+    panels: ['envelope', 'additive', 'phase', 'dual', 'source', 'analysis'],
     words: 'envelope adsr additive harmonics dual binaural',
     summary: 'Aditivní harmonické, obálka ADSR, pohledy na fázi a stereo a duální oscilátor, '
       + 'vedle generátoru a jeho analýzy.',
@@ -112,6 +143,8 @@ export const WORKSPACE_REGISTRY = Object.freeze([
         hash: '&st=stereo-beat' },
     ] },
   { id: 'sequencer', label: 'Sekvencer', group: 'synthesis',
+    panels: ['sequencer', // its own panel, then the compact Studio and the source
+      'studio', 'source'],
     words: 'sequencer pattern steps blocks song',
     summary: 'Blokové sekvence tónů, přeletů, pulzů a modulace vedle kompaktního Studia; '
       + 'krokový sekvencer s pady je v Synthu na záložce Bicí.',
@@ -121,6 +154,7 @@ export const WORKSPACE_REGISTRY = Object.freeze([
       { id: 'presets', why: 'Presety vzorů jako výchozí bod' },
     ] },
   { id: 'presets', label: 'Předvolby', group: 'synthesis', view: true,
+    panels: ['presets-view'],
     words: 'presets library load sounds',
     summary: 'Vestavěná i uložená nastavení nástroje a historie toho, co se hrálo.',
     related: [
@@ -133,6 +167,7 @@ export const WORKSPACE_REGISTRY = Object.freeze([
         + 'tlačítkem Uložit preset ve stavové liště.',
       action: { label: 'Otevřít Playground', to: 'playground' } } },
   { id: 'learn', label: 'Výuka', view: true, words: 'learn lessons guide acoustics',
+    panels: ['learn-view'],
     summary: 'Karty pojmů od frekvence po signálovou cestu, většina s ukázkou k přehrání.',
     related: [
       { id: 'analyzer', why: 'Tvary vln, harmonické a aliasing v živém spektru' },
@@ -140,6 +175,7 @@ export const WORKSPACE_REGISTRY = Object.freeze([
       { id: 'measure', why: 'Logaritmické stupnice a reproduktory v reálném měření' },
     ] },
   { id: 'studio', label: 'Studio', lang: 'en', view: true,
+    panels: ['studio-view'],
     words: 'graph nodes cables timeline patch',
     summary: 'Signálový graf, který propojujete kabely, s časovou osou, transportem '
       + 'a automatizací, běžící na Web Audio.',
@@ -150,6 +186,7 @@ export const WORKSPACE_REGISTRY = Object.freeze([
     ] },
   // Synth (K058) is top level after Studio by the owner's decision Q019.
   { id: 'synth', label: 'Synth', lang: 'en', view: true,
+    panels: ['synth-view'],
     words: 'synthesizer engines voices keys midi patch',
     summary: 'Semimodulární monofonní hlas na modelu Studia s patch bayí a ukotvenými '
       + 'klávesami; záložka Enginy s hlasy aditivními, FM, AM / ring, wavetable, hard sync '
@@ -160,6 +197,7 @@ export const WORKSPACE_REGISTRY = Object.freeze([
       { id: 'learn', why: 'Vysvětlení modulace, AM a FM' },
     ] },
   { id: 'about', label: 'O aplikaci', view: true, words: 'about credits licence version',
+    panels: ['about-view'],
     summary: 'Tato stránka: co je OSCILLA, jak vznikla a co přijde dál.',
     related: [
       { id: 'playground', why: 'Začněte u nástroje' },
@@ -168,6 +206,8 @@ export const WORKSPACE_REGISTRY = Object.freeze([
     ] },
 ].map((w) => Object.freeze({ ...w, icon: `i-ws-${w.id}`,
   ...(w.related ? { related: Object.freeze(w.related.map((r) => Object.freeze({ ...r }))) } : {}),
+  panels: Object.freeze((w.panels || []).map((e) => Object.freeze(typeof e === 'string'
+    ? { id: e, bands: BANDS } : { id: e.id, bands: Object.freeze([...e.bands]) }))),
 })));
 
 /** The sidebar groups, in the order their first workspace appears. */
@@ -178,6 +218,142 @@ export const GROUP_REGISTRY = Object.freeze({
 
 /** Workspace ids in navigation order (the URL `m` values). */
 export const WORKSPACE_IDS = Object.freeze(WORKSPACE_REGISTRY.map((w) => w.id));
+
+/**
+ * The elements a workspace's `panels` name: the instrument grid's panels (data-osc-panel) and
+ * the views of their own workspaces (data-osc `<workspace>-view`), each carrying data-osc-modes
+ * in src/index.html, and the Measure view's cards (data-osc-card), the keys of ui/app.js
+ * memberKey. Fields:
+ *   home         the workspace whose own panel it is: first in its data-osc-modes, which
+ *                ui/app.js workspaceHeading prefers over a panel the workspace shares.
+ *   row          a grid panel's row, the element carrying data-osc-row: `top` (the first
+ *                screen), `lab` (the third row), `solo` (the workspace-only row).
+ *   view         a card's view.
+ *   open         the panel folds under its header's button and opens by default (the default
+ *                state of ui/app.js `collapsed`).
+ *   hidesItself  the panel hides on its own wherever it is not shown, even inside a hidden row.
+ */
+export const PANEL_REGISTRY = Object.freeze([
+  { id: 'source', home: 'playground', row: 'top' },
+  { id: 'analysis', home: 'playground', row: 'top' },
+  { id: 'spectrogram', home: 'analyzer', row: 'top' },
+  { id: 'mic', home: 'analyzer', row: 'top' },
+  { id: 'device', home: 'analyzer', row: 'top', open: true },
+  { id: 'measure-view', home: 'measure' },
+  ...['flow', 'stimulus', 'input', 'quality', 'result', 'setup', 'experiment']
+    .map((c) => ({ id: `measure-${c}`, home: 'measure', view: 'measure-view' })),
+  { id: 'sequencer', home: 'sequencer', row: 'lab' },
+  { id: 'studio', home: 'playground', row: 'lab', hidesItself: true },
+  { id: 'filter', home: 'filter', row: 'lab' },
+  { id: 'envelope', home: 'synthesis', row: 'lab' },
+  { id: 'additive', home: 'synthesis', row: 'lab' },
+  { id: 'phase', home: 'compare', row: 'lab', open: true },
+  { id: 'bio', home: 'compare', row: 'lab', open: true },
+  { id: 'dual', home: 'synthesis', row: 'solo' },
+  ...['experiments', 'presets', 'learn', 'studio', 'synth', 'about']
+    .map((w) => ({ id: `${w}-view`, home: w })),
+].map(Object.freeze));
+
+/** The grid rows (data-osc-row), in document order. */
+export const GRID_ROWS = Object.freeze(['top', 'lab', 'solo']);
+
+const panelById = (id) => PANEL_REGISTRY.find((p) => p.id === id);
+
+/** A row of PANEL_REGISTRY, or null. */
+export function panelOf(id) {
+  return panelById(id) || null;
+}
+
+/**
+ * The bands (of BANDS, in order) in which workspace `ws` shows element `id`, [] for none. A
+ * view shows where the workspace lists it or one of its cards; a card where it lists the card
+ * or its view.
+ */
+export function memberBands(ws, id) {
+  const w = WORKSPACE_REGISTRY.find((r) => r.id === ws);
+  if (!w) return [];
+  const p = panelById(id);
+  const on = new Set();
+  for (const e of w.panels) {
+    const q = panelById(e.id);
+    if (e.id === id || (p && p.view === e.id) || (q && q.view === id)) {
+      for (const b of e.bands) on.add(b);
+    }
+  }
+  return BANDS.filter((b) => on.has(b));
+}
+
+/**
+ * The workspaces that show element `id` in some band: its home first, then navigation order.
+ * Exactly its data-osc-modes in src/index.html.
+ */
+export function modesOf(id) {
+  const p = panelById(id);
+  const shown = WORKSPACE_IDS.filter((ws) => memberBands(ws, id).length > 0);
+  return p && shown.includes(p.home) ? [p.home, ...shown.filter((ws) => ws !== p.home)] : shown;
+}
+
+/** Does workspace `ws` show grid row `row`: does it list one of the row's panels in a band? */
+export function rowShown(ws, row) {
+  return PANEL_REGISTRY.some((p) => p.row === row && memberBands(ws, p.id).length > 0);
+}
+
+/**
+ * The bands in which a hidden row is all that hides the panels it holds, per workspace; they
+ * keep their own display there. This is the arrangement the stylesheets had before the
+ * registry owned membership (U129), kept exactly because the U128 geometry census records
+ * which element carries display: none, also for a panel that renders in neither case: the
+ * workspaces with a view of their own but the Studio hid the grid's rows from 1536 px and the
+ * panels themselves below it, and the Playground hid its workspace-only row from 768 px.
+ */
+const ROW_CARRIES = Object.freeze({
+  playground: Object.freeze(['tablet', 'wide']),
+  ...Object.fromEntries(['measure', 'experiments', 'presets', 'learn', 'synth', 'about']
+    .map((ws) => [ws, Object.freeze(['wide'])])),
+});
+
+/**
+ * The class that hides an element in a band, or in every band: Tailwind's display: none,
+ * important, so no legacy rule of a higher specificity shows what the registry hides. The
+ * literals stand here for Tailwind to compile them.
+ */
+export const HIDE_CLASS = Object.freeze({
+  all: '!hidden', phone: 'max-md:!hidden', tablet: 'md:max-2xl:!hidden', wide: '2xl:!hidden',
+});
+
+/** Every class markWorkspacePanels sets or clears for membership. */
+export const MEMBERSHIP_CLASSES = Object.freeze(Object.values(HIDE_CLASS));
+
+const hideIn = (bands) => (bands.length === BANDS.length ? [HIDE_CLASS.all]
+  : bands.map((b) => HIDE_CLASS[b]));
+
+/**
+ * The membership classes of grid panel or card `id` in workspace `ws`: hidden in every band
+ * the workspace does not show it, unless its hidden row hides it there (ROW_CARRIES).
+ */
+export function membershipClassesOf(ws, id) {
+  const p = panelById(id);
+  const shown = memberBands(ws, id);
+  const carried = p && p.row && !p.hidesItself && !rowShown(ws, p.row)
+    ? (ROW_CARRIES[ws] || []) : [];
+  return hideIn(BANDS.filter((b) => !shown.includes(b) && !carried.includes(b)));
+}
+
+/** The membership classes of grid row `row` in workspace `ws`: hidden where it holds none. */
+export function rowClassesOf(ws, row) {
+  return rowShown(ws, row) ? [] : [HIDE_CLASS.all];
+}
+
+/** Is element `id` a view (a workspace's own, shown or hidden as a whole: its hidden attribute)? */
+export function isViewPanel(id) {
+  const p = panelById(id);
+  return !!p && !p.row && !p.view;
+}
+
+/** The default fold state of the panels that fold: { <id>: false } (open), for `collapsed`. */
+export function collapsedDefaults() {
+  return Object.fromEntries(PANEL_REGISTRY.filter((p) => p.open).map((p) => [p.id, false]));
+}
 
 /** group id -> its workspace ids, in order. */
 export const NAV_GROUPS = Object.freeze(Object.fromEntries(Object.keys(GROUP_REGISTRY)

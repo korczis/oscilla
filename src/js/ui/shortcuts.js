@@ -24,7 +24,7 @@
 
 import { STUDIO_SHORTCUTS } from './studio/graph-keys.js';
 import { KEY_HELP } from './studio/transport-view.js';
-import { WORKSPACE_LABELS } from './shell.js';
+import { modesOf, WORKSPACE_LABELS } from './shell.js';
 import { KEYBOARD_VIEWS } from '../midi/keyboard.js';
 import { OWNER } from './output-owner.js';
 import { STATUS_PLAY_WORKSPACES } from '../core/play-hints.js';
@@ -52,10 +52,10 @@ export const SPACE_OWNER = Object.freeze({
 
 /**
  * The instrument workspaces whose Source & Pattern panel lays out Hold to Play and Trigger: the
- * panel's data-osc-modes in src/index.html (tests/unit/workspace-play-visible.test.mjs holds
- * them equal).
+ * workspaces the shell registry shows the panel in (ui/shell.js), which its data-osc-modes in
+ * src/index.html says too (tests/unit/workspace-play-visible.test.mjs holds them equal).
  */
-export const SOURCE_PANEL_WORKSPACES = Object.freeze(['playground', 'sequencer', 'synthesis']);
+export const SOURCE_PANEL_WORKSPACES = Object.freeze(modesOf('source'));
 
 /**
  * The instrument workspaces without that panel (C030): Analyzer, Filter Lab, Compare and

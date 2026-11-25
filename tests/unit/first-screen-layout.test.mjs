@@ -30,6 +30,7 @@ import { measureFlow } from '../../src/js/measurement/views/measure-flow.js';
 import { MEASUREMENT_STATES as S } from '../../src/js/measurement/state-machine.js';
 // A namespace import: on a tree without PHONE_QUERY the tests fail one by one, not at link time.
 import * as appUi from '../../src/js/ui/app.js';
+import { BANDS, memberBands } from '../../src/js/ui/shell.js';
 
 const { createOscillaUi } = appUi;
 
@@ -75,15 +76,16 @@ test('the measurement row is MEASURE\'s one Guided measurement panel, shown on t
       'one primary measurement action');
     const view = html.match(/<section\b[^>]*\bid="osc-view-measure"[^>]*>/);
     assert.ok(view, 'the MEASURE view');
-    const hidden = (view[0].match(/\s:hidden="([^"]*)"/) || [])[1] || '';
+    // The shell registry decides it (ui/shell.js WORKSPACE_REGISTRY `panels`, U129): the
+    // Playground lists the Guided measurement card, which brings its view, in every band.
     for (const [workspace, shown] of [['measure', true], ['playground', true],
       ['experiments', false], ['analyzer', false], ['studio', false], ['about', false]]) {
-      // The binding is an Alpine expression over `workspace` alone.
-      // eslint-disable-next-line no-new-func
-      const isHidden = Function('workspace', `return (${hidden});`)(workspace);
-      assert.equal(!isHidden, shown, `the MEASURE view is ${shown ? 'shown' : 'hidden'} in `
-        + `${workspace} (:hidden="${hidden}")`);
+      assert.deepEqual(memberBands(workspace, 'measure-view'), shown ? BANDS : [],
+        `the MEASURE view is ${shown ? 'shown' : 'hidden'} in ${workspace}`);
     }
+    assert.deepEqual(memberBands('playground', 'measure-flow'), BANDS);
+    assert.deepEqual(memberBands('playground', 'measure-result'), [],
+      'the Playground shows the guided flow alone');
   });
 
 test('document order follows the rows: sentence, generate and listen, measure, then pattern '

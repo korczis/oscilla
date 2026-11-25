@@ -13,8 +13,9 @@
 import { shortcutHelp } from './shortcuts.js';
 import { counterpartOf, showsCounterparts } from './counterparts.js';
 import {
-  createShell, groupCrumbOf, NAV_GROUPS, navGroupOf, phonePrimaryOf, relatedHref,
-  WORKSPACE_IDS, WORKSPACE_LABELS, WORKSPACE_REGISTRY, workspaceLang, workspaceOf,
+  collapsedDefaults, createShell, groupCrumbOf, isViewPanel, memberBands, MEMBERSHIP_CLASSES,
+  membershipClassesOf, modesOf, NAV_GROUPS, navGroupOf, phonePrimaryOf, relatedHref,
+  rowClassesOf, WORKSPACE_IDS, WORKSPACE_LABELS, WORKSPACE_REGISTRY, workspaceLang, workspaceOf,
 } from './shell.js';
 import { pageRelatedOf, relatedLang, relatedText } from './cross-links.js';
 import { emptyPredicateHolds } from './empty-states.js';
@@ -34,6 +35,8 @@ const MODES = WORKSPACE_IDS;
 const WORKSPACE_TITLES = Object.freeze(Object.fromEntries(WORKSPACE_IDS
   .filter((id) => id !== 'playground').map((id) => [id, WORKSPACE_LABELS[id]])));
 const ROVING_ROLES = ['tab', 'radio'];
+/** The elements markWorkspacePanels applies the membership to. */
+export const MEMBERSHIP_SELECTOR = '[data-osc-modes], [data-osc-card], [data-osc-row]';
 /** The phone width of src/styles/responsive.css (single column below 768 px). */
 export const PHONE_QUERY = '(max-width: 767.98px)';
 
@@ -146,12 +149,26 @@ export function navTopLevel() {
 }
 
 /**
+ * The registry key of an element markWorkspacePanels applies membership to (ui/shell.js
+ * PANEL_REGISTRY): a grid panel's data-osc-panel, a view's data-osc (`<workspace>-view`), a
+ * card's data-osc-card.
+ */
+export function memberKey(el) {
+  const d = el.dataset || {};
+  if (d.oscPanel) return d.oscPanel;
+  if (d.oscCard) return d.oscCard;
+  return d.osc && /-view$/.test(d.osc) ? d.osc : '';
+}
+
+/** Does workspace `mode` show the element (the registry, in some band)? */
+const shows = (mode, el) => memberBands(mode, memberKey(el)).length > 0;
+
+/**
  * The heading of a workspace: the heading its own view is labelled by (MEASURE, STUDIO, …), the
  * title of the visually first of its panels on the Playground grid (Analyzer, Filter Lab, …),
- * or the page heading for the Playground. A panel a workspace lists first in data-osc-modes is
- * its own and is preferred over one it shares with the workspace listed before it (Compare's
- * Phase panel before the Analyzer's microphone panel, which Compare also shows). null when none
- * is shown.
+ * or the page heading for the Playground. A panel whose home (ui/shell.js PANEL_REGISTRY) is
+ * the workspace is preferred over one it shares with another (Compare's Phase panel before the
+ * Analyzer's microphone panel, which Compare also shows). null when none is shown.
  */
 export function workspaceHeading(root, mode) {
   const shown = (el) => !!el && el.getClientRects().length > 0;
@@ -161,33 +178,44 @@ export function workspaceHeading(root, mode) {
     return (id && root.querySelector(`#${id}`)) || el.querySelector('h2, h3');
   };
   if (mode === 'playground') return root.querySelector('#osc-main > h1');
-  const own = [...root.querySelectorAll('[data-osc-modes]')]
-    .filter((p) => p.dataset.oscModes.split(/\s+/).includes(mode));
+  const own = [...root.querySelectorAll('[data-osc-modes]')].filter((p) => shows(mode, p));
   // A full-width view: by its class, or a Pro view by its data-osc hook (the Synth view, #329).
   const view = own.find((p) => (p.classList.contains('osc-view')
     || p.dataset.osc === `${mode}-view`) && shown(p));
   if (view) return labelOf(view);
-  const panels = own.filter((p) => p.classList.contains('osc-panel') && shown(p)
+  const panels = own.filter((p) => p.dataset.oscPanel && shown(p)
     && !p.matches('.osc-p-source, .osc-p-analysis'))
     .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top
       || a.getBoundingClientRect().left - b.getBoundingClientRect().left);
-  const home = panels.find((p) => p.dataset.oscModes.split(/\s+/)[0] === mode);
+  const home = panels.find((p) => modesOf(memberKey(p))[0] === mode);
   return labelOf(home || panels[0]);
 }
 
 /**
- * Mark the panels of workspace `mode`: every panel whose data-osc-modes lists it gets the
- * focused class, every other loses it; on the Playground none has it. Below 1536 px the class
- * also decides which panels a workspace shows (responsive.css), so it is set in the same step
- * as the workspace, a deep link's load included (ui/navigation.js), before the first paint.
- * `panels` are the elements carrying data-osc-modes (views among them are never marked).
+ * Apply workspace `mode`'s membership (ui/shell.js WORKSPACE_REGISTRY `panels`), the one
+ * applier of it: `els` are the elements of MEMBERSHIP_SELECTOR. A grid panel
+ * or card gets the hide classes of the bands the workspace does not show it in
+ * (membershipClassesOf), a row is hidden where the workspace shows none of its panels, a view's
+ * hidden attribute follows whether the workspace lists it. A grid panel the workspace shows
+ * gets the focused class (its ring), but on the Playground, and the registry's phone.primary
+ * leads it on a phone. It runs in the step that sets the workspace, a deep link's load
+ * included (ui/navigation.js), before the first paint; src/index.html carries the Playground's
+ * classes, so the page paints the Playground before any script.
  */
-export function markWorkspacePanels(panels, mode, primary = phonePrimaryOf(mode)) {
-  for (const p of panels) {
-    const on = mode !== 'playground' && p.dataset.oscModes.split(/\s+/).includes(mode);
-    p.classList.toggle('is-focused', on && p.classList.contains('osc-panel'));
-    // The registry's phone.primary: that own panel leads the workspace on a phone.
-    p.classList.toggle('max-md:order-first', on && !!primary && p.dataset.oscPanel === primary);
+export function markWorkspacePanels(els, mode, primary = phonePrimaryOf(mode)) {
+  for (const el of els) {
+    const row = el.dataset.oscRow;
+    const id = row ? null : memberKey(el);
+    if (id && isViewPanel(id)) el.hidden = !shows(mode, el);
+    else {
+      const want = row ? rowClassesOf(mode, row) : membershipClassesOf(mode, id);
+      for (const c of MEMBERSHIP_CLASSES) el.classList.toggle(c, want.includes(c));
+    }
+    if (row) continue;
+    const on = shows(mode, el);
+    const grid = !!el.dataset.oscPanel;
+    el.classList.toggle('is-focused', mode !== 'playground' && on && grid);
+    el.classList.toggle('max-md:order-first', on && !!primary && el.dataset.oscPanel === primary);
   }
 }
 
@@ -280,14 +308,17 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
     dualRoute: 'mono',
     menus: { overflow: false, export: false, addBlock: false, actions: false, related: false,
       seqOpen: false, filterOpen: false },
-    collapsed: { device: false, phase: false, bio: false },
+    collapsed: collapsedDefaults(),
 
     init() {
       this.theme = resolveTheme(document.documentElement.dataset.theme);
       applyMockFlag();
       syncSliderFill(this.$root);
-      this.$watch('workspace', (ws) => syncSkipLink(document, ws));
+      // The membership follows every write of the workspace (setWorkspace and a load mark it
+      // in their own step already; marking again changes nothing).
+      this.$watch('workspace', (ws) => { syncSkipLink(document, ws); this.markWorkspace(ws); });
       syncSkipLink(document, this.workspace);
+      this.markWorkspace(this.workspace);
       this.$root.addEventListener('input', (e) => {
         if (e.target.matches && e.target.matches('input.osc-slider')) {
           e.target.style.setProperty('--osc-fill', sliderFill(e.target));
@@ -387,10 +418,12 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
     },
     /** Mark the panels of `mode` (markWorkspacePanels) without moving focus or scrolling. */
     markWorkspace(mode, root = this.$root) {
-      markWorkspacePanels(root.querySelectorAll('[data-osc-modes]'), mode);
+      if (root && root.querySelectorAll) {
+        markWorkspacePanels(root.querySelectorAll(MEMBERSHIP_SELECTOR), mode);
+      }
     },
     focusWorkspace(mode, root = this.$root) {
-      const panels = [...root.querySelectorAll('[data-osc-modes]')];
+      const panels = [...root.querySelectorAll(MEMBERSHIP_SELECTOR)];
       markWorkspacePanels(panels, mode);
       const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       const behavior = reduce ? 'auto' : 'smooth';
@@ -406,7 +439,7 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
         return;
       }
       // The visually first of the workspace's own panels (CSS order differs from DOM order).
-      const target = panels.filter((p) => p.dataset.oscModes.split(/\s+/).includes(mode)
+      const target = panels.filter((p) => !p.dataset.oscRow && shows(mode, p)
         && p.offsetParent !== null && !p.matches('.osc-p-source, .osc-p-analysis'))
         .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)[0];
       if (target) target.scrollIntoView({ block: tablet ? 'start' : 'nearest', behavior });

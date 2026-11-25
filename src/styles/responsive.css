@@ -35,23 +35,11 @@
     display: contents;
   }
 
-  .osc-workspace {
-    display: none;
-  }
-
-  .osc-app[data-mode="synthesis"] .osc-workspace {
-    display: contents;
-  }
-
-  /* A workspace shows the panels it lists (data-osc-modes) and leads with its own: the
-     Playground's Source & Pattern and Signal analysis lead only the Playground (order 0, document
-     order) and follow the workspace's panels everywhere else (ui-current#phone-whole). The
-     listed panels are the marked ones (ui/app.js markWorkspacePanels, set with the workspace,
-     a deep link's load included), so a new workspace needs no rule here. */
-  .osc-app:not([data-mode="playground"]) .osc-panel[data-osc-modes]:not(.is-focused) {
-    display: none;
-  }
-
+  /* A workspace shows the panels its registry row lists (ui/shell.js, applied by ui/app.js
+     markWorkspacePanels with the workspace, a deep link's load included) and leads with its
+     own: the Playground's Source & Pattern and Signal analysis lead only the Playground (order
+     0, document order) and follow the workspace's panels everywhere else
+     (ui-current#phone-whole). */
   .osc-app:not([data-mode="playground"]) .osc-p-source { order: 14; }
   .osc-app:not([data-mode="playground"]) .osc-p-analysis { order: 15; }
   .osc-p-mic { order: 3; }
@@ -74,12 +62,6 @@
   .osc-p-bio { order: 11; grid-column: 1 / -1; }
   .osc-p-dual { order: 12; grid-column: 1 / -1; }
   .osc-view { order: 13; grid-column: 1 / -1; }
-
-  .osc-app[data-mode="learn"] .osc-panel,
-  .osc-app[data-mode="presets"] .osc-panel,
-  .osc-app[data-mode="about"] .osc-panel {
-    display: none;
-  }
 
   /* Panels: natural height; hosts keep explicit heights. */
   .osc-analysis-head {
@@ -183,13 +165,6 @@
   .osc-main {
     grid-template-columns: minmax(0, 1fr);
     gap: 8px;
-  }
-
-  /* One column: the full-width panels (grid-column 1 / -1 above) span exactly it. The phone
-     Playground keeps the panels it lists (Source & Pattern, Signal analysis, the compact
-     Studio); the other workspaces show theirs by the rule above. */
-  .osc-app[data-mode="playground"] .osc-panel[data-osc-modes]:not([data-osc-modes~="playground"]) {
-    display: none;
   }
 
   .osc-source-view {
